@@ -1,0 +1,17 @@
+# secrets
+.env
+
+# dependencies
+nextapp/node_modules
+
+# next.js build output
+nextapp/.next
+nextapp/out
+nextapp/next-env.d.ts
+nextapp/*.tsbuildinfo
+
+# local Claude Code settings (personal permission overrides, not shared)
+.claude/settings.local.json
+
+# misc
+.DS_Store

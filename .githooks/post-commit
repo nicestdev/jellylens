@@ -1,0 +1,20 @@
+#!/bin/sh
+# Rebuilds the prod image and redeploys the prod container after every commit
+# on main, so localhost:8091 always reflects the latest committed code.
+# One-time setup per clone: git config core.hooksPath .githooks
+
+branch=$(git branch --show-current)
+if [ "$branch" != "main" ]; then
+  exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root" || exit 1
+
+echo "[post-commit] rebuilding jellylens image..."
+if docker compose build && docker compose up -d; then
+  echo "[post-commit] jellylens updated (http://localhost:8091)"
+else
+  echo "[post-commit] rebuild FAILED — commit was still recorded, fix and rebuild manually:"
+  echo "  docker compose up -d --build"
+fi

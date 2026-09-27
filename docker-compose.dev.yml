@@ -1,0 +1,24 @@
+services:
+  media-overview:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    environment:
+      JELLYFIN_URL: ${JELLYFIN_URL}
+      JELLYFIN_PUBLIC_URL: ${JELLYFIN_PUBLIC_URL:-}
+      JELLYFIN_API_KEY: ${JELLYFIN_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      JELLYFIN_SYNC_INTERVAL_HOURS: ${JELLYFIN_SYNC_INTERVAL_HOURS:-6}
+      TMDB_SYNC_INTERVAL_HOURS: ${TMDB_SYNC_INTERVAL_HOURS:-24}
+      MISSING_RECHECK_INTERVAL_HOURS: ${MISSING_RECHECK_INTERVAL_HOURS:-24}
+      DEV_ALLOWED_ORIGINS: ${DEV_ALLOWED_ORIGINS:-}
+      DATA_DIR: /app/data
+    volumes:
+      - ./nextapp:/app
+      - cache_data:/app/data
+    ports:
+      - "8081:3000"
+    restart: unless-stopped
+
+volumes:
+  cache_data:
