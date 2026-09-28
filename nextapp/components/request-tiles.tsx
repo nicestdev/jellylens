@@ -119,9 +119,9 @@ function TileButton({
 const latestRequest = (r: Request) =>
   r.requesters?.reduce((latest, q) => (q.requestedAt > latest ? q.requestedAt : latest), "") ?? r.requestedAt;
 
-// The user's request list plus everything that changes it. Arrived ones sort
-// first (they're the news), then newest request first. For admins also
-// everyone's (null otherwise): most wanted first, then most recently asked.
+// The user's request list plus everything that changes it — for admins
+// everyone's (overview), with who asked. Arrived ones sort first (they're
+// the news), then the most wanted, then the most recently asked for.
 export function useRequests() {
   const [jellyfinUrl, setJellyfinUrl] = useState("");
   const [items, setItems] = useState<Request[]>([]);
@@ -181,22 +181,20 @@ export function useRequests() {
     }
   }
 
-  const requests = items.filter((r) => r.mine);
-  const sorted = requests.sort(
-    (a, b) => Number(Boolean(b.library)) - Number(Boolean(a.library)) || b.requestedAt.localeCompare(a.requestedAt)
+  const mine = items.filter((r) => r.mine);
+  const shown = all ? items : mine;
+  const sorted = [...shown].sort(
+    (a, b) =>
+      Number(Boolean(b.library)) - Number(Boolean(a.library)) ||
+      (b.requesters?.length ?? 0) - (a.requesters?.length ?? 0) ||
+      latestRequest(b).localeCompare(latestRequest(a))
   );
-  const everyone = all
-    ? [...items].sort(
-        (a, b) =>
-          (b.requesters?.length ?? 0) - (a.requesters?.length ?? 0) || latestRequest(b).localeCompare(latestRequest(a))
-      )
-    : null;
   return {
     jellyfinUrl,
     requests: sorted,
-    everyone,
-    requestedKeys: new Set(requests.map(itemKey)),
-    availableCount: requests.filter((r) => r.library).length,
+    overview: all,
+    requestedKeys: new Set(mine.map(itemKey)),
+    availableCount: shown.filter((r) => r.library).length,
     loading,
     pending,
     error,
@@ -268,36 +266,16 @@ export function ResultTile({ item, requested, ctx }: { item: Result; requested: 
   );
 }
 
-// One of the user's requests: × removes it.
-export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) {
-  return (
-    <PosterCard
-      href={itemHref(item, ctx.jellyfinUrl)}
-      imageSrc={posterSrc(item.posterPath)}
-      title={item.title}
-      meta={metaLine(item)}
-      badge={statusBadge(item, "Available")}
-      action={
-        <TileButton
-          icon={X}
-          label="Remove request"
-          disabled={ctx.pending.has(itemKey(item))}
-          onClick={() => ctx.toggle(item, true)}
-        />
-      }
-    />
-  );
-}
-
 // "Anna, Ben" — who asked, in the order they did.
 function requesterNames(item: Request): string {
   return (item.requesters ?? []).map((q) => q.name).join(", ");
 }
 
-// One title in the admin's overview of everyone's requests: who asked on
-// the info line, a count badge once more than one person wants it, and ×
-// to remove it for all of them.
-export function EveryoneTile({ item, ctx }: { item: Request; ctx: TileContext }) {
+// One request: × removes it. In the admin's overview (item.requesters set)
+// the info line says who asked, a badge counts them once it's more than
+// one, and × removes it for all of them.
+export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) {
+  const overview = Boolean(item.requesters);
   const count = item.requesters?.length ?? 0;
   const names = requesterNames(item);
   return (
@@ -305,15 +283,15 @@ export function EveryoneTile({ item, ctx }: { item: Request; ctx: TileContext })
       href={itemHref(item, ctx.jellyfinUrl)}
       imageSrc={posterSrc(item.posterPath)}
       title={item.title}
-      meta={[item.year, names].filter(Boolean).join(" · ")}
+      meta={overview ? [item.year, names].filter(Boolean).join(" · ") : metaLine(item)}
       badge={statusBadge(item, "Available")}
       filterBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
       action={
         <TileButton
           icon={X}
-          label="Remove for everyone"
+          label={overview ? "Remove for everyone" : "Remove request"}
           disabled={ctx.pending.has(itemKey(item))}
-          onClick={() => ctx.toggle(item, true, true)}
+          onClick={() => ctx.toggle(item, true, overview)}
         />
       }
     />

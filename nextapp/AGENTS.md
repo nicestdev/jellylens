@@ -77,7 +77,7 @@ turns it all off: everyone is `LOCAL_USER`, an admin, and requests are one
 shared list again.
 
 Requests are one entry per title with a `requesters` list; admins see
-everyone's on the Requests page's "Everyone" tab, most-requested first.
+everyone's on the Requests tab (with who asked), most-requested first.
 
 ## Pages
 
