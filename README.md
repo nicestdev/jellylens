@@ -86,7 +86,7 @@ Jellylens is built to sit behind a reverse proxy or a Cloudflare Tunnel:
 #### With a Cloudflare Tunnel
 
 1. In the Cloudflare dashboard, go to *Zero Trust → Networks → Tunnels*, create a tunnel of type *Cloudflared* and copy its token.
-2. Add a public hostname to the tunnel, e.g. `jellylens.example.com`, with service type `HTTP` and URL `jellylens:3000`.
+2. Add a public hostname to the tunnel, e.g. `jellylens.example.com`, pointing to the service URL `http://jellylens:3000` (the compose service name; plain `http`, Cloudflare handles HTTPS).
 3. Run `cloudflared` next to Jellylens. Jellylens needs no `ports:` then: it's only reachable through the tunnel.
 
 ```yaml
