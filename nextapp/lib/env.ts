@@ -15,3 +15,9 @@ function hours(name: string, fallback: number): number {
 export const JELLYFIN_SYNC_INTERVAL_HOURS = hours("JELLYFIN_SYNC_INTERVAL_HOURS", 6);
 export const TMDB_SYNC_INTERVAL_HOURS = hours("TMDB_SYNC_INTERVAL_HOURS", 24);
 export const MISSING_RECHECK_INTERVAL_HOURS = hours("MISSING_RECHECK_INTERVAL_HOURS", 24);
+
+// Sign-in with Jellyfin accounts; on unless set to "false" (or 0/no/off).
+// Off, Jellylens is open to anyone who can reach it, as a single admin.
+export const AUTH_ENABLED = !/^(false|0|no|off)$/i.test(process.env.AUTH_ENABLED?.trim() ?? "");
+
+export const DATA_DIR = process.env.DATA_DIR || "/app/data";

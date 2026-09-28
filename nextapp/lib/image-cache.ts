@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { DATA_DIR } from "./store";
+import { DATA_DIR } from "./env";
 import { JELLYFIN_URL, JELLYFIN_API_KEY } from "./env";
 import { authHeaders } from "./jellyfin";
 

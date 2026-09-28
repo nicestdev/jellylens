@@ -14,6 +14,7 @@ type Config = {
   jellyfinPublicUrl: string;
   jellyfinApiKey: string;
   tmdbApiKey: string;
+  authEnabled: boolean;
   intervals: Intervals;
 };
 
@@ -210,6 +211,7 @@ export default function SettingsPage() {
                 ? [{ label: "Public URL", env: "JELLYFIN_PUBLIC_URL", value: config.jellyfinPublicUrl }]
                 : []),
               { label: "API key", env: "JELLYFIN_API_KEY", value: config?.jellyfinApiKey },
+              { label: "Sign-in", env: "AUTH_ENABLED", value: config ? (config.authEnabled ? "Jellyfin accounts" : "Off") : undefined },
             ],
           },
           {

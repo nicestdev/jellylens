@@ -1,6 +1,10 @@
 export async function apiFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
+    // The session ran out while the page was open: sign in, then come back.
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      window.location.replace("/login?next=" + encodeURIComponent(location.pathname + location.search));
+    }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Request to ${path} failed (HTTP ${res.status})`);
   }

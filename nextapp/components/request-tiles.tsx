@@ -27,10 +27,18 @@ export type Result = {
   library: LibraryRef;
   availability: Availability;
 };
-export type Request = Result & { requestedAt: string };
+// requestedAt: when this user asked (for someone else's, in the admin
+// overview: when it was first asked for). requesters: admins only.
+export type Request = Result & {
+  requestedAt: string;
+  mine: boolean;
+  requesters?: { name: string; requestedAt: string }[];
+};
 
 export const itemKey = (r: { mediaType: MediaType; tmdbId: number }) => `${r.mediaType}:${r.tmdbId}`;
 const TYPE_LABEL: Record<MediaType, string> = { movie: "Movie", tv: "Show" };
+
+type RequestsResponse = { Items: Request[]; all: boolean };
 
 // Only the not-yet-home-watchable states get a badge; fully out is normal.
 const STATUS_BADGE: Record<NonNullable<Availability>["status"], PosterBadge> = {
@@ -108,11 +116,16 @@ function TileButton({
   );
 }
 
+const latestRequest = (r: Request) =>
+  r.requesters?.reduce((latest, q) => (q.requestedAt > latest ? q.requestedAt : latest), "") ?? r.requestedAt;
+
 // The user's request list plus everything that changes it. Arrived ones sort
-// first (they're the news), then newest request first.
+// first (they're the news), then newest request first. For admins also
+// everyone's (null otherwise): most wanted first, then most recently asked.
 export function useRequests() {
   const [jellyfinUrl, setJellyfinUrl] = useState("");
-  const [requests, setRequests] = useState<Request[]>([]);
+  const [items, setItems] = useState<Request[]>([]);
+  const [all, setAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState("");
@@ -121,10 +134,11 @@ export function useRequests() {
     try {
       const [config, res] = await Promise.all([
         apiFetch<{ jellyfinPublicUrl: string }>("/api/config"),
-        apiFetch<{ Items: Request[] }>("/api/requests"),
+        apiFetch<RequestsResponse>("/api/requests"),
       ]);
       setJellyfinUrl(config.jellyfinPublicUrl);
-      setRequests(res.Items ?? []);
+      setItems(res.Items ?? []);
+      setAll(res.all);
     } catch (e) {
       setError(`Failed to load requests: ${(e as Error).message}`);
     } finally {
@@ -136,11 +150,12 @@ export function useRequests() {
     load();
   }, [load]);
 
-  async function toggle(item: Result, requested: boolean) {
+  // everyone: an admin removing the request for all who asked.
+  async function toggle(item: Result, requested: boolean, everyone = false) {
     const k = itemKey(item);
     setPending((prev) => new Set(prev).add(k));
     try {
-      const res = await apiFetch<{ Items: Request[] }>("/api/requests", {
+      const res = await apiFetch<RequestsResponse>("/api/requests", {
         method: requested ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,9 +165,11 @@ export function useRequests() {
           year: item.year,
           releaseDate: item.releaseDate,
           posterPath: item.posterPath,
+          everyone,
         }),
       });
-      setRequests(res.Items ?? []);
+      setItems(res.Items ?? []);
+      setAll(res.all);
     } catch (e) {
       setError(`Couldn't update request: ${(e as Error).message}`);
     } finally {
@@ -164,12 +181,20 @@ export function useRequests() {
     }
   }
 
-  const sorted = [...requests].sort(
+  const requests = items.filter((r) => r.mine);
+  const sorted = requests.sort(
     (a, b) => Number(Boolean(b.library)) - Number(Boolean(a.library)) || b.requestedAt.localeCompare(a.requestedAt)
   );
+  const everyone = all
+    ? [...items].sort(
+        (a, b) =>
+          (b.requesters?.length ?? 0) - (a.requesters?.length ?? 0) || latestRequest(b).localeCompare(latestRequest(a))
+      )
+    : null;
   return {
     jellyfinUrl,
     requests: sorted,
+    everyone,
     requestedKeys: new Set(requests.map(itemKey)),
     availableCount: requests.filter((r) => r.library).length,
     loading,
@@ -211,7 +236,11 @@ function itemHref(item: Result, jellyfinUrl: string): string {
   return `https://www.themoviedb.org/${item.mediaType}/${item.tmdbId}`;
 }
 
-type TileContext = { jellyfinUrl: string; pending: Set<string>; toggle: (item: Result, requested: boolean) => void };
+type TileContext = {
+  jellyfinUrl: string;
+  pending: Set<string>;
+  toggle: (item: Result, requested: boolean, everyone?: boolean) => void;
+};
 
 // A search/trending result: + to request, ✓ once requested (not clickable).
 // Requested needs no badge — the filled ✓ already says so.
@@ -254,6 +283,37 @@ export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) 
           label="Remove request"
           disabled={ctx.pending.has(itemKey(item))}
           onClick={() => ctx.toggle(item, true)}
+        />
+      }
+    />
+  );
+}
+
+// "Anna, Ben" — who asked, in the order they did.
+function requesterNames(item: Request): string {
+  return (item.requesters ?? []).map((q) => q.name).join(", ");
+}
+
+// One title in the admin's overview of everyone's requests: who asked on
+// the info line, a count badge once more than one person wants it, and ×
+// to remove it for all of them.
+export function EveryoneTile({ item, ctx }: { item: Request; ctx: TileContext }) {
+  const count = item.requesters?.length ?? 0;
+  const names = requesterNames(item);
+  return (
+    <PosterCard
+      href={itemHref(item, ctx.jellyfinUrl)}
+      imageSrc={posterSrc(item.posterPath)}
+      title={item.title}
+      meta={[item.year, names].filter(Boolean).join(" · ")}
+      badge={statusBadge(item, "Available")}
+      filterBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
+      action={
+        <TileButton
+          icon={X}
+          label="Remove for everyone"
+          disabled={ctx.pending.has(itemKey(item))}
+          onClick={() => ctx.toggle(item, true, true)}
         />
       }
     />

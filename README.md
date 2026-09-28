@@ -23,7 +23,8 @@ TMDB matches, and keep a wishlist of what to add next.
 - 🧩 **Missing episodes**: gaps, whole missing seasons and seasons that are still airing, all checked against TMDB. Ignore anything you don't care about.
 - 🔍 **Mismatch detection**: episodes and seasons TMDB doesn't know about, usually a wrong match or a duplicate file.
 - 🗣️ **Language coverage**: flags shows where only some seasons have your audio language.
-- 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin.
+- 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin. Everyone has their own list; admins see all of them, most wanted first.
+- 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing and Settings are for Jellyfin admins only.
 - 🔄 **Automatic sync**: Jellyfin and TMDB refresh on a schedule you set on the Settings page.
 - 📱 **Works on any device**: responsive, dark UI that works on desktop and phone.
 
@@ -70,6 +71,7 @@ Available for `linux/amd64` and `linux/arm64`.
 | `JELLYFIN_SYNC_INTERVAL_HOURS` | | `6` | Hours between Jellyfin library syncs, `0` = off |
 | `TMDB_SYNC_INTERVAL_HOURS` | | `24` | Hours between TMDB metadata refreshes, `0` = off |
 | `MISSING_RECHECK_INTERVAL_HOURS` | | `24` | Hours between missing-episode rechecks, `0` = off |
+| `AUTH_ENABLED` | | `true` | Sign in with Jellyfin accounts; `false` opens Jellylens to anyone who can reach it |
 
 All data (library cache, posters, requests, settings) is stored in `/app/data`.
 

@@ -63,6 +63,22 @@ The browser never talks to `JELLYFIN_URL`: posters go through
 pruned after each Jellyfin sync). Only "Open in Jellyfin" links point at
 Jellyfin, via the optional `JELLYFIN_PUBLIC_URL`.
 
+## Sign-in
+
+`proxy.ts` gates every page and `/api/*` route (except `/login` and
+`/api/auth/*`). Users sign in with their Jellyfin username/password, checked
+once via `/Users/AuthenticateByName` (`lib/jellyfin.ts`); the Jellyfin token
+is signed out right away, and Jellylens keeps its own HMAC-signed cookie
+(`lib/session.ts`, secret generated into `DATA_DIR/session-secret`). Jellyfin
+admins get Missing, Settings and the sync/ignore APIs (`ADMIN_ONLY` in
+`proxy.ts`); everyone gets Movies, TV Shows and their own Requests. Server
+code reads the user with `currentUser()` (`lib/auth.ts`). `AUTH_ENABLED=false`
+turns it all off: everyone is `LOCAL_USER`, an admin, and requests are one
+shared list again.
+
+Requests are one entry per title with a `requesters` list; admins see
+everyone's on the Requests page's "Everyone" tab, most-requested first.
+
 ## Pages
 
 `app/movies`, `app/shows`, `app/missing` — all client components (`'use client'`)

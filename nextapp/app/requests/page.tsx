@@ -6,14 +6,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmptyState } from "@/components/empty-state";
 import { SearchInput } from "@/components/search-input";
 import { POSTER_GRID, PosterGridSkeleton } from "@/components/poster-card";
-import { RequestTile, ResultTile, itemKey, useDiscover, useRequests } from "@/components/request-tiles";
+import { EveryoneTile, RequestTile, ResultTile, itemKey, useDiscover, useRequests } from "@/components/request-tiles";
 import { cn } from "@/lib/utils";
 
-type Tab = "discover" | "requests";
+type Tab = "discover" | "requests" | "everyone";
 
-// Two tabs: Discover (TMDB search, or trending when the box is empty) and
-// the user's own requests. The one search box serves both — on the requests
-// tab it just filters the list by title.
+const TAB_LABEL: Record<Tab, string> = { discover: "Discover", requests: "Requests", everyone: "Everyone" };
+const SEARCH_PLACEHOLDER: Record<Tab, string> = {
+  discover: "Search movies and shows…",
+  requests: "Search your requests…",
+  everyone: "Search all requests…",
+};
+
+// Tabs: Discover (TMDB search, or trending when the box is empty), the
+// user's own requests, and for admins everyone's. The one search box serves
+// all of them — on a list tab it just filters the list by title.
 export default function RequestsPage() {
   const [tab, setTab] = useState<Tab>("discover");
   const [query, setQuery] = useState("");
@@ -21,9 +28,14 @@ export default function RequestsPage() {
   const r = useRequests();
   const discover = useDiscover(tab === "discover" ? q : "");
   const error = r.error || discover.error;
+  const tabs: Tab[] = r.everyone ? ["discover", "requests", "everyone"] : ["discover", "requests"];
+  const tabCount: Partial<Record<Tab, number>> = { requests: r.requests.length, everyone: r.everyone?.length };
 
   const needle = q.toLowerCase();
-  const shownRequests = needle ? r.requests.filter((item) => item.title.toLowerCase().includes(needle)) : r.requests;
+  const matching = <T extends { title: string }>(items: T[]) =>
+    needle ? items.filter((item) => item.title.toLowerCase().includes(needle)) : items;
+  const shownRequests = matching(r.requests);
+  const shownEveryone = matching(r.everyone ?? []);
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
@@ -51,10 +63,10 @@ export default function RequestsPage() {
       ) : null}
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <SearchInput value={query} onChange={setQuery} placeholder={tab === "discover" ? "Search movies and shows…" : "Search your requests…"} className="w-full sm:w-80" />
-        {/* Full width with equal halves on phones, where it gets its own line; compact and right-aligned from sm up. */}
+        <SearchInput value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER[tab]} className="w-full sm:w-80" />
+        {/* Full width with equal parts on phones, where it gets its own line; compact and right-aligned from sm up. */}
         <div className="flex h-8 w-full items-center rounded-lg border bg-card p-0.5 text-sm sm:ml-auto sm:w-auto">
-          {(["discover", "requests"] as const).map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               type="button"
@@ -65,10 +77,10 @@ export default function RequestsPage() {
                 tab === t ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {t === "discover" ? "Discover" : "Requests"}
-              {t === "requests" && r.requests.length ? (
+              {TAB_LABEL[t]}
+              {tabCount[t] ? (
                 <span className="rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
-                  {r.requests.length}
+                  {tabCount[t]}
                 </span>
               ) : null}
             </button>
@@ -77,7 +89,23 @@ export default function RequestsPage() {
       </div>
 
       <div className="mt-6">
-        {tab === "requests" ? (
+        {tab === "everyone" ? (
+          r.loading ? (
+            <PosterGridSkeleton />
+          ) : shownEveryone.length === 0 ? (
+            q ? (
+              <EmptyState icon={SearchX} title="No matching requests" hint={`No request matches “${q}”.`} />
+            ) : (
+              <EmptyState icon={Inbox} title="No requests yet" hint="Nobody has requested anything so far." />
+            )
+          ) : (
+            <div className={POSTER_GRID}>
+              {shownEveryone.map((item) => (
+                <EveryoneTile key={itemKey(item)} item={item} ctx={r} />
+              ))}
+            </div>
+          )
+        ) : tab === "requests" ? (
           r.loading ? (
             <PosterGridSkeleton />
           ) : shownRequests.length === 0 ? (

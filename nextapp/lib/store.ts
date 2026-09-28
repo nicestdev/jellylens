@@ -1,5 +1,7 @@
 import fs from "fs";
 import path from "path";
+import { DATA_DIR } from "./env";
+import { LOCAL_USER } from "./session";
 
 // Loosely typed: these carry many raw pass-through fields from Jellyfin/TMDB
 // that we never touch ourselves, plus the handful we actually read.
@@ -71,6 +73,8 @@ export type IgnoreEntry = { kind: IgnoreKind; seriesId: string; season: number |
 // the Requests page. Title/year/poster are copied in so the list renders
 // without calling TMDB again. Whether it has arrived isn't stored: it's
 // derived on read by matching tmdbId against the Jellyfin cache.
+// One entry per title, however many people asked for it: requesters lists
+// them, and the entry goes once the last one takes their request back.
 export type RequestEntry = {
   mediaType: "movie" | "tv";
   tmdbId: number;
@@ -79,8 +83,13 @@ export type RequestEntry = {
   // First release / air date; absent on requests saved before it existed.
   releaseDate?: string | null;
   posterPath: string | null;
+  // When anyone first asked for it.
   requestedAt: string;
+  requesters: Requester[];
 };
+
+// A Jellyfin user, by id; the name is kept for the admin's overview.
+export type Requester = { id: string; name: string; requestedAt: string };
 
 export type Store = {
   jellyfin: {
@@ -105,7 +114,6 @@ export type Store = {
   requests: RequestEntry[];
 };
 
-export const DATA_DIR = process.env.DATA_DIR || "/app/data";
 const CACHE_FILE = path.join(DATA_DIR, "cache.json");
 
 function emptyState(): Store {
@@ -133,6 +141,11 @@ export function load() {
     const parsed = JSON.parse(raw);
     delete parsed.settings;
     Object.assign(store, emptyState(), parsed);
+    // Requests from before sign-in existed have no requesters; they go to
+    // the local user, whom the first admin to sign in takes over from.
+    for (const r of store.requests) {
+      r.requesters ??= [{ id: LOCAL_USER.id, name: LOCAL_USER.name, requestedAt: r.requestedAt }];
+    }
     console.log("[store] loaded persisted cache from " + CACHE_FILE);
   } catch {
     console.log("[store] no persisted cache found, starting empty");

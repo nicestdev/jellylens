@@ -5,6 +5,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { Logo } from "@/components/logo";
 import { Nav } from "@/components/nav";
+import { currentUser } from "@/lib/auth";
+import { AUTH_ENABLED } from "@/lib/env";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +23,9 @@ export const metadata: Metadata = {
   description: "Jellyfin library analyzer — missing episodes, mismatches, and library overview.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // null only on the sign-in page, which gets the bare header.
+  const user = await currentUser();
   return (
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} antialiased`}>
       <body className="flex min-h-svh flex-col bg-background text-foreground">
@@ -32,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Logo className="size-7" />
                 <span>Jellylens</span>
               </Link>
-              <Nav />
+              {user ? <Nav user={user} canSignOut={AUTH_ENABLED} /> : null}
             </div>
           </header>
           {children}
