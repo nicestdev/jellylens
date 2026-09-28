@@ -24,8 +24,8 @@ const noSubscribe = () => () => {};
 const allLinks: { href: string; label: string; admin?: boolean }[] = [
   { href: "/movies", label: "Movies" },
   { href: "/shows", label: "TV Shows" },
-  { href: "/missing", label: "Missing", admin: true },
   { href: "/requests", label: "Requests" },
+  { href: "/missing", label: "Missing", admin: true },
   { href: "/settings", label: "Settings", admin: true },
 ];
 
