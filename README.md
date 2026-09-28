@@ -83,6 +83,38 @@ Jellylens is built to sit behind a reverse proxy or a Cloudflare Tunnel:
 - Serve it over HTTPS; the session cookie is then marked `Secure` automatically.
 - Jellyfin locks accounts itself after repeated wrong passwords. For extra protection, add a Cloudflare rate-limiting rule for `/api/auth/login` or put Cloudflare Access in front.
 
+#### With a Cloudflare Tunnel
+
+1. In the Cloudflare dashboard, go to *Zero Trust → Networks → Tunnels*, create a tunnel of type *Cloudflared* and copy its token.
+2. Add a public hostname to the tunnel, e.g. `jellylens.example.com`, with service type `HTTP` and URL `jellylens:3000`.
+3. Run `cloudflared` next to Jellylens. Jellylens needs no `ports:` then: it's only reachable through the tunnel.
+
+```yaml
+services:
+  jellylens:
+    image: ghcr.io/nicestdev/jellylens:latest
+    container_name: jellylens
+    environment:
+      JELLYFIN_URL: http://192.168.1.10:8096
+      JELLYFIN_API_KEY: your_jellyfin_api_key
+      TMDB_API_KEY: your_tmdb_api_key
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: your_tunnel_token
+    depends_on:
+      - jellylens
+    restart: unless-stopped
+```
+
+Both services share the compose network, so the tunnel reaches Jellylens by its service name. If you also want to open it at home without the tunnel, publish the port on your server's LAN address only (e.g. `192.168.1.20:3000:3000`), and make sure your router doesn't forward it.
+
 ## Development
 
 ```bash
