@@ -35,8 +35,9 @@ export function CornerBadge({ badge, className }: { badge: PosterBadge; classNam
 // One tile of a poster grid (Movies, TV Shows): the poster with up to two
 // corner badges — top right for the item's own state (4K, Continuing), bottom
 // left for how it relates to an active filter — then title and a muted info
-// line. The whole tile is a link. action is a button over the poster's
-// bottom-right corner, kept outside the link so it's valid, clickable HTML.
+// line. The whole tile links to href (TMDB), when there is one. action is a
+// button over the poster's bottom-right corner, kept outside the link so
+// it's valid, clickable HTML.
 export function PosterCard({
   href,
   itemId,
@@ -48,7 +49,7 @@ export function PosterCard({
   filterBadge,
   action,
 }: {
-  href: string;
+  href?: string;
   itemId?: string;
   imageTag?: string;
   imageSrc?: string | null;
@@ -58,9 +59,11 @@ export function PosterCard({
   filterBadge?: PosterBadge;
   action?: ReactNode;
 }) {
+  const Tile = href ? "a" : "div";
+  const link = href ? { href, target: "_blank", rel: "noopener noreferrer" } : {};
   return (
     <div className="relative min-w-0">
-      <a href={href} target="_blank" rel="noopener noreferrer" title={title} className="group block outline-none">
+      <Tile {...link} title={title} className="group block outline-none">
         <div className="relative">
           <Poster
             itemId={itemId}
@@ -75,7 +78,7 @@ export function PosterCard({
         </div>
         <div className="mt-2 truncate text-sm font-medium transition-colors group-hover:text-primary">{title}</div>
         {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}
-      </a>
+      </Tile>
       {action ? (
         // Same box as the poster, so the button lands on its corner.
         <div className="pointer-events-none absolute inset-x-0 top-0 aspect-2/3">

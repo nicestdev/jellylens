@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { PosterCard, type PosterBadge } from "@/components/poster-card";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, tmdbUrl } from "@/lib/api-client";
 
 type MediaType = "movie" | "tv";
 // Set when the item is already in Jellyfin (matched by TMDB id).
@@ -123,7 +123,6 @@ const latestRequest = (r: Request) =>
 // everyone's (overview), with who asked. Arrived ones sort first (they're
 // the news), then the most wanted, then the most recently asked for.
 export function useRequests() {
-  const [jellyfinUrl, setJellyfinUrl] = useState("");
   const [items, setItems] = useState<Request[]>([]);
   const [all, setAll] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -132,11 +131,7 @@ export function useRequests() {
 
   const load = useCallback(async () => {
     try {
-      const [config, res] = await Promise.all([
-        apiFetch<{ jellyfinPublicUrl: string }>("/api/config"),
-        apiFetch<RequestsResponse>("/api/requests"),
-      ]);
-      setJellyfinUrl(config.jellyfinPublicUrl);
+      const res = await apiFetch<RequestsResponse>("/api/requests");
       setItems(res.Items ?? []);
       setAll(res.all);
     } catch (e) {
@@ -190,7 +185,6 @@ export function useRequests() {
       latestRequest(b).localeCompare(latestRequest(a))
   );
   return {
-    jellyfinUrl,
     requests: sorted,
     overview: all,
     requestedKeys: new Set(mine.map(itemKey)),
@@ -229,13 +223,8 @@ export function useDiscover(q: string) {
   return { items: loading ? [] : results!.items, loading, error: results?.error ?? "" };
 }
 
-function itemHref(item: Result, jellyfinUrl: string): string {
-  if (item.library) return `${jellyfinUrl}/web/index.html#!/details?id=${item.library.id}&serverId=${item.library.serverId}`;
-  return `https://www.themoviedb.org/${item.mediaType}/${item.tmdbId}`;
-}
 
 type TileContext = {
-  jellyfinUrl: string;
   pending: Set<string>;
   toggle: (item: Result, requested: boolean, everyone?: boolean) => void;
 };
@@ -245,7 +234,7 @@ type TileContext = {
 export function ResultTile({ item, requested, ctx }: { item: Result; requested: boolean; ctx: TileContext }) {
   return (
     <PosterCard
-      href={itemHref(item, ctx.jellyfinUrl)}
+      href={tmdbUrl(item.mediaType, item.tmdbId)}
       imageSrc={posterSrc(item.posterPath)}
       title={item.title}
       meta={metaLine(item)}
@@ -280,7 +269,7 @@ export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) 
   const names = requesterNames(item);
   return (
     <PosterCard
-      href={itemHref(item, ctx.jellyfinUrl)}
+      href={tmdbUrl(item.mediaType, item.tmdbId)}
       imageSrc={posterSrc(item.posterPath)}
       title={item.title}
       meta={overview ? [item.year, names].filter(Boolean).join(" · ") : metaLine(item)}

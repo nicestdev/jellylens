@@ -8,7 +8,7 @@ import { SearchInput } from "@/components/search-input";
 import { FilterChips, FilterMenu, byCount, countValues, toggled } from "@/components/filter-menu";
 import { POSTER_GRID, PosterCard, PosterGridSkeleton } from "@/components/poster-card";
 import { SortMenu, compareValues, type SortDir } from "@/components/sort-menu";
-import { apiFetch, type MediaItem } from "@/lib/api-client";
+import { apiFetch, tmdbUrl, type MediaItem } from "@/lib/api-client";
 import { languageName } from "@/lib/languages";
 
 // Per-series audio language counts from /api/shows; null until the first
@@ -72,7 +72,6 @@ function languageBadge(cov: LanguageCoverage | null | undefined, selected: Set<s
 
 export default function ShowsPage() {
   const [shows, setShows] = useState<Show[]>([]);
-  const [jellyfinUrl, setJellyfinUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -84,11 +83,7 @@ export default function ShowsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [config, showsRes] = await Promise.all([
-        apiFetch<{ jellyfinPublicUrl: string }>("/api/config"),
-        apiFetch<{ Items: Show[] }>("/api/shows"),
-      ]);
-      setJellyfinUrl(config.jellyfinPublicUrl);
+      const showsRes = await apiFetch<{ Items: Show[] }>("/api/shows");
       setShows(showsRes.Items ?? []);
       setError("");
     } catch (e) {
@@ -101,12 +96,6 @@ export default function ShowsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  function itemUrl(item: MediaItem): string {
-    const tmdbId = item.ProviderIds?.Tmdb;
-    if (tmdbId) return `https://www.themoviedb.org/tv/${tmdbId}`;
-    return `${jellyfinUrl}/web/index.html#!/details?id=${item.Id}&serverId=${item.ServerId ?? ""}`;
-  }
 
   // Menu counts come from the whole library, so the menus don't shrink as
   // you filter. A show counts for a language if any episode has it.
@@ -231,7 +220,7 @@ export default function ShowsPage() {
             {rows.map((item) => (
               <PosterCard
                 key={item.Id}
-                href={itemUrl(item)}
+                href={tmdbUrl("tv", item.ProviderIds?.Tmdb)}
                 itemId={item.Id}
                 imageTag={item.ImageTags?.Primary}
                 title={item.Name}

@@ -8,7 +8,7 @@ import { SearchInput } from "@/components/search-input";
 import { FilterChips, FilterMenu, byCount, countValues, toggled } from "@/components/filter-menu";
 import { POSTER_GRID, PosterCard, PosterGridSkeleton } from "@/components/poster-card";
 import { SortMenu, compareValues, type SortDir } from "@/components/sort-menu";
-import { apiFetch, type MediaItem } from "@/lib/api-client";
+import { apiFetch, tmdbUrl, type MediaItem } from "@/lib/api-client";
 import { languageName } from "@/lib/languages";
 
 // The lean shape /api/movies sends. Codec and release group are left out on
@@ -57,7 +57,7 @@ function movieSortValue(item: Movie, key: SortKey): string | number {
   }
 }
 
-function MovieCard({ item, href }: { item: Movie; href: string }) {
+function MovieCard({ item, href }: { item: Movie; href?: string }) {
   const f = movieFacets(item);
   const minutes = item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null;
   const meta = [item.ProductionYear, minutes ? `${minutes} min` : null].filter(Boolean).join(" · ");
@@ -75,7 +75,6 @@ function MovieCard({ item, href }: { item: Movie; href: string }) {
 
 export default function MoviesPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [jellyfinUrl, setJellyfinUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -86,11 +85,7 @@ export default function MoviesPage() {
 
   const load = useCallback(async () => {
     try {
-      const [config, moviesRes] = await Promise.all([
-        apiFetch<{ jellyfinPublicUrl: string }>("/api/config"),
-        apiFetch<{ Items: Movie[] }>("/api/movies"),
-      ]);
-      setJellyfinUrl(config.jellyfinPublicUrl);
+      const moviesRes = await apiFetch<{ Items: Movie[] }>("/api/movies");
       setMovies(moviesRes.Items ?? []);
       setError("");
     } catch (e) {
@@ -103,12 +98,6 @@ export default function MoviesPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  function itemUrl(item: MediaItem): string {
-    const tmdbId = item.ProviderIds?.Tmdb;
-    if (tmdbId) return `https://www.themoviedb.org/movie/${tmdbId}`;
-    return `${jellyfinUrl}/web/index.html#!/details?id=${item.Id}&serverId=${item.ServerId ?? ""}`;
-  }
 
   // Menu counts come from the whole library, so the menus don't shrink as
   // you filter. A movie matches a facet if it has any selected value.
@@ -214,7 +203,7 @@ export default function MoviesPage() {
         ) : (
           <div className={POSTER_GRID}>
             {rows.map((item) => (
-              <MovieCard key={item.Id} item={item} href={itemUrl(item)} />
+              <MovieCard key={item.Id} item={item} href={tmdbUrl("movie", item.ProviderIds?.Tmdb)} />
             ))}
           </div>
         )}

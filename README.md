@@ -66,7 +66,6 @@ Available for `linux/amd64` and `linux/arm64`.
 | --- | :---: | :---: | --- |
 | `JELLYFIN_URL` | ✅ | | Address of your Jellyfin server, as seen from the container |
 | `JELLYFIN_API_KEY` | ✅ | | Jellyfin API key (*Dashboard → API Keys*) |
-| `JELLYFIN_PUBLIC_URL` | | `JELLYFIN_URL` | Address your browser uses for "Open in Jellyfin" links |
 | `TMDB_API_KEY` | ✅ | | [TMDB API key](https://www.themoviedb.org/settings/api) (v3) |
 | `JELLYFIN_SYNC_INTERVAL_HOURS` | | `6` | Hours between Jellyfin library syncs, `0` = off |
 | `TMDB_SYNC_INTERVAL_HOURS` | | `24` | Hours between TMDB metadata refreshes, `0` = off |

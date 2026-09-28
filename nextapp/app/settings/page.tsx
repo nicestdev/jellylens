@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 type Intervals = { jellyfin: number; tmdb: number; missing: number };
 type Config = {
   jellyfinUrl: string;
-  jellyfinPublicUrl: string;
   jellyfinApiKey: string;
   tmdbApiKey: string;
   authEnabled: boolean;
@@ -206,10 +205,6 @@ export default function SettingsPage() {
             icon: Server,
             rows: [
               { label: "Server", env: "JELLYFIN_URL", value: config?.jellyfinUrl },
-              // Only worth a row when it differs from the server address.
-              ...(config && config.jellyfinPublicUrl !== config.jellyfinUrl
-                ? [{ label: "Public URL", env: "JELLYFIN_PUBLIC_URL", value: config.jellyfinPublicUrl }]
-                : []),
               { label: "API key", env: "JELLYFIN_API_KEY", value: config?.jellyfinApiKey },
               { label: "Sign-in", env: "AUTH_ENABLED", value: config ? (config.authEnabled ? "Jellyfin accounts" : "Off") : undefined },
             ],

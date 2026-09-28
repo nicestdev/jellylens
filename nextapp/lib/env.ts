@@ -1,7 +1,4 @@
 export const JELLYFIN_URL = (process.env.JELLYFIN_URL || "").replace(/\/+$/, "");
-// Where the browser opens Jellyfin for "Open in Jellyfin" links. Only needed
-// when JELLYFIN_URL isn't reachable from your devices (e.g. a Docker hostname).
-export const JELLYFIN_PUBLIC_URL = (process.env.JELLYFIN_PUBLIC_URL || JELLYFIN_URL).replace(/\/+$/, "");
 export const JELLYFIN_API_KEY = process.env.JELLYFIN_API_KEY || "";
 export const TMDB_API_KEY = process.env.TMDB_API_KEY || "";
 

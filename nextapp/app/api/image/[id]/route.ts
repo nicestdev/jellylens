@@ -17,8 +17,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return new Response(new Uint8Array(image.body), {
     headers: {
       "Content-Type": image.type,
-      // The tag is in the URL, so a given URL's bytes never change.
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // The tag is in the URL, so a given URL's bytes never change. private:
+      // browsers may keep them, but no CDN (e.g. Cloudflare) serves them to
+      // someone who isn't signed in.
+      "Cache-Control": "private, max-age=31536000, immutable",
     },
   });
 }

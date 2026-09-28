@@ -20,14 +20,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Poster } from "@/components/poster";
 import { CornerBadge } from "@/components/poster-card";
-import { apiFetch, relativeTime, type MediaItem, type SyncStatus } from "@/lib/api-client";
+import { apiFetch, relativeTime, tmdbUrl, type MediaItem, type SyncStatus } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type MissingSeason = {
@@ -300,21 +299,22 @@ function StripLegend({ tone, upcoming }: { tone: Tone; upcoming: boolean }) {
 function ShowCard({
   group,
   category,
-  itemUrl,
-  jellyfinItemUrl,
   onIgnore,
 }: {
   group: Group;
   category: Category;
-  itemUrl: (item: MediaItem) => string;
-  jellyfinItemUrl: (item: MediaItem) => string;
   onIgnore: (entry: IgnoreEntry) => void;
 }) {
   const { item, lines } = group;
   const singleSeason = lines.length === 1;
+  // Poster and name link to TMDB; without a TMDB id they're plain.
+  const href = tmdbUrl("tv", item.ProviderIds?.Tmdb);
+  const PosterLink = href ? "a" : "div";
+  const NameLink = href ? "a" : "span";
+  const link = href ? { href, target: "_blank", rel: "noopener noreferrer" } : {};
   return (
     <article className="flex min-w-0 gap-4 rounded-xl border bg-card p-4">
-      <a href={itemUrl(item)} target="_blank" rel="noopener noreferrer" tabIndex={-1} className="group relative shrink-0">
+      <PosterLink {...link} tabIndex={href ? -1 : undefined} className="group relative shrink-0">
         <Poster
           itemId={item.Id}
           tag={item.ImageTags?.Primary}
@@ -331,19 +331,17 @@ function ShowCard({
           }
           className="top-1.5 right-1.5"
         />
-      </a>
+      </PosterLink>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <a
-              href={itemUrl(item)}
-              target="_blank"
-              rel="noopener noreferrer"
+            <NameLink
+              {...link}
               title={item.Name}
-              className="block truncate font-medium transition-colors hover:text-primary"
+              className={cn("block truncate font-medium", href && "transition-colors hover:text-primary")}
             >
               {item.Name}
-            </a>
+            </NameLink>
             {item.ProductionYear ? <p className="text-xs text-muted-foreground">{item.ProductionYear}</p> : null}
           </div>
           <DropdownMenu>
@@ -354,15 +352,6 @@ function ShowCard({
               <MoreHorizontal />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-auto">
-              <DropdownMenuItem onClick={() => window.open(jellyfinItemUrl(item), "_blank", "noopener")}>
-                Open in Jellyfin
-              </DropdownMenuItem>
-              {item.ProviderIds?.Tmdb ? (
-                <DropdownMenuItem onClick={() => window.open(itemUrl(item), "_blank", "noopener")}>
-                  Open on TMDB
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuSeparator />
               {lines.map((line) => (
                 <DropdownMenuItem
                   key={`ignore-${line.season}`}
@@ -476,7 +465,6 @@ export default function MissingPage() {
   const [shows, setShows] = useState<ShowWithMissing[]>([]);
   const [ignored, setIgnored] = useState<IgnoreEntry[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
-  const [jellyfinUrl, setJellyfinUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [rechecking, setRechecking] = useState(false);
@@ -484,13 +472,11 @@ export default function MissingPage() {
 
   const load = useCallback(async () => {
     try {
-      const [config, showsRes, ignoredRes, status] = await Promise.all([
-        apiFetch<{ jellyfinPublicUrl: string }>("/api/config"),
+      const [showsRes, ignoredRes, status] = await Promise.all([
         apiFetch<{ Items: ShowWithMissing[] }>("/api/shows"),
         apiFetch<{ Items: IgnoreEntry[] }>("/api/ignored"),
         apiFetch<SyncStatus>("/api/status"),
       ]);
-      setJellyfinUrl(config.jellyfinPublicUrl);
       setShows([...(showsRes.Items ?? [])].sort((a, b) => a.Name.localeCompare(b.Name)));
       setIgnored(ignoredRes.Items ?? []);
       setCheckedAt(status.missing.syncedAt);
@@ -534,15 +520,6 @@ export default function MissingPage() {
 
   const ignore = (entry: IgnoreEntry) => updateIgnored("POST", entry);
   const unignore = (entry: IgnoreEntry) => updateIgnored("DELETE", entry);
-
-  function jellyfinItemUrl(item: MediaItem): string {
-    return `${jellyfinUrl}/web/index.html#!/details?id=${item.Id}&serverId=${item.ServerId ?? ""}`;
-  }
-
-  function itemUrl(item: MediaItem): string {
-    const tmdbId = item.ProviderIds?.Tmdb;
-    return tmdbId ? `https://www.themoviedb.org/tv/${tmdbId}` : jellyfinItemUrl(item);
-  }
 
   const groupsByCategory = Object.fromEntries(
     CATEGORIES.map((c) => [
@@ -652,8 +629,6 @@ export default function MissingPage() {
                 key={group.item.Id}
                 group={group}
                 category={activeCategory}
-                itemUrl={itemUrl}
-                jellyfinItemUrl={jellyfinItemUrl}
                 onIgnore={ignore}
               />
             ))}

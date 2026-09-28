@@ -5,7 +5,6 @@ services:
     command: sh -c "npm install && npm run dev"
     environment:
       JELLYFIN_URL: ${JELLYFIN_URL}
-      JELLYFIN_PUBLIC_URL: ${JELLYFIN_PUBLIC_URL:-}
       JELLYFIN_API_KEY: ${JELLYFIN_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
       JELLYFIN_SYNC_INTERVAL_HOURS: ${JELLYFIN_SYNC_INTERVAL_HOURS:-6}

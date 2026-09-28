@@ -46,3 +46,9 @@ export type MediaItem = {
   ProviderIds?: { Tmdb?: string };
   [key: string]: unknown;
 };
+
+// Every title links to its TMDB page — never to Jellyfin, which usually
+// isn't reachable from where Jellylens is opened. No TMDB id, no link.
+export function tmdbUrl(type: "movie" | "tv", tmdbId: string | number | undefined): string | undefined {
+  return tmdbId ? `https://www.themoviedb.org/${type}/${tmdbId}` : undefined;
+}

@@ -60,8 +60,8 @@ account found via `/Users`) — there's no user picker.
 
 The browser never talks to `JELLYFIN_URL`: posters go through
 `GET /api/image/<id>` (`lib/image-cache.ts`, cached under `DATA_DIR/images`,
-pruned after each Jellyfin sync). Only "Open in Jellyfin" links point at
-Jellyfin, via the optional `JELLYFIN_PUBLIC_URL`.
+pruned after each Jellyfin sync). Titles link to TMDB only (`tmdbUrl()` in
+`lib/api-client.ts`), never to Jellyfin.
 
 ## Sign-in
 
