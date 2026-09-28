@@ -69,7 +69,13 @@ Jellyfin, via the optional `JELLYFIN_PUBLIC_URL`.
 `/api/auth/*`). Users sign in with their Jellyfin username/password, checked
 once via `/Users/AuthenticateByName` (`lib/jellyfin.ts`); the Jellyfin token
 is signed out right away, and Jellylens keeps its own HMAC-signed cookie
-(`lib/session.ts`, secret generated into `DATA_DIR/session-secret`). Jellyfin
+(`lib/session.ts`, 7 days, secret generated into `DATA_DIR/session-secret`).
+Every request re-checks that cookie against Jellyfin's `/Users` list (API
+key, cached a minute; `activeUser()`), so deleted/disabled users are out and
+admin rights follow Jellyfin within a minute. Failed sign-ins are rate
+limited per IP and per username (`lib/rate-limit.ts`, 5 per 15 min).
+`proxy.ts` also rejects state-changing requests with a cross-site
+`Sec-Fetch-Site`, and `next.config.ts` sets the security headers. Jellyfin
 admins get Missing, Settings and the sync/ignore APIs (`ADMIN_ONLY` in
 `proxy.ts`); everyone gets Movies, TV Shows and their own Requests. Server
 code reads the user with `currentUser()` (`lib/auth.ts`). `AUTH_ENABLED=false`

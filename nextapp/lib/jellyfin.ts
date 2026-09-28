@@ -15,7 +15,7 @@ export async function jfGet<T = unknown>(baseUrl: string, apiKey: string, path: 
   return res.json();
 }
 
-type JellyfinUser = { Id: string; Policy?: { IsAdministrator?: boolean } };
+export type JellyfinUser = { Id: string; Name: string; Policy?: { IsAdministrator?: boolean; IsDisabled?: boolean } };
 
 // Aggregate fields like ChildCount/RecursiveItemCount are only computed by
 // Jellyfin on the per-user /Users/{id}/Items endpoint, not the unscoped
@@ -59,7 +59,7 @@ export async function authenticateUser(
   });
   if (res.status === 400 || res.status === 401 || res.status === 403) return null;
   if (!res.ok) throw new Error("Jellyfin returned HTTP " + res.status + " for sign-in");
-  const body = (await res.json()) as { AccessToken: string; User: JellyfinUser & { Name: string } };
+  const body = (await res.json()) as { AccessToken: string; User: JellyfinUser };
   fetch(baseUrl + "/Sessions/Logout", {
     method: "POST",
     headers: { Authorization: LOGIN_CLIENT + ', Token="' + body.AccessToken + '"' },

@@ -75,6 +75,15 @@ Available for `linux/amd64` and `linux/arm64`.
 
 All data (library cache, posters, requests, settings) is stored in `/app/data`.
 
+### Exposing Jellylens to the internet
+
+Jellylens is built to sit behind a reverse proxy or a Cloudflare Tunnel:
+
+- Keep `AUTH_ENABLED` on. Sessions last 7 days and are checked against Jellyfin on every request, so disabling or deleting a user in Jellyfin locks them out within a minute.
+- Failed sign-ins are limited to 5 per 15 minutes per IP and per username. Jellylens reads the client IP from `CF-Connecting-IP` (Cloudflare) or `X-Forwarded-For`, so don't also expose the container port directly.
+- Serve it over HTTPS; the session cookie is then marked `Secure` automatically.
+- Jellyfin locks accounts itself after repeated wrong passwords. For extra protection, add a Cloudflare rate-limiting rule for `/api/auth/login` or put Cloudflare Access in front.
+
 ## Development
 
 ```bash

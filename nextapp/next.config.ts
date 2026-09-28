@@ -10,6 +10,25 @@ const nextConfig: NextConfig = {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
+  poweredByHeader: false,
+  // Hardening for a publicly reachable instance. Posters come from Jellylens
+  // itself and image.tmdb.org, so no script/img CSP is set; framing is shut
+  // off entirely (clickjacking). HSTS only takes effect over HTTPS.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "same-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
