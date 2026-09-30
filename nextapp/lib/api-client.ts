@@ -24,8 +24,8 @@ export function relativeTime(iso: string | null): string {
 
 export type SyncStatus = {
   jellyfin: { syncedAt: string | null; movies: number; shows: number };
-  tmdb: { syncedAt: string | null; shows: number };
-  missing: { syncedAt: string | null; incompleteCount: number };
+  tmdb: { syncedAt: string | null; shows: number; collections: number };
+  missing: { syncedAt: string | null; incompleteCount: number; incompleteCollectionCount: number };
   mismatches: { syncedAt: string | null; mismatchCount: number };
 };
 
@@ -49,6 +49,6 @@ export type MediaItem = {
 
 // Every title links to its TMDB page — never to Jellyfin, which usually
 // isn't reachable from where Jellylens is opened. No TMDB id, no link.
-export function tmdbUrl(type: "movie" | "tv", tmdbId: string | number | undefined): string | undefined {
+export function tmdbUrl(type: "movie" | "tv" | "collection", tmdbId: string | number | undefined): string | undefined {
   return tmdbId ? `https://www.themoviedb.org/${type}/${tmdbId}` : undefined;
 }

@@ -7,9 +7,12 @@ type ItemsResponse = { Items?: JellyfinItem[] };
 // Scene/P2P release filenames conventionally end in "-GROUP" (or, less
 // commonly, wrap it in brackets); this is a best-effort heuristic, not a
 // guaranteed parse — Jellyfin doesn't expose the release group as its own field.
-function parseReleaseGroup(filePath: unknown): string | undefined {
+function fileNameOf(filePath: unknown): string | undefined {
   if (typeof filePath !== "string" || !filePath) return undefined;
-  const fileName = filePath.replace(/\\/g, "/").split("/").pop();
+  return filePath.replace(/\\/g, "/").split("/").pop() || undefined;
+}
+
+function parseReleaseGroup(fileName: string | undefined): string | undefined {
   if (!fileName) return undefined;
   const stem = fileName.replace(/\.[a-zA-Z0-9]{2,4}$/, "");
 
@@ -58,8 +61,9 @@ export async function syncJellyfin(
   store.jellyfin.movies = (moviesRes.Items ?? []).map((movie) => {
     const mediaSources = movie.MediaSources as { Size?: number }[] | undefined;
     const size = mediaSources?.[0]?.Size ?? 0;
-    const releaseGroup = parseReleaseGroup(movie.Path);
-    const clean: JellyfinItem = { ...movie, Size: size, ReleaseGroup: releaseGroup };
+    // Only the file name is kept, not where it lives on the server.
+    const fileName = fileNameOf(movie.Path);
+    const clean: JellyfinItem = { ...movie, Size: size, FileName: fileName, ReleaseGroup: parseReleaseGroup(fileName) };
     delete clean.MediaSources;
     delete clean.Path;
     return clean;

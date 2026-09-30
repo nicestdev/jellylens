@@ -10,10 +10,12 @@ export async function GET() {
     tmdb: {
       syncedAt: store.tmdb.syncedAt,
       shows: Object.keys(store.tmdb.bySeriesId).length,
+      collections: Object.keys(store.tmdb.byCollectionId).length,
     },
     missing: {
       syncedAt: store.missing.syncedAt,
       incompleteCount: Object.keys(store.missing.bySeriesId).length,
+      incompleteCollectionCount: Object.keys(store.missing.byCollectionId).length,
     },
     mismatches: {
       syncedAt: store.mismatches.syncedAt,

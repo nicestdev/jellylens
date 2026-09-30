@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { Footer } from "@/components/footer";
 import { Logo } from "@/components/logo";
 import { Nav } from "@/components/nav";
 import { currentUser } from "@/lib/auth";
@@ -20,7 +21,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Jellylens",
-  description: "Jellyfin library analyzer — missing episodes, mismatches, and library overview.",
+  description: "Jellyfin library analyzer — missing episodes, incomplete movie collections, mismatches, and library overview.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </header>
           {children}
+          {user ? <Footer /> : null}
         </Providers>
       </body>
     </html>

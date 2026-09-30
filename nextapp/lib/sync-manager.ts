@@ -55,12 +55,12 @@ export const triggerJellyfinSync = makeTrigger("jellyfin-sync", async () => {
   return result;
 });
 
-export const triggerTmdbSync = makeTrigger("tmdb-sync", () => {
-  if (!TMDB_API_KEY) return Promise.reject(new Error("TMDB_API_KEY is not configured on the backend."));
-  return syncTmdb(store, { tmdbApiKey: TMDB_API_KEY }).then((result) =>
-    // Keep the missing cache from silently drifting out of date after a fresh TMDB sync.
-    triggerMissingRecheck().then(() => result)
-  );
+export const triggerTmdbSync = makeTrigger("tmdb-sync", async () => {
+  if (!TMDB_API_KEY) throw new Error("TMDB_API_KEY is not configured on the backend.");
+  const result = await syncTmdb(store, { tmdbApiKey: TMDB_API_KEY, language: await ensureMetadataLanguage() });
+  // Keep the missing cache from silently drifting out of date after a fresh TMDB sync.
+  await triggerMissingRecheck();
+  return result;
 });
 
 // Installs the three interval timers from the env vars, once at boot.

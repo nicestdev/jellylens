@@ -30,6 +30,24 @@ export async function fetchTmdbSeason(
   return res.json();
 }
 
+type TmdbCollectionData = {
+  name?: string;
+  poster_path?: string | null;
+  parts?: { id: number; media_type?: string; title?: string; release_date?: string; poster_path?: string | null }[];
+};
+
+// language is a TMDB locale ("de-DE") so part titles match the library's.
+export async function fetchTmdbCollection(
+  apiKey: string,
+  collectionId: string,
+  language: string
+): Promise<TmdbCollectionData | null> {
+  const qs = new URLSearchParams({ language, api_key: apiKey });
+  const res = await fetch("https://api.themoviedb.org/3/collection/" + collectionId + "?" + qs);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 // Runs fn over items with at most `limit` calls in flight at once.
 export async function mapWithConcurrency<T, R>(
   items: T[],

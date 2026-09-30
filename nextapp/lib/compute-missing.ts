@@ -1,4 +1,5 @@
-import { save, type Store, type MissingEntry, type MismatchEntry } from "./store";
+import { save, type Store, type MissingEntry, type MismatchEntry, type MissingCollection, type CollectionPart } from "./store";
+import { movieAvailability } from "./requests";
 
 // Groups a sorted list of episode numbers into "3, 5-7, 9" style ranges.
 function formatEpisodeRanges(numbers: number[]): string[] {
@@ -18,6 +19,47 @@ function formatEpisodeRanges(numbers: number[]): string[] {
     parts.push(start === prev ? String(start) : `${start}-${prev}`);
   }
   return parts;
+}
+
+// Out on disc or digital, going by the same rules as the Requests page
+// (lib/requests.ts). Parts released over a year ago carry no release dates
+// (see syncCollections) and count as out; a recent one whose dates couldn't
+// be fetched doesn't, until the next TMDB sync gets them.
+function homeReleased(p: CollectionPart, today: string, yearAgo: string): boolean {
+  if (!p.releaseDate || p.releaseDate > today) return false;
+  if (!p.releases) return p.releaseDate < yearAgo;
+  const availability = movieAvailability(p.releases, p.releaseDate, today, yearAgo);
+  return availability === null || availability.status === "digital";
+}
+
+// Parts of each synced TMDB collection that aren't owned (matched by TMDB
+// movie id) and are out on disc or digital. The rest (in cinemas, announced,
+// undated) is dropped entirely and shows up once it's out.
+function computeMissingCollections(store: Store): Record<string, MissingCollection> {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const owned = new Map(
+    store.jellyfin.movies.filter((m) => m.ProviderIds?.Tmdb).map((m) => [Number(m.ProviderIds!.Tmdb), m])
+  );
+  const byCollectionId: Record<string, MissingCollection> = {};
+
+  for (const [id, collection] of Object.entries(store.tmdb.byCollectionId)) {
+    const parts = collection.parts
+      .filter((p) => owned.has(p.tmdbId) || homeReleased(p, today, yearAgo))
+      // The release dates were only needed for the check above.
+      .map((p) => ({
+        tmdbId: p.tmdbId,
+        title: p.title,
+        releaseDate: p.releaseDate,
+        posterPath: p.posterPath,
+        owned: owned.has(p.tmdbId),
+        fileName: owned.get(p.tmdbId)?.FileName,
+      }));
+    const count = parts.filter((p) => !p.owned).length;
+    if (count) byCollectionId[id] = { count, parts };
+  }
+  return byCollectionId;
 }
 
 // Pure, synchronous, no network: diffs store.jellyfin.episodes against
@@ -105,6 +147,7 @@ export function computeMissing(store: Store) {
   }
 
   store.missing.bySeriesId = bySeriesId;
+  store.missing.byCollectionId = computeMissingCollections(store);
   store.missing.syncedAt = new Date().toISOString();
   store.mismatches.bySeriesId = mismatchesBySeriesId;
   store.mismatches.syncedAt = store.missing.syncedAt;
@@ -113,6 +156,7 @@ export function computeMissing(store: Store) {
   return {
     incompleteCount: Object.keys(bySeriesId).length,
     mismatchCount: Object.keys(mismatchesBySeriesId).length,
+    incompleteCollectionCount: Object.keys(store.missing.byCollectionId).length,
     syncedAt: store.missing.syncedAt,
   };
 }

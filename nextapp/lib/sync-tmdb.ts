@@ -1,11 +1,56 @@
-import { fetchTmdbShow, fetchTmdbSeason, mapWithConcurrency } from "./tmdb";
-import { save, type Store, type TmdbSeriesEntry } from "./store";
+import { fetchTmdbShow, fetchTmdbSeason, fetchTmdbCollection, fetchMovieReleases, mapWithConcurrency } from "./tmdb";
+import { save, type Store, type TmdbSeriesEntry, type TmdbCollection, type CollectionPart } from "./store";
 
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export async function syncTmdb(store: Store, { tmdbApiKey }: { tmdbApiKey: string }) {
+// Every TMDB collection an owned movie belongs to, with all its parts —
+// owned or not — so the missing recheck can tell which ones are absent.
+// Parts out within the last year also get their cinema/digital/disc dates,
+// so the recheck can skip ones that are only in cinemas so far.
+async function syncCollections(store: Store, tmdbApiKey: string, language: string) {
+  const today = todayStr();
+  const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const countries = [...new Set([language.split("-")[1] ?? "US", "US"])];
+  const ids = [...new Set(store.jellyfin.movies.map((m) => m.ProviderIds?.TmdbCollection).filter((id) => id))] as string[];
+
+  const results = await mapWithConcurrency(ids, 5, async (id) => {
+    let data;
+    try {
+      data = await fetchTmdbCollection(tmdbApiKey, id, language);
+    } catch {
+      return null;
+    }
+    if (!data || !Array.isArray(data.parts)) return null;
+
+    const parts: CollectionPart[] = data.parts
+      .filter((p) => !p.media_type || p.media_type === "movie")
+      .map((p) => ({
+        tmdbId: p.id,
+        title: p.title || "",
+        releaseDate: p.release_date || null,
+        posterPath: p.poster_path || null,
+      }))
+      // TMDB lists parts in no particular order; undated ones go last.
+      .sort((a, b) => (a.releaseDate ?? "9999").localeCompare(b.releaseDate ?? "9999"));
+
+    await mapWithConcurrency(
+      parts.filter((p) => p.releaseDate && p.releaseDate >= yearAgo && p.releaseDate <= today),
+      3,
+      async (p) => {
+        p.releases = await fetchMovieReleases(tmdbApiKey, p.tmdbId, countries).catch(() => undefined);
+      }
+    );
+
+    const entry: TmdbCollection = { name: data.name || "", posterPath: data.poster_path || null, parts };
+    return [id, entry] as const;
+  });
+
+  return Object.fromEntries(results.filter((r) => r !== null));
+}
+
+export async function syncTmdb(store: Store, { tmdbApiKey, language }: { tmdbApiKey: string; language: string }) {
   if (!store.jellyfin.syncedAt) {
     throw new Error("Sync Jellyfin first — no series to look up on TMDB yet.");
   }
@@ -56,8 +101,13 @@ export async function syncTmdb(store: Store, { tmdbApiKey }: { tmdbApiKey: strin
   }
 
   store.tmdb.bySeriesId = bySeriesId;
+  store.tmdb.byCollectionId = await syncCollections(store, tmdbApiKey, language);
   store.tmdb.syncedAt = new Date().toISOString();
   save();
 
-  return { shows: Object.keys(bySeriesId).length, syncedAt: store.tmdb.syncedAt };
+  return {
+    shows: Object.keys(bySeriesId).length,
+    collections: Object.keys(store.tmdb.byCollectionId).length,
+    syncedAt: store.tmdb.syncedAt,
+  };
 }

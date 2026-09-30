@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { DATA_DIR } from "./env";
 import { LOCAL_USER } from "./session";
+import type { MovieReleases } from "./tmdb";
 
 // Loosely typed: these carry many raw pass-through fields from Jellyfin/TMDB
 // that we never touch ourselves, plus the handful we actually read.
@@ -17,6 +18,8 @@ export type JellyfinItem = {
   Height?: number;
   RunTimeTicks?: number;
   Size?: number;
+  // Movies only: the file's name, without its folder.
+  FileName?: string;
   ReleaseGroup?: string;
   Status?: string;
   ChildCount?: number;
@@ -57,6 +60,29 @@ export type MissingSeason = {
 export type EpisodeState = { n: number; state: "owned" | "missing" | "upcoming" };
 export type MissingEntry = { count: number; seasons: MissingSeason[] };
 
+// A TMDB movie collection ("The Lord of the Rings Collection") that at least
+// one owned movie belongs to, via Jellyfin's TmdbCollection provider id.
+// Parts are sorted by release date; releaseDate null = not dated yet.
+// releases: cinema/digital/disc dates, fetched only for parts that came out
+// within the last year — older ones are taken as out on disc or digital.
+export type CollectionPart = {
+  tmdbId: number;
+  title: string;
+  releaseDate: string | null;
+  posterPath: string | null;
+  releases?: MovieReleases;
+};
+export type TmdbCollection = { name: string; posterPath: string | null; parts: CollectionPart[] };
+
+// A collection with at least one part not owned that's out on disc or
+// digital. Parts not out that way yet are left out until they are.
+// fileName: the owned movie's file (see JellyfinItem.FileName), so you can
+// get the missing parts from the same release group.
+export type MissingCollection = {
+  count: number; // home-released parts not owned
+  parts: (Omit<CollectionPart, "releases"> & { owned: boolean; fileName?: string })[];
+};
+
 // Owned episodes/seasons TMDB doesn't know about for that series — usually
 // means the Jellyfin item is matched to the wrong TMDB show, not that
 // episodes are actually missing.
@@ -65,9 +91,12 @@ export type MismatchEntry = { extraSeasons: number[]; extraEpisodes: ExtraSeason
 
 // A row the user dismissed on the Missing page; season null = the whole show.
 // Scoped per kind, so ignoring a show's missing episodes doesn't also hide
-// its possible mismatches (and vice versa).
+// its possible mismatches (and vice versa). For kind "collection", seriesId
+// is the TMDB collection id and movieId one of its parts (null = all of it).
 export type IgnoreKind = "missing" | "mismatch";
-export type IgnoreEntry = { kind: IgnoreKind; seriesId: string; season: number | null };
+export type IgnoreEntry =
+  | { kind: IgnoreKind; seriesId: string; season: number | null }
+  | { kind: "collection"; collectionId: string; movieId: number | null };
 
 // Something the user wants added to the library, picked from TMDB search on
 // the Requests page. Title/year/poster are copied in so the list renders
@@ -91,6 +120,12 @@ export type RequestEntry = {
 // A Jellyfin user, by id; the name is kept for the admin's overview.
 export type Requester = { id: string; name: string; requestedAt: string };
 
+// Display options an admin sets on the Settings page. Unlike the env-var
+// config, these are changed at runtime, so they live in the cache.
+// showFileNames: owned movies' file names on the Missing page's collection
+// cards (to match the release group); off, they aren't sent at all.
+export type Preferences = { showFileNames: boolean };
+
 export type Store = {
   jellyfin: {
     movies: JellyfinItem[];
@@ -100,10 +135,12 @@ export type Store = {
   };
   tmdb: {
     bySeriesId: Record<string, TmdbSeriesEntry>;
+    byCollectionId: Record<string, TmdbCollection>;
     syncedAt: string | null;
   };
   missing: {
     bySeriesId: Record<string, MissingEntry>;
+    byCollectionId: Record<string, MissingCollection>;
     syncedAt: string | null;
   };
   mismatches: {
@@ -112,6 +149,7 @@ export type Store = {
   };
   ignored: IgnoreEntry[];
   requests: RequestEntry[];
+  preferences: Preferences;
 };
 
 const CACHE_FILE = path.join(DATA_DIR, "cache.json");
@@ -119,11 +157,12 @@ const CACHE_FILE = path.join(DATA_DIR, "cache.json");
 function emptyState(): Store {
   return {
     jellyfin: { movies: [], shows: [], episodes: [], syncedAt: null },
-    tmdb: { bySeriesId: {}, syncedAt: null },
-    missing: { bySeriesId: {}, syncedAt: null },
+    tmdb: { bySeriesId: {}, byCollectionId: {}, syncedAt: null },
+    missing: { bySeriesId: {}, byCollectionId: {}, syncedAt: null },
     mismatches: { bySeriesId: {}, syncedAt: null },
     ignored: [],
     requests: [],
+    preferences: { showFileNames: false },
   };
 }
 
@@ -141,6 +180,10 @@ export function load() {
     const parsed = JSON.parse(raw);
     delete parsed.settings;
     Object.assign(store, emptyState(), parsed);
+    // Only a shallow merge: caches from before movie collections existed
+    // lack these until the next TMDB sync / missing recheck.
+    store.tmdb.byCollectionId ??= {};
+    store.missing.byCollectionId ??= {};
     // Requests from before sign-in existed have no requesters; they go to
     // the local user, whom the first admin to sign in takes over from.
     for (const r of store.requests) {

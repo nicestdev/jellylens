@@ -1,8 +1,9 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { AlertCircle, Globe, ListChecks, Lock, RefreshCw, Server, type LucideIcon } from "lucide-react";
+import { AlertCircle, FileText, Globe, ListChecks, Lock, RefreshCw, Server, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, relativeTime, type SyncStatus } from "@/lib/api-client";
@@ -16,6 +17,9 @@ type Config = {
   authEnabled: boolean;
   intervals: Intervals;
 };
+type Preferences = { showFileNames: boolean };
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : word.endsWith("h") ? "es" : "s"}`;
 
 // Hours; 0 means the automatic schedule is off (manual "Sync now" only).
 function intervalLabel(hours: number): string {
@@ -68,14 +72,20 @@ type Stage = {
 export default function SettingsPage() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
+  const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [s, c] = await Promise.all([apiFetch<SyncStatus>("/api/status"), apiFetch<Config>("/api/config")]);
+      const [s, c, p] = await Promise.all([
+        apiFetch<SyncStatus>("/api/status"),
+        apiFetch<Config>("/api/config"),
+        apiFetch<Preferences>("/api/preferences"),
+      ]);
       setStatus(s);
       setConfig(c);
+      setPrefs(p);
     } catch (e) {
       setError(`Failed to load settings: ${(e as Error).message}`);
     }
@@ -84,6 +94,25 @@ export default function SettingsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Flips the switch right away and rolls back if saving fails.
+  async function setPref(changes: Partial<Preferences>) {
+    if (!prefs) return;
+    const before = prefs;
+    setPrefs({ ...prefs, ...changes });
+    try {
+      setPrefs(
+        await apiFetch<Preferences>("/api/preferences", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(changes),
+        })
+      );
+    } catch (e) {
+      setPrefs(before);
+      setError(`Couldn't save setting: ${(e as Error).message}`);
+    }
+  }
 
   async function trigger(key: string, path: string) {
     setError("");
@@ -113,8 +142,9 @@ export default function SettingsPage() {
       key: "tmdb",
       icon: Globe,
       title: "TMDB",
-      description: "Pulls season and episode air dates for matched shows, then rechecks missing episodes.",
-      detail: status ? `${status.tmdb.shows} shows matched` : "",
+      description:
+        "Pulls season and episode air dates for matched shows and the movie collections you own parts of, then rechecks what's missing.",
+      detail: status ? `${plural(status.tmdb.shows, "show")} matched · ${plural(status.tmdb.collections, "collection")}` : "",
       syncedAt: status?.tmdb.syncedAt ?? null,
       path: "/api/sync/tmdb",
       env: "TMDB_SYNC_INTERVAL_HOURS",
@@ -122,10 +152,10 @@ export default function SettingsPage() {
     {
       key: "missing",
       icon: ListChecks,
-      title: "Missing episodes",
-      description: "Recomputes missing episodes and mismatches from the cached data — no network calls.",
+      title: "Missing episodes & movies",
+      description: "Recomputes missing episodes, collection movies and mismatches from the cached data — no network calls.",
       detail: status
-        ? `${status.missing.incompleteCount} incomplete shows · ${status.mismatches.mismatchCount} mismatches`
+        ? `${plural(status.missing.incompleteCount, "incomplete show")} · ${plural(status.missing.incompleteCollectionCount, "incomplete collection")} · ${plural(status.mismatches.mismatchCount, "mismatch")}`
         : "",
       syncedAt: status?.missing.syncedAt ?? null,
       path: "/api/recheck-missing",
@@ -139,7 +169,7 @@ export default function SettingsPage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Sync sources and how often they run.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Sync sources, how often they run, and display options.</p>
       </div>
 
       {error ? (
@@ -196,6 +226,32 @@ export default function SettingsPage() {
           );
         })}
       </div>
+
+      {/* Unlike the sections around it, this one is changed right here. */}
+      <h2 className="mt-10 mb-3 text-sm font-medium text-muted-foreground">Display</h2>
+      <section className="rounded-xl border bg-card">
+        <label className="flex cursor-pointer items-center gap-3.5 p-4">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+            <FileText className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">File names on missing movies</span>
+            <span className="block text-sm text-muted-foreground">
+              Shows the files you own on each collection card, so you can get the missing parts from the same release
+              group.
+            </span>
+          </span>
+          {prefs ? (
+            <Switch
+              checked={prefs.showFileNames}
+              onCheckedChange={(checked) => setPref({ showFileNames: checked })}
+              aria-label="File names on missing movies"
+            />
+          ) : (
+            <Skeleton className="h-[18px] w-8 rounded-full" />
+          )}
+        </label>
+      </section>
 
       <ReadOnlyHeading title="Server" className="mt-10" />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

@@ -6,14 +6,15 @@
 
 **See what's missing from your Jellyfin library.**
 
-Browse your movies and shows, find missing episodes and seasons, catch bad
-TMDB matches, and keep a wishlist of what to add next.
+Browse your movies and shows, find missing episodes and seasons, complete
+your movie collections, catch bad TMDB matches, and keep a wishlist of what
+to add next.
 
 [![Build](https://github.com/nicestdev/jellylens/actions/workflows/docker.yml/badge.svg)](https://github.com/nicestdev/jellylens/actions/workflows/docker.yml)
 [![Image](https://img.shields.io/badge/ghcr.io-nicestdev%2Fjellylens-a78bfa?logo=docker&logoColor=white)](https://github.com/nicestdev/jellylens/pkgs/container/jellylens)
 [![License](https://img.shields.io/badge/license-MIT-a78bfa)](LICENSE)
 
-<img src="docs/screenshot-missing.jpg" width="90%" alt="Missing episodes" />
+<img src="docs/screenshot-missing.jpg" width="90%" alt="Missing episodes and movies" />
 
 </div>
 
@@ -21,11 +22,12 @@ TMDB matches, and keep a wishlist of what to add next.
 
 - 🎬 **Library overview**: poster grids for movies and shows. Search, sort, and filter by genre, audio language or airing status.
 - 🧩 **Missing episodes**: gaps, whole missing seasons and seasons that are still airing, all checked against TMDB. Ignore anything you don't care about.
+- 🎞️ **Movie collections**: for every TMDB collection you own part of (*The Lord of the Rings*, *Bourne*, …), the movies you don't have yet. Only those out on disc or digital count, and each one can be requested right from its card. Optionally shows the file names you own, so you can get the rest from the same release group.
 - 🔍 **Mismatch detection**: episodes and seasons TMDB doesn't know about, usually a wrong match or a duplicate file.
 - 🗣️ **Language coverage**: flags shows where only some seasons have your audio language.
 - 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin. Everyone has their own list; admins see all of them, most wanted first.
 - 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing and Settings are for Jellyfin admins only.
-- 🔄 **Automatic sync**: Jellyfin and TMDB refresh on a schedule you set on the Settings page.
+- 🔄 **Automatic sync**: Jellyfin and TMDB refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync right away.
 - 📱 **Works on any device**: responsive, dark UI that works on desktop and phone.
 
 <details>
@@ -35,8 +37,10 @@ TMDB matches, and keep a wishlist of what to add next.
 | Movies | TV Shows |
 | :---: | :---: |
 | <img src="docs/screenshot-movies.jpg" alt="Movies" /> | <img src="docs/screenshot-shows.jpg" alt="TV Shows" /> |
-| **Requests** | **Settings** |
-| <img src="docs/screenshot-requests.jpg" alt="Requests" /> | <img src="docs/screenshot-settings.jpg" alt="Settings" /> |
+| **Requests** | **Movie collections** |
+| <img src="docs/screenshot-requests.jpg" alt="Requests" /> | <img src="docs/screenshot-missing-movies.jpg" alt="Missing movies from a collection" /> |
+| **Settings** | |
+| <img src="docs/screenshot-settings.jpg" alt="Settings" /> | |
 
 </details>
 
@@ -69,10 +73,10 @@ Available for `linux/amd64` and `linux/arm64`.
 | `TMDB_API_KEY` | ✅ | | [TMDB API key](https://www.themoviedb.org/settings/api) (v3) |
 | `JELLYFIN_SYNC_INTERVAL_HOURS` | | `6` | Hours between Jellyfin library syncs, `0` = off |
 | `TMDB_SYNC_INTERVAL_HOURS` | | `24` | Hours between TMDB metadata refreshes, `0` = off |
-| `MISSING_RECHECK_INTERVAL_HOURS` | | `24` | Hours between missing-episode rechecks, `0` = off |
+| `MISSING_RECHECK_INTERVAL_HOURS` | | `24` | Hours between rechecks for missing episodes and movies, `0` = off |
 | `AUTH_ENABLED` | | `true` | Sign in with Jellyfin accounts; `false` opens Jellylens to anyone who can reach it |
 
-All data (library cache, posters, requests, settings) is stored in `/app/data`.
+All data (library cache, posters, requests, display settings) is stored in `/app/data`.
 
 ### Exposing Jellylens to the internet
 
@@ -123,7 +127,8 @@ docker compose -f docker-compose.dev.yml up -d   # next dev, hot reload
 docker compose up -d --build                     # local production build
 ```
 
-The app is a Next.js project in [`nextapp/`](nextapp).
+The app is a Next.js project in [`nextapp/`](nextapp). The README screenshots
+come from a fake Jellyfin with a free demo library, see [`docs/demo/`](docs/demo).
 
 ## License
 

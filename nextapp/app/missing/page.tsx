@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
   EyeOff,
+  Film,
   GitCompareArrows,
-  Layers,
-  ListX,
   MoreHorizontal,
-  Radio,
   RefreshCw,
+  Tv,
   type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -22,12 +21,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Poster } from "@/components/poster";
 import { CornerBadge } from "@/components/poster-card";
 import { apiFetch, relativeTime, tmdbUrl, type MediaItem, type SyncStatus } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { CardSkeleton, StatCard, TONES, plural, type Tone } from "./shared";
+import {
+  CollectionList,
+  IgnoredCollections,
+  missingParts,
+  type CollectionIgnore,
+  type MissingCollection,
+} from "./collections";
 
 type MissingSeason = {
   season: number;
@@ -49,10 +55,12 @@ type ShowWithMissing = MediaItem & {
 };
 
 type IgnoreKind = "missing" | "mismatch";
-type IgnoreEntry = { kind: IgnoreKind; seriesId: string; season: number | null };
+type ShowIgnore = { kind: IgnoreKind; seriesId: string; season: number | null };
+type IgnoreEntry = ShowIgnore | CollectionIgnore;
 
 // One season line on a show card. extraSeason = a whole season TMDB
-// doesn't list at all (mismatches only).
+// doesn't list at all (mismatches only). airing = the season is still
+// airing, so the gaps may just mean you're not caught up yet.
 type Line = {
   season: number;
   episodes: string;
@@ -61,15 +69,9 @@ type Line = {
   episodeStates?: EpisodeState[];
   wholeSeason?: boolean;
   extraSeason?: boolean;
+  airing?: boolean;
 };
 type Group = { item: ShowWithMissing; lines: Line[] };
-
-type Tone = "destructive" | "warning" | "info";
-const TONES: Record<Tone, { badge: string; tile: string }> = {
-  destructive: { badge: "bg-destructive/15 text-destructive", tile: "bg-destructive/15 text-destructive ring-destructive/40" },
-  warning: { badge: "bg-warning/15 text-warning", tile: "bg-warning/15 text-warning ring-warning/40" },
-  info: { badge: "bg-info/15 text-info", tile: "bg-info/15 text-info ring-info/40" },
-};
 
 // Owned tiles stay neutral gray so only the gaps (in the category's tone)
 // carry color; upcoming is a faint outline — nothing to own yet.
@@ -87,68 +89,60 @@ const SEGMENT_LABEL: Record<EpisodeState["state"], string> = {
   upcoming: "not aired yet",
 };
 
-type CategoryKey = "gaps" | "seasons" | "airing" | "mismatch";
+// Shows (missing episodes — gaps, whole seasons and seasons still airing),
+// Movies (collection parts) and Mismatches, one card each.
+type CategoryKey = "shows" | "movies" | "mismatch";
 type Category = {
   key: CategoryKey;
   label: string;
   hint: string;
   empty: { title: string; hint: string }; // shown when the category has nothing
   tone: Tone;
-  kind: IgnoreKind;
   icon: LucideIcon;
   unit: string; // what the stat card counts
+  groupUnit: string; // what it counts them in
 };
 
 const CATEGORIES: Category[] = [
   {
-    key: "gaps",
-    icon: ListX,
+    key: "shows",
+    icon: Tv,
     unit: "episode",
-    label: "Missing episodes",
-    hint: "Gaps in seasons that have finished airing.",
-    empty: { title: "No gaps", hint: "Every finished season you've started is complete." },
+    groupUnit: "show",
+    label: "Shows",
+    hint: "Episodes you don't have. Seasons still airing are marked — often you're just not caught up yet.",
+    empty: { title: "No gaps", hint: "Every season you've started is complete." },
     tone: "destructive",
-    kind: "missing",
   },
   {
-    key: "seasons",
-    icon: Layers,
-    unit: "episode",
-    label: "Missing seasons",
-    hint: "Fully aired seasons you own none of.",
-    empty: { title: "No missing seasons", hint: "You have episodes from every season that has finished airing." },
+    key: "movies",
+    icon: Film,
+    unit: "movie",
+    groupUnit: "collection",
+    label: "Movies",
+    hint: "Movies out on disc or digital from collections you own part of.",
+    empty: { title: "No gaps", hint: "You have every available movie of the collections you've started." },
     tone: "destructive",
-    kind: "missing",
-  },
-  {
-    key: "airing",
-    icon: Radio,
-    unit: "episode",
-    label: "Currently airing",
-    hint: "Seasons still airing — often you're just not caught up yet.",
-    empty: { title: "All caught up", hint: "Nothing missing from seasons that are still airing." },
-    tone: "warning",
-    kind: "missing",
   },
   {
     key: "mismatch",
     icon: GitCompareArrows,
     unit: "issue",
+    groupUnit: "show",
     label: "Mismatches",
     hint: "Files TMDB doesn't know about — often duplicates, bonus content or a wrong match.",
     empty: { title: "No mismatches", hint: "Everything you own matches TMDB." },
     tone: "info",
-    kind: "mismatch",
   },
 ];
 
-function isIgnored(ignored: IgnoreEntry[], kind: IgnoreKind, seriesId: string, season: number): boolean {
+function isIgnored(ignored: ShowIgnore[], kind: IgnoreKind, seriesId: string, season: number): boolean {
   return ignored.some(
     (e) => e.kind === kind && e.seriesId === seriesId && (e.season === null || e.season === season)
   );
 }
 
-function linesFor(item: ShowWithMissing, key: CategoryKey): Line[] {
+function linesFor(item: ShowWithMissing, key: "shows" | "mismatch"): Line[] {
   if (key === "mismatch") {
     const m = item.Mismatches;
     if (!m) return [];
@@ -157,9 +151,10 @@ function linesFor(item: ShowWithMissing, key: CategoryKey): Line[] {
       ...m.extraEpisodes.map((s) => ({ season: s.season, episodes: s.episodes, count: s.count })),
     ].sort((a, b) => a.season - b.season);
   }
-  const predicate: (s: MissingSeason) => boolean =
-    key === "airing" ? (s) => !s.ended : key === "seasons" ? (s) => s.ended && s.wholeSeason : (s) => s.ended && !s.wholeSeason;
-  return (item.MissingEpisodes?.seasons ?? []).filter(predicate);
+  // Finished seasons first: those are the real gaps.
+  return (item.MissingEpisodes?.seasons ?? [])
+    .map((s) => ({ ...s, airing: !s.ended }))
+    .sort((a, b) => Number(a.airing) - Number(b.airing) || a.season - b.season);
 }
 
 function seasonLabel(season: number): string {
@@ -169,10 +164,6 @@ function seasonLabel(season: number): string {
 // Compact form for the pill in front of each tile row ("S2", "SP").
 function seasonShort(season: number): string {
   return season === 0 ? "SP" : `S${season}`;
-}
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
 // "5-7, 9" -> "E5–7, E9"
@@ -189,64 +180,6 @@ function lineText(line: Line): string {
   if (line.extraSeason) return "Not on TMDB";
   if (line.wholeSeason) return "Entire season";
   return episodeRanges(line.episodes);
-}
-
-function StatCard({
-  category,
-  episodes,
-  shows,
-  active,
-  loading,
-  onClick,
-}: {
-  category: Category;
-  episodes: number;
-  shows: number;
-  active: boolean;
-  loading: boolean;
-  onClick: () => void;
-}) {
-  const Icon = category.icon;
-  const empty = !loading && episodes === 0;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded-xl border bg-card p-4 text-left transition-colors outline-none hover:border-foreground/20 focus-visible:ring-3 focus-visible:ring-ring/50",
-        active && "border-primary/60 ring-1 ring-primary/40 hover:border-primary/60"
-      )}
-    >
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-lg",
-            empty ? "bg-muted text-muted-foreground" : TONES[category.tone].badge
-          )}
-        >
-          <Icon className="size-4" />
-        </span>
-        <span className="text-sm leading-tight font-medium">{category.label}</span>
-      </div>
-      {loading ? (
-        <>
-          <Skeleton className="mt-4 h-7 w-24" />
-          <Skeleton className="mt-1.5 h-3 w-16" />
-        </>
-      ) : (
-        <>
-          <div className="mt-4 flex items-baseline gap-1.5">
-            <span className={cn("text-2xl font-semibold tracking-tight tabular-nums", empty && "text-muted-foreground")}>
-              {episodes}
-            </span>
-            <span className="text-sm text-muted-foreground">{episodes === 1 ? category.unit : `${category.unit}s`}</span>
-          </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">{empty ? "Nothing to do" : `in ${plural(shows, "show")}`}</div>
-        </>
-      )}
-    </button>
-  );
 }
 
 // One numbered tile per episode, so the exact gaps are readable at a glance.
@@ -298,15 +231,18 @@ function StripLegend({ tone, upcoming }: { tone: Tone; upcoming: boolean }) {
 
 function ShowCard({
   group,
-  category,
+  kind,
+  tone,
   onIgnore,
 }: {
   group: Group;
-  category: Category;
-  onIgnore: (entry: IgnoreEntry) => void;
+  kind: IgnoreKind;
+  tone: Tone;
+  onIgnore: (entry: ShowIgnore) => void;
 }) {
   const { item, lines } = group;
   const singleSeason = lines.length === 1;
+  const airing = lines.filter((l) => l.airing);
   // Poster and name link to TMDB; without a TMDB id they're plain.
   const href = tmdbUrl("tv", item.ProviderIds?.Tmdb);
   const PosterLink = href ? "a" : "div";
@@ -342,7 +278,27 @@ function ShowCard({
             >
               {item.Name}
             </NameLink>
-            {item.ProductionYear ? <p className="text-xs text-muted-foreground">{item.ProductionYear}</p> : null}
+            {/* Airing goes here rather than on the season rows, so it doesn't
+                push their episode tiles out of line with the other rows. */}
+            {item.ProductionYear || airing.length ? (
+              <p className="text-xs text-muted-foreground">
+                {[
+                  item.ProductionYear,
+                  airing.length ? (
+                    <span key="airing" title="Still airing — you may just not be caught up yet" className="text-warning">
+                      {singleSeason ? "Still airing" : `${airing.map((l) => seasonShort(l.season)).join(", ")} still airing`}
+                    </span>
+                  ) : null,
+                ]
+                  .filter(Boolean)
+                  .map((part, i) => (
+                    <Fragment key={i}>
+                      {i > 0 ? " · " : null}
+                      {part}
+                    </Fragment>
+                  ))}
+              </p>
+            ) : null}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -355,13 +311,13 @@ function ShowCard({
               {lines.map((line) => (
                 <DropdownMenuItem
                   key={`ignore-${line.season}`}
-                  onClick={() => onIgnore({ kind: category.kind, seriesId: item.Id, season: line.season })}
+                  onClick={() => onIgnore({ kind, seriesId: item.Id, season: line.season })}
                 >
                   <EyeOff />
                   Ignore {seasonLabel(line.season).toLowerCase()}
                 </DropdownMenuItem>
               ))}
-              <DropdownMenuItem onClick={() => onIgnore({ kind: category.kind, seriesId: item.Id, season: null })}>
+              <DropdownMenuItem onClick={() => onIgnore({ kind, seriesId: item.Id, season: null })}>
                 <EyeOff />
                 Ignore entire show
               </DropdownMenuItem>
@@ -386,7 +342,7 @@ function ShowCard({
                   </span>
                 )}
                 {line.episodeStates?.length ? (
-                  <EpisodeStrip line={line} states={line.episodeStates} tone={category.tone} />
+                  <EpisodeStrip line={line} states={line.episodeStates} tone={line.airing ? "warning" : tone} />
                 ) : (
                   <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{lineText(line)}</span>
                 )}
@@ -404,9 +360,9 @@ function IgnoredList({
   shows,
   onUnignore,
 }: {
-  entries: IgnoreEntry[];
+  entries: ShowIgnore[];
   shows: ShowWithMissing[];
-  onUnignore: (entry: IgnoreEntry) => void;
+  onUnignore: (entry: ShowIgnore) => void;
 }) {
   const byId = new Map(shows.map((s) => [s.Id, s]));
   const name = (id: string) => byId.get(id)?.Name ?? "Unknown show";
@@ -448,21 +404,9 @@ function IgnoredList({
   );
 }
 
-function CardSkeleton() {
-  return (
-    <div className="flex gap-4 rounded-xl border bg-card p-4">
-      <Skeleton className="aspect-2/3 w-20" />
-      <div className="flex-1 space-y-2 pt-1">
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-4 h-5 w-full max-w-md" />
-      </div>
-    </div>
-  );
-}
-
 export default function MissingPage() {
   const [shows, setShows] = useState<ShowWithMissing[]>([]);
+  const [collections, setCollections] = useState<MissingCollection[]>([]);
   const [ignored, setIgnored] = useState<IgnoreEntry[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -472,12 +416,14 @@ export default function MissingPage() {
 
   const load = useCallback(async () => {
     try {
-      const [showsRes, ignoredRes, status] = await Promise.all([
+      const [showsRes, collectionsRes, ignoredRes, status] = await Promise.all([
         apiFetch<{ Items: ShowWithMissing[] }>("/api/shows"),
+        apiFetch<{ Items: MissingCollection[] }>("/api/collections"),
         apiFetch<{ Items: IgnoreEntry[] }>("/api/ignored"),
         apiFetch<SyncStatus>("/api/status"),
       ]);
       setShows([...(showsRes.Items ?? [])].sort((a, b) => a.Name.localeCompare(b.Name)));
+      setCollections(collectionsRes.Items ?? []);
       setIgnored(ignoredRes.Items ?? []);
       setCheckedAt(status.missing.syncedAt);
       setError("");
@@ -521,26 +467,38 @@ export default function MissingPage() {
   const ignore = (entry: IgnoreEntry) => updateIgnored("POST", entry);
   const unignore = (entry: IgnoreEntry) => updateIgnored("DELETE", entry);
 
-  const groupsByCategory = Object.fromEntries(
-    CATEGORIES.map((c) => [
-      c.key,
-      shows
-        .map((item) => ({
-          item,
-          lines: linesFor(item, c.key).filter((l) => !isIgnored(ignored, c.kind, item.Id, l.season)),
-        }))
-        .filter((g) => g.lines.length > 0),
-    ])
-  ) as Record<CategoryKey, Group[]>;
+  const showIgnored = ignored.filter((e): e is ShowIgnore => e.kind !== "collection");
+  const collectionIgnored = ignored.filter((e): e is CollectionIgnore => e.kind === "collection");
 
-  const episodeCount = (groups: Group[]) => groups.reduce((sum, g) => sum + g.lines.reduce((s, l) => s + l.count, 0), 0);
+  const showGroups = (key: "shows" | "mismatch", kind: IgnoreKind): Group[] =>
+    shows
+      .map((item) => ({ item, lines: linesFor(item, key).filter((l) => !isIgnored(showIgnored, kind, item.Id, l.season)) }))
+      .filter((g) => g.lines.length > 0);
+  const missingShows = showGroups("shows", "missing");
+  const mismatches = showGroups("mismatch", "mismatch");
+  const collectionGroups = collections
+    .map((collection) => ({ collection, parts: missingParts(collection, collectionIgnored) }))
+    .filter((g) => g.parts.length > 0);
 
-  const missingGroups = [...groupsByCategory.gaps, ...groupsByCategory.seasons, ...groupsByCategory.airing];
-  const totalMissing = episodeCount(missingGroups);
-  const totalShows = new Set(missingGroups.map((g) => g.item.Id)).size;
+  const lineCount = (groups: Group[], airing?: boolean) =>
+    groups.reduce((sum, g) => sum + g.lines.reduce((s, l) => s + (airing === undefined || l.airing === airing ? l.count : 0), 0), 0);
+  const counts: Record<CategoryKey, { count: number; groups: number }> = {
+    shows: { count: lineCount(missingShows), groups: missingShows.length },
+    movies: { count: collectionGroups.reduce((sum, g) => sum + g.parts.length, 0), groups: collectionGroups.length },
+    mismatch: { count: lineCount(mismatches), groups: mismatches.length },
+  };
+  const airingCount = lineCount(missingShows, true);
+
+  const summary =
+    [
+      counts.shows.count ? plural(counts.shows.count, "episode") : null,
+      counts.movies.count ? plural(counts.movies.count, "movie") : null,
+    ]
+      .filter(Boolean)
+      .join(" and ") || "Nothing";
 
   // Until the user picks a card, land on the first category with anything in it.
-  const activeView = view ?? CATEGORIES.find((c) => groupsByCategory[c.key].length)?.key ?? "gaps";
+  const activeView = view ?? CATEGORIES.find((c) => counts[c.key].groups)?.key ?? "shows";
   const activeCategory = CATEGORIES.find((c) => c.key === activeView);
 
   return (
@@ -549,9 +507,7 @@ export default function MissingPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Missing</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {loading
-              ? "Loading…"
-              : `${totalMissing ? `${plural(totalMissing, "episode")} missing across ${plural(totalShows, "show")}` : "Your library is complete"} · checked ${relativeTime(checkedAt)}`}
+            {loading ? "Loading…" : `${summary} missing · checked ${relativeTime(checkedAt)}`}
           </p>
         </div>
         <Button variant="outline" className="ml-auto" onClick={recheck} disabled={rechecking || loading}>
@@ -567,13 +523,18 @@ export default function MissingPage() {
         </Alert>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {CATEGORIES.map((c) => (
           <StatCard
             key={c.key}
-            category={c}
-            episodes={episodeCount(groupsByCategory[c.key])}
-            shows={groupsByCategory[c.key].length}
+            label={c.label}
+            icon={c.icon}
+            tone={c.tone}
+            unit={c.unit}
+            groupUnit={c.groupUnit}
+            count={counts[c.key].count}
+            groups={counts[c.key].groups}
+            detail={c.key === "shows" && airingCount ? `${airingCount} airing` : undefined}
             active={activeView === c.key}
             loading={loading}
             onClick={() => setView(c.key)}
@@ -593,13 +554,11 @@ export default function MissingPage() {
         {activeCategory ? (
           <div className="ml-auto flex w-full items-center justify-end gap-3 sm:w-auto">
             {/* Full width (its own line) on phones — whether it fit next to the
-                hint depended on the hint's length, so it jumped between tabs. */}
-            {activeCategory.kind === "missing" ? (
-              <StripLegend tone={activeCategory.tone} upcoming={activeCategory.key === "airing"} />
-            ) : null}
+                hint depended on the hint's length, so it jumped between cards. */}
+            {activeCategory.key === "shows" ? <StripLegend tone={activeCategory.tone} upcoming={airingCount > 0} /> : null}
             {ignored.length ? (
               <>
-                {activeCategory.kind === "missing" ? <span className="h-4 w-px bg-border" /> : null}
+                {activeCategory.key === "shows" ? <span className="h-4 w-px bg-border" /> : null}
                 <Button
                   variant="ghost"
                   className="-mr-2.5 shrink-0 text-muted-foreground"
@@ -621,23 +580,38 @@ export default function MissingPage() {
           <CardSkeleton />
           <CardSkeleton />
         </div>
-      ) : activeCategory ? (
-        groupsByCategory[activeCategory.key].length ? (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {groupsByCategory[activeCategory.key].map((group) => (
-              <ShowCard
-                key={group.item.Id}
-                group={group}
-                category={activeCategory}
-                onIgnore={ignore}
-              />
-            ))}
-          </div>
-        ) : (
-          <EmptyState icon={CheckCircle2} title={activeCategory.empty.title} hint={activeCategory.empty.hint} />
-        )
+      ) : !activeCategory ? (
+        <div className="space-y-6">
+          {showIgnored.length ? (
+            <section>
+              <h2 className="mb-2 text-sm font-medium">Shows</h2>
+              <IgnoredList entries={showIgnored} shows={shows} onUnignore={unignore} />
+            </section>
+          ) : null}
+          {collectionIgnored.length ? (
+            <section>
+              <h2 className="mb-2 text-sm font-medium">Movies</h2>
+              <IgnoredCollections entries={collectionIgnored} collections={collections} onUnignore={unignore} />
+            </section>
+          ) : null}
+          {ignored.length ? null : <EmptyState icon={EyeOff} title="Nothing ignored" hint="Ignored shows and movies show up here." />}
+        </div>
+      ) : counts[activeCategory.key].groups === 0 ? (
+        <EmptyState icon={CheckCircle2} title={activeCategory.empty.title} hint={activeCategory.empty.hint} />
+      ) : activeCategory.key === "movies" ? (
+        <CollectionList groups={collectionGroups} onIgnore={ignore} />
       ) : (
-        <IgnoredList entries={ignored} shows={shows} onUnignore={unignore} />
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {(activeCategory.key === "shows" ? missingShows : mismatches).map((group) => (
+            <ShowCard
+              key={group.item.Id}
+              group={group}
+              kind={activeCategory.key === "shows" ? "missing" : "mismatch"}
+              tone={activeCategory.tone}
+              onIgnore={ignore}
+            />
+          ))}
+        </div>
       )}
     </main>
   );
