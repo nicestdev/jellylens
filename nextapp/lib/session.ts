@@ -65,11 +65,12 @@ const ACCOUNTS_TTL_MS = 60 * 1000;
 const globalForAccounts = globalThis as unknown as {
   __jellyfinAccounts?: { at: number; byId: Map<string, Account> | null; pending?: Promise<void> };
 };
-const accounts = (globalForAccounts.__jellyfinAccounts ??= { at: 0, byId: null });
+const accountsState = () => (globalForAccounts.__jellyfinAccounts ??= { at: 0, byId: null });
 
 // Jellyfin's users by id, fetched with the API key at most once a minute.
 // null = never fetched successfully; a failed refresh keeps the last list.
 async function jellyfinAccounts(): Promise<Map<string, Account> | null> {
+  const accounts = accountsState();
   if (Date.now() - accounts.at > ACCOUNTS_TTL_MS) {
     accounts.pending ??= jfGet<JellyfinUser[]>(JELLYFIN_URL, JELLYFIN_API_KEY, "/Users")
       .then((users) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -24,54 +24,24 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { Poster } from "@/components/poster";
 import { CornerBadge } from "@/components/poster-card";
-import { apiFetch, relativeTime, tmdbUrl, type MediaItem, type SyncStatus } from "@/lib/api-client";
+import { apiFetch, runSync, tmdbUrl } from "@/lib/api-client";
+import { relativeTime, seasonLabel } from "@/lib/format";
+import type {
+  CollectionsResponse,
+  EpisodeState,
+  IgnoredResponse,
+  IgnoreEntry,
+  IgnoreKind,
+  ShowIgnore,
+  ShowItem as ShowWithMissing,
+  ShowsResponse,
+  StatusResponse,
+} from "@/lib/api-types";
+import { useLoad } from "@/hooks/use-load";
 import { cn } from "@/lib/utils";
-import { CardSkeleton, StatCard, TONES, plural, type Tone } from "./shared";
-import {
-  CollectionList,
-  IgnoredCollections,
-  missingParts,
-  type CollectionIgnore,
-  type MissingCollection,
-} from "./collections";
-
-type MissingSeason = {
-  season: number;
-  episodes: string;
-  wholeSeason: boolean;
-  ended: boolean;
-  count: number;
-  // Both absent until the next missing-recheck after upgrading.
-  total?: number;
-  episodeStates?: EpisodeState[];
-};
-type EpisodeState = { n: number; state: "owned" | "missing" | "upcoming" };
-type ExtraSeason = { season: number; episodes: string; count: number };
-type ShowWithMissing = MediaItem & {
-  Status?: string;
-  ImageTags?: { Primary?: string };
-  MissingEpisodes: { count: number; seasons: MissingSeason[] } | null;
-  Mismatches: { extraSeasons: number[]; extraEpisodes: ExtraSeason[] } | null;
-};
-
-type IgnoreKind = "missing" | "mismatch";
-type ShowIgnore = { kind: IgnoreKind; seriesId: string; season: number | null };
-type IgnoreEntry = ShowIgnore | CollectionIgnore;
-
-// One season line on a show card. extraSeason = a whole season TMDB
-// doesn't list at all (mismatches only). airing = the season is still
-// airing, so the gaps may just mean you're not caught up yet.
-type Line = {
-  season: number;
-  episodes: string;
-  count: number;
-  total?: number;
-  episodeStates?: EpisodeState[];
-  wholeSeason?: boolean;
-  extraSeason?: boolean;
-  airing?: boolean;
-};
-type Group = { item: ShowWithMissing; lines: Line[] };
+import { CardSkeleton, StatCard, TONES, type Tone } from "./shared";
+import { CollectionList, IgnoredCollections } from "./collections";
+import { episodeRanges, lineText, missingView, summary, type CategoryKey, type Group, type Line } from "./logic";
 
 // Owned tiles stay neutral gray so only the gaps (in the category's tone)
 // carry color; upcoming is a faint outline — nothing to own yet.
@@ -91,7 +61,6 @@ const SEGMENT_LABEL: Record<EpisodeState["state"], string> = {
 
 // Shows (missing episodes — gaps, whole seasons and seasons still airing),
 // Movies (collection parts) and Mismatches, one card each.
-type CategoryKey = "shows" | "movies" | "mismatch";
 type Category = {
   key: CategoryKey;
   label: string;
@@ -136,51 +105,11 @@ const CATEGORIES: Category[] = [
   },
 ];
 
-function isIgnored(ignored: ShowIgnore[], kind: IgnoreKind, seriesId: string, season: number): boolean {
-  return ignored.some(
-    (e) => e.kind === kind && e.seriesId === seriesId && (e.season === null || e.season === season)
-  );
-}
-
-function linesFor(item: ShowWithMissing, key: "shows" | "mismatch"): Line[] {
-  if (key === "mismatch") {
-    const m = item.Mismatches;
-    if (!m) return [];
-    return [
-      ...m.extraSeasons.map((season) => ({ season, episodes: "", count: 1, extraSeason: true })),
-      ...m.extraEpisodes.map((s) => ({ season: s.season, episodes: s.episodes, count: s.count })),
-    ].sort((a, b) => a.season - b.season);
-  }
-  // Finished seasons first: those are the real gaps.
-  return (item.MissingEpisodes?.seasons ?? [])
-    .map((s) => ({ ...s, airing: !s.ended }))
-    .sort((a, b) => Number(a.airing) - Number(b.airing) || a.season - b.season);
-}
-
-function seasonLabel(season: number): string {
-  return season === 0 ? "Specials" : `Season ${season}`;
-}
-
 // Compact form for the pill in front of each tile row ("S2", "SP").
 function seasonShort(season: number): string {
   return season === 0 ? "SP" : `S${season}`;
 }
 
-// "5-7, 9" -> "E5–7, E9"
-function episodeRanges(episodes: string): string {
-  return episodes
-    .split(", ")
-    .map((part) => `E${part.replace("-", "–")}`)
-    .join(", ");
-}
-
-// Text fallback for lines without per-episode data: mismatches, and missing
-// seasons computed before episodeStates existed.
-function lineText(line: Line): string {
-  if (line.extraSeason) return "Not on TMDB";
-  if (line.wholeSeason) return "Entire season";
-  return episodeRanges(line.episodes);
-}
 
 // One numbered tile per episode, so the exact gaps are readable at a glance.
 // Tiles fill the available width and wrap only when the row is full.
@@ -404,47 +333,41 @@ function IgnoredList({
   );
 }
 
+async function loadMissing() {
+  const [showsRes, collectionsRes, ignoredRes, status] = await Promise.all([
+    apiFetch<ShowsResponse>("/api/shows"),
+    apiFetch<CollectionsResponse>("/api/collections"),
+    apiFetch<IgnoredResponse>("/api/ignored"),
+    apiFetch<StatusResponse>("/api/status"),
+  ]);
+  return {
+    shows: [...showsRes.Items].sort((a, b) => a.Name.localeCompare(b.Name)),
+    collections: collectionsRes.Items,
+    ignored: ignoredRes.Items,
+    checkedAt: status.missing.syncedAt,
+  };
+}
+
 export default function MissingPage() {
-  const [shows, setShows] = useState<ShowWithMissing[]>([]);
-  const [collections, setCollections] = useState<MissingCollection[]>([]);
-  const [ignored, setIgnored] = useState<IgnoreEntry[]>([]);
-  const [checkedAt, setCheckedAt] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const page = useLoad(loadMissing);
+  const shows = page.data?.shows ?? [];
+  const collections = page.data?.collections ?? [];
+  const ignored = page.data?.ignored ?? [];
+  const loading = page.loading;
+  // Errors of what the user just did; the load's own error shows otherwise.
+  const [actionError, setActionError] = useState("");
+  const error = actionError || (page.error && `Failed to load: ${page.error}`);
   const [rechecking, setRechecking] = useState(false);
   const [view, setView] = useState<CategoryKey | "ignored" | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [showsRes, collectionsRes, ignoredRes, status] = await Promise.all([
-        apiFetch<{ Items: ShowWithMissing[] }>("/api/shows"),
-        apiFetch<{ Items: MissingCollection[] }>("/api/collections"),
-        apiFetch<{ Items: IgnoreEntry[] }>("/api/ignored"),
-        apiFetch<SyncStatus>("/api/status"),
-      ]);
-      setShows([...(showsRes.Items ?? [])].sort((a, b) => a.Name.localeCompare(b.Name)));
-      setCollections(collectionsRes.Items ?? []);
-      setIgnored(ignoredRes.Items ?? []);
-      setCheckedAt(status.missing.syncedAt);
-      setError("");
-    } catch (e) {
-      setError(`Failed to load: ${(e as Error).message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   async function recheck() {
     setRechecking(true);
+    setActionError("");
     try {
-      await apiFetch("/api/recheck-missing", { method: "POST" });
-      await load();
+      await runSync("missing", 500);
+      await page.reload();
     } catch (e) {
-      setError(`Recheck failed: ${(e as Error).message}`);
+      setActionError(`Recheck failed: ${(e as Error).message}`);
     } finally {
       setRechecking(false);
     }
@@ -452,50 +375,26 @@ export default function MissingPage() {
 
   async function updateIgnored(method: "POST" | "DELETE", entry: IgnoreEntry) {
     try {
-      const res = await apiFetch<{ Items: IgnoreEntry[] }>("/api/ignored", {
+      const res = await apiFetch<IgnoredResponse>("/api/ignored", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry),
       });
-      setIgnored(res.Items);
-      setError("");
+      page.setData((data) => data && { ...data, ignored: res.Items });
+      setActionError("");
     } catch (e) {
-      setError(`Failed to update ignore list: ${(e as Error).message}`);
+      setActionError(`Failed to update ignore list: ${(e as Error).message}`);
     }
   }
 
   const ignore = (entry: IgnoreEntry) => updateIgnored("POST", entry);
   const unignore = (entry: IgnoreEntry) => updateIgnored("DELETE", entry);
 
-  const showIgnored = ignored.filter((e): e is ShowIgnore => e.kind !== "collection");
-  const collectionIgnored = ignored.filter((e): e is CollectionIgnore => e.kind === "collection");
-
-  const showGroups = (key: "shows" | "mismatch", kind: IgnoreKind): Group[] =>
-    shows
-      .map((item) => ({ item, lines: linesFor(item, key).filter((l) => !isIgnored(showIgnored, kind, item.Id, l.season)) }))
-      .filter((g) => g.lines.length > 0);
-  const missingShows = showGroups("shows", "missing");
-  const mismatches = showGroups("mismatch", "mismatch");
-  const collectionGroups = collections
-    .map((collection) => ({ collection, parts: missingParts(collection, collectionIgnored) }))
-    .filter((g) => g.parts.length > 0);
-
-  const lineCount = (groups: Group[], airing?: boolean) =>
-    groups.reduce((sum, g) => sum + g.lines.reduce((s, l) => s + (airing === undefined || l.airing === airing ? l.count : 0), 0), 0);
-  const counts: Record<CategoryKey, { count: number; groups: number }> = {
-    shows: { count: lineCount(missingShows), groups: missingShows.length },
-    movies: { count: collectionGroups.reduce((sum, g) => sum + g.parts.length, 0), groups: collectionGroups.length },
-    mismatch: { count: lineCount(mismatches), groups: mismatches.length },
-  };
-  const airingCount = lineCount(missingShows, true);
-
-  const summary =
-    [
-      counts.shows.count ? plural(counts.shows.count, "episode") : null,
-      counts.movies.count ? plural(counts.movies.count, "movie") : null,
-    ]
-      .filter(Boolean)
-      .join(" and ") || "Nothing";
+  const { showIgnored, collectionIgnored, missingShows, mismatches, collectionGroups, counts, airingCount } = missingView(
+    shows,
+    collections,
+    ignored
+  );
 
   // Until the user picks a card, land on the first category with anything in it.
   const activeView = view ?? CATEGORIES.find((c) => counts[c.key].groups)?.key ?? "shows";
@@ -507,7 +406,7 @@ export default function MissingPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Missing</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {loading ? "Loading…" : `${summary} missing · checked ${relativeTime(checkedAt)}`}
+            {loading ? "Loading…" : `${summary(counts)} missing · checked ${relativeTime(page.data?.checkedAt ?? null)}`}
           </p>
         </div>
         <Button variant="outline" className="ml-auto" onClick={recheck} disabled={rechecking || loading}>

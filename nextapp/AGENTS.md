@@ -8,114 +8,190 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Media Library Overview
+# Jellylens
 
-A personal dashboard over a Jellyfin library: movies, TV shows, and
-missing-episode and missing-movie detection (cross-referenced against TMDB). An analytics page
-(storage/count stats) existed earlier and was removed for now — straightforward
-to recreate if it comes back: a `computeAnalytics(store)` reading
-`store.jellyfin.movies/shows/episodes` (movies and episodes both carry a `Size`
-field in bytes), a `GET /api/analytics` route, and a page with stat tiles.
+A dashboard over a Jellyfin library: movies and shows, missing episodes and
+collection movies (checked against TMDB), mismatches, per-user requests, and
+the releases of favorite P2P groups (from xREL).
 
 ## Stack
 
-- Next.js App Router (TypeScript), backend logic lives in Route Handlers under
-  `app/api/**` — there is no separate backend service.
-- UI: shadcn/ui (components live as source in `components/ui/`, built on Base UI
-  primitives in this shadcn version — not Radix, despite older docs/examples
-  assuming Radix). Tailwind v4. `next-themes` for the dark/light toggle.
-- No database. All state is an in-memory object (`lib/store.ts`) persisted to
-  `DATA_DIR/cache.json` (default `/app/data`, a Docker volume in compose).
-- Config is env vars only (read-only on the Settings page), except display
-  options: `store.preferences`, toggled on Settings' Display section via
-  `PATCH /api/preferences` (admin only).
+- Next.js App Router (TypeScript) on Node 24. Backend logic lives in Route
+  Handlers under `app/api/**`; there is no separate backend service.
+- UI: shadcn/ui components as source in `components/ui/`, built on Base UI
+  primitives in this shadcn version (not Radix, despite older examples).
+  Tailwind v4, dark only (`<html class="dark">`).
+- All state in SQLite: `DATA_DIR/jellylens.db` (default `/app/data`), through
+  better-sqlite3. `lib/db.ts` opens it and runs the migrations (one entry per
+  schema version, tracked in `PRAGMA user_version`; never edit one that has
+  shipped). Data access is in `lib/store/`, one module per area (library,
+  tmdb, missing, ignored, requests, preferences, releases, posters,
+  sync-state), all re-exported by `lib/store/index.ts`; SQL helpers in
+  `lib/store/sql.ts`. Every read goes to the database, so a page always sees
+  what the last sync wrote; each sync replaces its data in one transaction.
+  Jellyfin items are stored with only the fields Jellylens reads
+  (`JellyfinMovie`, `JellyfinShow` in `lib/store/library.ts`).
+- Route responses are typed in `lib/api-types.ts`, shared by the routes
+  (`satisfies`) and the pages.
+- Config is env vars only (`lib/env.ts`, read-only on the Settings page),
+  except display options (`preferences` table, `PATCH /api/preferences`) and
+  the favorite release groups.
 
-## Data flow — three independent sync stages
+## Sync stages
 
-1. **Sync Jellyfin** (`lib/sync-jellyfin.ts`) — pulls movies/shows/episodes from
-   the Jellyfin API into `store.jellyfin`.
-2. **Sync TMDB** (`lib/sync-tmdb.ts`) — for every show with a TMDB id, pulls the
-   full season/episode list (only counting episodes whose `air_date` has passed)
-   into `store.tmdb`. Also fetches every TMDB movie collection an owned movie
-   belongs to (Jellyfin sets `ProviderIds.TmdbCollection` on movies it matched
-   via TMDB, whether or not Jellyfin's own BoxSets are enabled) into
-   `store.tmdb.byCollectionId`, in Jellyfin's metadata language. Chains a
-   missing-recheck afterward automatically.
-3. **Recheck missing** (`lib/compute-missing.ts`) — pure, synchronous, no
-   network: diffs `store.jellyfin.episodes` against `store.tmdb` to find
-   already-aired episodes not owned. Handles combined multi-episode files via
-   Jellyfin's `IndexNumberEnd` field (e.g. one file covering S02E01-E02).
-   Also diffs each collection's parts against owned movies (by TMDB movie
-   id) into `store.missing.byCollectionId`. Only parts out on disc or
-   digital count (same rules as the Requests page's `movieAvailability`;
-   the TMDB sync fetches release dates only for parts out within the last
-   year, older ones count as out); anything in cinemas only, announced or
-   undated is left out until it's out. Only collections with such a
-   non-owned part are kept. Owned parts carry the movie's file name
-   (`FileName`, kept by the Jellyfin sync without its folder) so the card
-   can show which release group the others should come from;
-   `/api/collections` only sends them when `store.preferences.showFileNames`
-   is on.
+Each has a trigger in `lib/sync-manager.ts` (deduped by `makeTrigger` in
+`lib/scheduler.ts`, so a manual "Sync now" racing a scheduled tick never runs
+twice; it also remembers whether it's running and its last error) and an
+interval env var (`0` = off). `POST /api/sync/<stage>` starts one in the
+background and answers 202 right away (a sync can outlast a proxy's
+timeout); `GET /api/status` has each stage's last sync, `running` and
+`error`, and `runSync()` in `lib/api-client.ts` starts a stage and polls
+until it's done. `instrumentation.ts` opens the database at boot, runs
+Jellyfin → TMDB (→ missing) and the releases sync, then installs the
+intervals.
 
-Each stage has its own manual trigger (`POST /api/sync/jellyfin`,
-`/api/sync/tmdb`, `/api/recheck-missing`) and its own interval, scheduled once
-at server boot from `instrumentation.ts` (`JELLYFIN_SYNC_INTERVAL_HOURS`,
-`TMDB_SYNC_INTERVAL_HOURS`, `MISSING_RECHECK_INTERVAL_HOURS` env vars, defaults
-6/24/24; `0` disables that stage's automatic schedule). The env vars are the
-only source — the Settings page shows them read-only. `lib/sync-manager.ts` holds the
-trigger functions (deduped via `lib/scheduler.ts`'s `makeTrigger` so a manual
-click racing a scheduled tick never runs the same stage twice concurrently).
+1. **Jellyfin** (`lib/sync-jellyfin.ts`, stage `jellyfin`,
+   `JELLYFIN_SYNC_INTERVAL_HOURS`, default 6): movies, shows and episodes of
+   the first admin user (resolved at boot). Movies keep their file's name
+   (for matching the release group) but not its path; `/api/movies` leaves
+   it out. Chains a missing recheck once TMDB has synced.
+2. **TMDB** (`lib/sync-tmdb.ts`, stage `tmdb`,
+   `TMDB_SYNC_INTERVAL_HOURS`, default 24): season/episode lists of every
+   show matched to TMDB, and every TMDB collection an owned movie belongs to
+   (Jellyfin sets `ProviderIds.TmdbCollection`), in Jellyfin's metadata
+   language. A show or collection whose request fails keeps the last sync's
+   data (a hiccup must not turn into missing episodes or false mismatches);
+   only a 404 drops it. Chains a missing recheck.
+3. **Missing recheck** (`lib/compute-missing.ts`, stage `missing`,
+   `MISSING_RECHECK_INTERVAL_HOURS`, default 24): no network. Pure diffs
+   (`ownedEpisodes`, `diffSeries`, `missingCollections`) of the library
+   against TMDB: aired episodes not owned (combined files via
+   `IndexNumberEnd`), owned episodes/seasons TMDB doesn't know (mismatches;
+   specials excluded), and collection parts not owned that are out on disc
+   or digital (same rules as the Requests page, `movieAvailability` in
+   `lib/availability.ts`).
+4. **Releases** (`lib/sync-releases.ts`, stage `releases`,
+   `XREL_SYNC_INTERVAL_HOURS`, default 6), see below.
 
-`GET /api/movies` / `/api/shows` / `/api/status` all read straight from the
-in-memory `store` — no live Jellyfin/TMDB calls on page load, only during an
-explicit sync.
+## Releases (xREL)
 
-## Required env vars
+Admins add favorite P2P groups in Settings (`app/settings/release-groups.tsx`,
+`/api/release-groups`). xREL's API (`lib/xrel.ts`, no key) has no group
+lookup, so a name is resolved by searching releases for `-NAME`; a scene group
+gets its own error message (only P2P groups can list their releases). xREL
+allows 900 calls an hour: the client reads `x-ratelimit-*` and a sync stops
+with 10 left; searches are spaced 2.5 s apart.
 
-`JELLYFIN_URL`, `JELLYFIN_API_KEY`, `TMDB_API_KEY` — see `.env.example` at the
-repo root. The Jellyfin user is resolved automatically at boot (first admin
-account found via `/Users`) — there's no user picker.
+A group's first sync walks its whole list (100 per page); later ones stop at
+the first page with a release already stored. Releases belong to xREL titles
+(`title_key`); a movie's are split further by the year in their names
+(`e1~1995`, `toRelease` in `lib/xrel.ts`), since xREL now and then files a
+remake under the original. xREL also sometimes links a release to the
+wrong movie, so its IMDb id's TMDB entry (`imdb_lookups`) is
+only a candidate: `decideMatch` in `lib/title-match.ts` checks it against the
+release names (title by TMDB's localized, original or other titles, year ±1,
+±3 for the very same title), falls back to a TMDB search by the name's title
+and year, and otherwise shows the name's own title with nothing from TMDB.
+The result is `title_matches` (status verified / searched / unverified, or
+confirmed / rejected by hand from the title's panel, kept in
+`match_overrides`). The page, its search (`r.search` for names, `t.search`
+for checked titles) and "In library" read only from `title_matches`, never
+xREL's own title.
 
-The browser never talks to `JELLYFIN_URL`: posters go through
-`GET /api/image/<id>` (`lib/image-cache.ts`, cached under `DATA_DIR/images`,
-pruned after each Jellyfin sync). Titles link to TMDB only (`tmdbUrl()` in
-`lib/api-client.ts`), never to Jellyfin.
+The page shows one tile per TMDB entry (key `movie:949`), since one movie
+can end up as several titles; a title matched to nothing is a tile of its
+own (key: its `title_key`). `GET /api/releases` searches, filters (group,
+quality, type), sorts and pages tiles in SQL, nothing cached; the filter
+menu lists its values without counts, which would mean another scan of
+every release. `GET /api/releases/<key>` gives a tile's titles with their
+releases and matches (the panel, `app/releases/title-panel.tsx`); `POST`
+takes a decision about one of them (`titleKey`) and answers with the tile,
+or the title's new one if it was the tile's last.
+
+## Images
+
+The browser never talks to Jellyfin or TMDB directly. Jellyfin posters go
+through `GET /api/image/<id>` (`lib/image-cache.ts`, `DATA_DIR/images`, pruned
+after each Jellyfin sync); TMDB posters through `GET /api/tmdb-image/<size>/<file>`
+(`lib/tmdb-image-cache.ts`, `DATA_DIR/tmdb-images`; build URLs with
+`tmdbImage()` in `lib/api-client.ts`). Unreferenced TMDB posters are pruned
+after a month (`tmdbPosterPaths()` in `lib/store/posters.ts` lists the
+referenced ones). Titles link to TMDB (`tmdbUrl()`), never to Jellyfin. The
+CSP in `next.config.ts` allows images and fonts only from Jellylens itself,
+so a new image source has to go through a route like these.
 
 ## Sign-in
 
-`proxy.ts` gates every page and `/api/*` route (except `/login` and
-`/api/auth/*`). Users sign in with their Jellyfin username/password, checked
-once via `/Users/AuthenticateByName` (`lib/jellyfin.ts`); the Jellyfin token
-is signed out right away, and Jellylens keeps its own HMAC-signed cookie
-(`lib/session.ts`, 7 days, secret generated into `DATA_DIR/session-secret`).
-Every request re-checks that cookie against Jellyfin's `/Users` list (API
-key, cached a minute; `activeUser()`), so deleted/disabled users are out and
-admin rights follow Jellyfin within a minute. Failed sign-ins are rate
-limited per IP and per username (`lib/rate-limit.ts`, 5 per 15 min).
-`proxy.ts` also rejects state-changing requests with a cross-site
-`Sec-Fetch-Site`, and `next.config.ts` sets the security headers. Jellyfin
-admins get Missing, Settings and the sync/ignore APIs (`ADMIN_ONLY` in
-`proxy.ts`); everyone gets Movies, TV Shows and their own Requests. Server
-code reads the user with `currentUser()` (`lib/auth.ts`). `AUTH_ENABLED=false`
-turns it all off: everyone is `LOCAL_USER`, an admin, and requests are one
-shared list again.
+`proxy.ts` gates every page and `/api/*` route except `/login` and
+`/api/auth/*`. Users sign in with their Jellyfin username and password,
+checked once via `/Users/AuthenticateByName` (the Jellyfin token is signed
+out right away); Jellylens keeps its own HMAC-signed cookie (`lib/session.ts`,
+7 days, secret in `DATA_DIR/session-secret`), re-checked against Jellyfin's
+user list (cached a minute) on every request. Failed sign-ins are limited per
+IP and per username (`lib/rate-limit.ts`, 5 per 15 min). `proxy.ts` also
+rejects state changes with a cross-site `Sec-Fetch-Site`; `next.config.ts`
+sets the security headers. Jellyfin admins get Missing, Releases, Settings
+and the sync/ignore/config APIs (`ADMIN_ONLY`); everyone gets Movies, TV
+Shows and their own Requests. Server code reads the user with `currentUser()`
+(`lib/auth.ts`). `AUTH_ENABLED=false` turns it all off: everyone is
+`LOCAL_USER`, an admin, and requests are one shared list.
 
-Requests are one entry per title with a `requesters` list; admins see
-everyone's on the Requests tab (with who asked), most-requested first.
+Requests are one entry per title (`requests`) with everyone who asked
+(`requesters`); admins see everyone's, most wanted first. Each request
+lists the favorite groups that have released it (`groupsByTile` in
+`lib/store/releases.ts`, by TMDB entry), and Releases tiles matched to TMDB
+can be requested from the grid (`RequestAction` in
+`components/request-tiles.tsx`).
 
 ## Pages
 
-`app/movies`, `app/shows`, `app/missing` — all client components (`'use client'`)
-that fetch from the routes above. Missing has one card per category: Shows
-(missing episodes from `/api/shows`: gaps, whole seasons and seasons still
-airing, the latter marked "Airing" in the warning tone), Movies (collection
-parts, `app/missing/collections.tsx`, from `/api/collections`) and
-Mismatches; the stat card helpers are in `app/missing/shared.tsx`. Ignore entries
-are `{ kind: "missing" | "mismatch", seriesId, season }` for shows and
-`{ kind: "collection", collectionId, movieId }` for collections (`null` =
-the whole show/collection). `components/nav.tsx` highlights the active
-route. `components/media-list.tsx` (Table-based list + Badge facet filters) and
-`components/sync-menu.tsx` are shared between the movies and shows pages.
+Client components under `app/` that fetch from the routes above. Page data
+loads through `useLoad` (`hooks/use-load.ts`: load on mount, `reload()`,
+`setData()` after a change the server answered). What a page works out from
+that data (filtering, sorting, counts, tile texts) is plain functions in its
+`logic.ts` next to it, tested without React; shared helpers are in
+`lib/facets.ts` (filter and sort) and `lib/format.ts` (plurals, numbers and
+dates German-style, relative times). Shared UI: `poster-card`
+(grid tile with corner badges, link or button), `filter-menu`, `sort-menu`,
+`search-input`, `empty-state`. Missing has one card per category (shows,
+collection movies, mismatches; `app/missing/`); ignore entries are
+`{ kind: "missing" | "mismatch", seriesId, season }` or
+`{ kind: "collection", collectionId, movieId }` (`null` = all of it).
+
+## Development
+
+`docker compose -f docker-compose.dev.yml up -d` runs `next dev` in a
+container on http://localhost:8081, with `nextapp/` bind-mounted; it reloads
+on save, so there's no need to restart the container after an edit (only
+after changing `next.config.ts`, the env or `package.json`). Type checks,
+lint and tests run in the container (`docker compose -f
+docker-compose.dev.yml exec media-overview npm run typecheck`, `… npm run
+lint`, `… npm test`).
+
+## Tests
+
+Vitest (`vitest.config.mts`, `npm test`), next to the code as `*.test.ts(x)`.
+`test/setup.ts` gives every test a fresh in-memory database, fails any fetch
+a test didn't mock (`mockFetch` in `test/http.ts`), and drops server state
+kept on `globalThis` (`test/state.ts`). Modules keep such state (rate limits,
+caches, queues) on `globalThis` and look it up on every use, never capture
+it at import, so that reset works; add new keys to `test/state.ts`. Stored
+library items for tests come from `test/fixtures.ts`. Components and hooks
+are tested with Testing Library in happy-dom (`*.test.tsx`, or a hook's
+`*.test.ts`, starting with `// @vitest-environment happy-dom` and importing
+`test/dom.ts`); pages keep their logic in `logic.ts` and interactive parts
+in components of their own (a page file may only export the page). CI
+(`.github/workflows/docker.yml`) runs lint, `npm run typecheck` (which runs
+`next typegen` first) and the tests before building the image.
+
+## Dependencies
+
+npm 11's `allowScripts` in `package.json` denies install scripts not
+reviewed: better-sqlite3 ships prebuilt binaries for every platform we build
+(its implicit `node-gyp rebuild` would only need a compiler), and
+unrs-resolver's postinstall only fetches a binding npm already installs. A
+new dependency with an install script shows up in `npm install-scripts ls`;
+allow it only if it really builds something.
 
 ## Working with shadcn components
 
@@ -123,4 +199,3 @@ Add new components with `npx shadcn@latest add <name>` rather than hand-writing
 them — this version's primitives (`@base-ui/react`, not Radix) and APIs may not
 match older shadcn examples. Check `ui.shadcn.com/llms.txt` or the installed
 component's own source in `components/ui/` before assuming an API.
-

@@ -1,8 +1,8 @@
-import { store, save, type Preferences } from "@/lib/store";
+import { getPreferences, setPreferences, type Preferences } from "@/lib/store";
 
 // The Settings page's display options; admin only (see proxy.ts).
 export async function GET() {
-  return Response.json(store.preferences);
+  return Response.json(getPreferences());
 }
 
 // Merges the given options in; unknown keys and wrong types are rejected.
@@ -18,7 +18,6 @@ export async function PATCH(req: Request) {
     if (key === "showFileNames" && typeof value === "boolean") changes.showFileNames = value;
     else return Response.json({ error: "Expected { showFileNames: boolean }." }, { status: 400 });
   }
-  Object.assign(store.preferences, changes);
-  save();
-  return Response.json(store.preferences);
+  setPreferences(changes);
+  return Response.json(getPreferences());
 }

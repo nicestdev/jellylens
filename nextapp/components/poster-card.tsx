@@ -32,14 +32,19 @@ export function CornerBadge({ badge, className }: { badge: PosterBadge; classNam
   );
 }
 
-// One tile of a poster grid (Movies, TV Shows): the poster with up to two
-// corner badges — top right for the item's own state (4K, Continuing), bottom
-// left for how it relates to an active filter — then title and a muted info
-// line. The whole tile links to href (TMDB), when there is one. action is a
-// button over the poster's bottom-right corner, kept outside the link so
-// it's valid, clickable HTML.
+// One tile of a poster grid (Movies, TV Shows): the poster with corner
+// badges — top right for the item's own state (4K, Continuing), bottom left
+// for how it relates to an active filter (Requests: who released it), top
+// left for a count (Requests: how many asked) — then title and a muted info
+// line. badge can be several, side by side (Releases: one per quality it
+// comes in); filterBadge too, stacked (Requests: one per group). The whole
+// tile links to href (TMDB), when there is one, or is a button for onClick
+// (Releases opens a panel). action is a button over the
+// poster's bottom-right corner, kept outside the link so it's valid,
+// clickable HTML.
 export function PosterCard({
   href,
+  onClick,
   itemId,
   imageTag,
   imageSrc,
@@ -47,23 +52,36 @@ export function PosterCard({
   meta,
   badge,
   filterBadge,
+  countBadge,
   action,
 }: {
   href?: string;
+  onClick?: () => void;
   itemId?: string;
   imageTag?: string;
   imageSrc?: string | null;
   title: string;
   meta?: string;
-  badge?: PosterBadge;
-  filterBadge?: PosterBadge;
+  badge?: PosterBadge | PosterBadge[];
+  filterBadge?: PosterBadge | PosterBadge[];
+  countBadge?: PosterBadge;
   action?: ReactNode;
 }) {
-  const Tile = href ? "a" : "div";
-  const link = href ? { href, target: "_blank", rel: "noopener noreferrer" } : {};
+  const badges = badge ? [badge].flat() : [];
+  const filterBadges = filterBadge ? [filterBadge].flat() : [];
+  const Tile = href ? "a" : onClick ? "button" : "div";
+  const props = href
+    ? { href, target: "_blank", rel: "noopener noreferrer" }
+    : onClick
+      ? { type: "button" as const, onClick }
+      : {};
   return (
     <div className="relative min-w-0">
-      <Tile {...link} title={title} className="group block outline-none">
+      <Tile
+        {...props}
+        title={title}
+        className={cn("group block w-full text-left outline-none", onClick && "cursor-pointer")}
+      >
         <div className="relative">
           <Poster
             itemId={itemId}
@@ -73,8 +91,22 @@ export function PosterCard({
             height={480}
             className="w-full rounded-lg transition-shadow group-hover:ring-2 group-hover:ring-primary/60 group-focus-visible:ring-3 group-focus-visible:ring-ring"
           />
-          {badge ? <CornerBadge badge={badge} className="top-2 right-2" /> : null}
-          {filterBadge ? <CornerBadge badge={filterBadge} className="bottom-2 left-2" /> : null}
+          {badges.length ? (
+            <div className="absolute top-2 right-2 flex gap-1">
+              {badges.map((b) => (
+                <CornerBadge key={b.label} badge={b} className="relative" />
+              ))}
+            </div>
+          ) : null}
+          {countBadge ? <CornerBadge badge={countBadge} className="top-2 left-2" /> : null}
+          {filterBadges.length ? (
+            // Stacked; stops short of the action button in the other corner.
+            <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1">
+              {filterBadges.map((b) => (
+                <CornerBadge key={b.label} badge={b} className="relative block max-w-full truncate leading-5" />
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="mt-2 truncate text-sm font-medium transition-colors group-hover:text-primary">{title}</div>
         {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}

@@ -1,25 +1,28 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState } from "react";
-import { AlertCircle, FileText, Globe, ListChecks, Lock, RefreshCw, Server, type LucideIcon } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import {
+  AlertCircle,
+  FileText,
+  Globe,
+  ListChecks,
+  Lock,
+  PackageSearch,
+  RefreshCw,
+  Server,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ReleaseGroups } from "./release-groups";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiFetch, relativeTime, type SyncStatus } from "@/lib/api-client";
+import { apiFetch, runSync } from "@/lib/api-client";
+import { plural, relativeTime } from "@/lib/format";
+import type { ConfigResponse, Preferences, StatusResponse, SyncStageName } from "@/lib/api-types";
+import { useLoad } from "@/hooks/use-load";
 import { cn } from "@/lib/utils";
 
-type Intervals = { jellyfin: number; tmdb: number; missing: number };
-type Config = {
-  jellyfinUrl: string;
-  jellyfinApiKey: string;
-  tmdbApiKey: string;
-  authEnabled: boolean;
-  intervals: Intervals;
-};
-type Preferences = { showFileNames: boolean };
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : word.endsWith("h") ? "es" : "s"}`;
 
 // Hours; 0 means the automatic schedule is off (manual "Sync now" only).
 function intervalLabel(hours: number): string {
@@ -59,41 +62,44 @@ function BreakableName({ name }: { name: string }) {
 }
 
 type Stage = {
-  key: keyof Intervals;
+  key: SyncStageName;
   icon: LucideIcon;
   title: string;
   description: string;
   detail: string;
-  syncedAt: string | null;
-  path: string;
   env: string;
 };
 
+async function loadSettings() {
+  const [status, config, prefs] = await Promise.all([
+    apiFetch<StatusResponse>("/api/status"),
+    apiFetch<ConfigResponse>("/api/config"),
+    apiFetch<Preferences>("/api/preferences"),
+  ]);
+  return { status, config, prefs };
+}
+
 export default function SettingsPage() {
-  const [status, setStatus] = useState<SyncStatus | null>(null);
-  const [config, setConfig] = useState<Config | null>(null);
-  const [prefs, setPrefs] = useState<Preferences | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const page = useLoad(loadSettings);
+  const status = page.data?.status ?? null;
+  const config = page.data?.config ?? null;
+  const prefs = page.data?.prefs ?? null;
+  // The stage a "Sync now" here is waiting on.
+  const [busy, setBusy] = useState<SyncStageName | null>(null);
+  // Errors of what the user just did; the load's own error shows otherwise.
+  const [actionError, setError] = useState("");
+  const error = actionError || (page.error && `Failed to load settings: ${page.error}`);
+  const setPrefs = (next: Preferences) => page.setData((data) => data && { ...data, prefs: next });
+  const reload = page.reload;
 
-  const load = useCallback(async () => {
-    try {
-      const [s, c, p] = await Promise.all([
-        apiFetch<SyncStatus>("/api/status"),
-        apiFetch<Config>("/api/config"),
-        apiFetch<Preferences>("/api/preferences"),
-      ]);
-      setStatus(s);
-      setConfig(c);
-      setPrefs(p);
-    } catch (e) {
-      setError(`Failed to load settings: ${(e as Error).message}`);
-    }
-  }, []);
-
+  // A sync that started elsewhere (on schedule, at boot, by adding a
+  // release group) shows as running too; the page checks back until it's done.
+  const runningElsewhere = status && !busy && Object.values(status).some((s) => s.running);
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!runningElsewhere) return;
+    const timer = setTimeout(reload, 3000);
+    return () => clearTimeout(timer);
+  }, [runningElsewhere, status, reload]);
 
   // Flips the switch right away and rolls back if saving fails.
   async function setPref(changes: Partial<Preferences>) {
@@ -114,15 +120,15 @@ export default function SettingsPage() {
     }
   }
 
-  async function trigger(key: string, path: string) {
+  async function trigger(stage: SyncStageName) {
     setError("");
-    setBusy(key);
+    setBusy(stage);
     try {
-      await apiFetch(path, { method: "POST" });
-      await load();
+      await runSync(stage);
     } catch (e) {
       setError(`Sync failed: ${(e as Error).message}`);
     } finally {
+      await reload();
       setBusy(null);
     }
   }
@@ -132,10 +138,8 @@ export default function SettingsPage() {
       key: "jellyfin",
       icon: Server,
       title: "Jellyfin",
-      description: "Pulls movies, shows and episodes from your Jellyfin server.",
+      description: "Pulls movies, shows and episodes from your Jellyfin server, then rechecks what's missing.",
       detail: status ? `${status.jellyfin.movies} movies · ${status.jellyfin.shows} shows` : "",
-      syncedAt: status?.jellyfin.syncedAt ?? null,
-      path: "/api/sync/jellyfin",
       env: "JELLYFIN_SYNC_INTERVAL_HOURS",
     },
     {
@@ -145,8 +149,6 @@ export default function SettingsPage() {
       description:
         "Pulls season and episode air dates for matched shows and the movie collections you own parts of, then rechecks what's missing.",
       detail: status ? `${plural(status.tmdb.shows, "show")} matched · ${plural(status.tmdb.collections, "collection")}` : "",
-      syncedAt: status?.tmdb.syncedAt ?? null,
-      path: "/api/sync/tmdb",
       env: "TMDB_SYNC_INTERVAL_HOURS",
     },
     {
@@ -155,13 +157,22 @@ export default function SettingsPage() {
       title: "Missing episodes & movies",
       description: "Recomputes missing episodes, collection movies and mismatches from the cached data — no network calls.",
       detail: status
-        ? `${plural(status.missing.incompleteCount, "incomplete show")} · ${plural(status.missing.incompleteCollectionCount, "incomplete collection")} · ${plural(status.mismatches.mismatchCount, "mismatch")}`
+        ? `${plural(status.missing.incompleteCount, "incomplete show")} · ${plural(status.missing.incompleteCollectionCount, "incomplete collection")} · ${plural(status.missing.mismatchCount, "mismatch")}`
         : "",
-      syncedAt: status?.missing.syncedAt ?? null,
-      path: "/api/recheck-missing",
       env: "MISSING_RECHECK_INTERVAL_HOURS",
     },
+    {
+      key: "releases",
+      icon: PackageSearch,
+      title: "xREL releases",
+      description: "Pulls new P2P releases of your release groups from xREL.",
+      detail: status
+        ? `${plural(status.releases.groups, "group")} · ${plural(status.releases.releases, "release")}`
+        : "",
+      env: "XREL_SYNC_INTERVAL_HOURS",
+    },
   ];
+
 
   const loading = !status || !config;
 
@@ -169,7 +180,7 @@ export default function SettingsPage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Sync sources, how often they run, and display options.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Sync sources, how often they run, display options and release groups.</p>
       </div>
 
       {error ? (
@@ -183,7 +194,8 @@ export default function SettingsPage() {
       <div className="space-y-3">
         {stages.map((stage) => {
           const Icon = stage.icon;
-          const running = busy === stage.key;
+          const running = busy === stage.key || Boolean(status?.[stage.key].running);
+          const syncedAt = status?.[stage.key].syncedAt ?? null;
           return (
             <section
               key={stage.key}
@@ -200,7 +212,7 @@ export default function SettingsPage() {
                     <Skeleton className="mt-2 h-3 w-48" />
                   ) : (
                     <p className="mt-1.5 text-xs text-muted-foreground">
-                      {stage.detail} · {stage.syncedAt ? `synced ${relativeTime(stage.syncedAt)}` : "never synced"}
+                      {stage.detail} · {syncedAt ? `synced ${relativeTime(syncedAt)}` : "never synced"}
                     </p>
                   )}
                 </div>
@@ -217,7 +229,7 @@ export default function SettingsPage() {
                     <BreakableName name={stage.env} />
                   </div>
                 </div>
-                <Button variant="outline" onClick={() => trigger(stage.key, stage.path)} disabled={running}>
+                <Button variant="outline" onClick={() => trigger(stage.key)} disabled={running}>
                   <RefreshCw className={cn(running && "animate-spin")} />
                   {running ? "Syncing…" : "Sync now"}
                 </Button>
@@ -227,7 +239,7 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* Unlike the sections around it, this one is changed right here. */}
+      {/* Unlike the read-only sections, this one and Release groups are changed right here. */}
       <h2 className="mt-10 mb-3 text-sm font-medium text-muted-foreground">Display</h2>
       <section className="rounded-xl border bg-card">
         <label className="flex cursor-pointer items-center gap-3.5 p-4">
@@ -252,6 +264,9 @@ export default function SettingsPage() {
           )}
         </label>
       </section>
+
+      <h2 className="mt-10 mb-3 text-sm font-medium text-muted-foreground">Release groups</h2>
+      <ReleaseGroups onError={setError} onChange={reload} />
 
       <ReadOnlyHeading title="Server" className="mt-10" />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

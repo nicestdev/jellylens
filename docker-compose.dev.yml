@@ -1,6 +1,6 @@
 services:
   media-overview:
-    image: node:20-alpine
+    image: node:24-alpine
     working_dir: /app
     command: sh -c "npm install && npm run dev"
     environment:
@@ -10,6 +10,7 @@ services:
       JELLYFIN_SYNC_INTERVAL_HOURS: ${JELLYFIN_SYNC_INTERVAL_HOURS:-6}
       TMDB_SYNC_INTERVAL_HOURS: ${TMDB_SYNC_INTERVAL_HOURS:-24}
       MISSING_RECHECK_INTERVAL_HOURS: ${MISSING_RECHECK_INTERVAL_HOURS:-24}
+      XREL_SYNC_INTERVAL_HOURS: ${XREL_SYNC_INTERVAL_HOURS:-6}
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       DEV_ALLOWED_ORIGINS: ${DEV_ALLOWED_ORIGINS:-}
       DATA_DIR: /app/data

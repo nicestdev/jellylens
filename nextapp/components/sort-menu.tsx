@@ -9,15 +9,10 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { SortDir } from "@/lib/facets";
 import { cn } from "@/lib/utils";
 
-export type SortDir = "asc" | "desc";
 export type SortOption<K extends string> = { key: K; label: string; defaultDir: SortDir };
-
-export function compareValues(a: string | number, b: string | number): number {
-  if (typeof a === "string" && typeof b === "string") return a.localeCompare(b);
-  return (a as number) - (b as number);
-}
 
 // Toolbar sort control: a menu to pick the key plus a direction toggle.
 // Picking a key resets the direction to that key's default.

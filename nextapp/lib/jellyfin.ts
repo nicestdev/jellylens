@@ -1,10 +1,8 @@
+// Jellylens' own calls, with the API key.
 export function authHeaders(apiKey: string): Record<string, string> {
   return {
     "X-Emby-Token": apiKey,
-    Authorization:
-      'MediaBrowser Token="' +
-      apiKey +
-      '", Client="Media Overview", Device="Server", DeviceId="media-overview-backend", Version="1.0"',
+    Authorization: `MediaBrowser Token="${apiKey}", Client="Jellylens", Device="Server", DeviceId="jellylens-server", Version="1.0"`,
     Accept: "application/json",
   };
 }

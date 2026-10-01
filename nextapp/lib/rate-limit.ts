@@ -7,7 +7,8 @@ const MAX_FAILURES = 5;
 
 type Counter = { failures: number; resetAt: number };
 const globalForLimits = globalThis as unknown as { __loginFailures?: Map<string, Counter> };
-const counters = (globalForLimits.__loginFailures ??= new Map());
+// Looked up on every call, never captured: tests start over by dropping it.
+const counters = () => (globalForLimits.__loginFailures ??= new Map());
 
 // The visitor's address. Behind Cloudflare it's CF-Connecting-IP, which
 // Cloudflare always overwrites; behind another reverse proxy, the last
@@ -32,7 +33,7 @@ export function retryAfter(keys: string[]): number {
   const now = Date.now();
   let wait = 0;
   for (const key of keys) {
-    const c = counters.get(key);
+    const c = counters().get(key);
     if (c && c.resetAt > now && c.failures >= MAX_FAILURES) wait = Math.max(wait, c.resetAt - now);
   }
   return Math.ceil(wait / 1000);
@@ -40,14 +41,14 @@ export function retryAfter(keys: string[]): number {
 
 export function recordFailure(keys: string[]) {
   const now = Date.now();
-  if (counters.size > 1000) for (const [key, c] of counters) if (c.resetAt <= now) counters.delete(key);
+  if (counters().size > 1000) for (const [key, c] of counters()) if (c.resetAt <= now) counters().delete(key);
   for (const key of keys) {
-    const c = counters.get(key);
-    if (!c || c.resetAt <= now) counters.set(key, { failures: 1, resetAt: now + WINDOW_MS });
+    const c = counters().get(key);
+    if (!c || c.resetAt <= now) counters().set(key, { failures: 1, resetAt: now + WINDOW_MS });
     else c.failures++;
   }
 }
 
 export function clearFailures(key: string) {
-  counters.delete(key);
+  counters().delete(key);
 }

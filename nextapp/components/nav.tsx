@@ -26,6 +26,7 @@ const allLinks: { href: string; label: string; admin?: boolean }[] = [
   { href: "/shows", label: "TV Shows" },
   { href: "/requests", label: "Requests" },
   { href: "/missing", label: "Missing", admin: true },
+  { href: "/releases", label: "Releases", admin: true },
   { href: "/settings", label: "Settings", admin: true },
 ];
 

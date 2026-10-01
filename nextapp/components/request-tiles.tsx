@@ -1,44 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
-import { PosterCard, type PosterBadge } from "@/components/poster-card";
-import { apiFetch, tmdbUrl } from "@/lib/api-client";
+import { CornerBadge, PosterCard, type PosterBadge } from "@/components/poster-card";
+import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
+import type { DiscoverItem, DiscoverResponse, RequestItem as Request, RequestsResponse } from "@/lib/api-types";
+import { useLoad } from "@/hooks/use-load";
 
 type MediaType = "movie" | "tv";
-// Set when the item is already in Jellyfin (matched by TMDB id).
-type LibraryRef = { id: string; serverId: string } | null;
 
-// How far along the release is, when it isn't fully out yet (null = out, or
-// owned). next = the next relevant date: a digital or Blu-ray release, the
-// cinema start, or a show's premiere. Computed server-side from TMDB.
-type Availability = {
-  status: "upcoming" | "cinema" | "digital";
-  next: { kind: string; date: string } | null;
-} | null;
-
-export type Result = {
-  mediaType: MediaType;
-  tmdbId: number;
-  title: string;
-  year: number | null;
+// Anything that can be requested: a search or trending result, a request,
+// or a collection's missing part. library: already in Jellyfin (by TMDB
+// id). availability: how far along its release is when it isn't fully out
+// yet (null = out, or owned), computed server-side from TMDB.
+export type Result = Pick<DiscoverItem, "mediaType" | "tmdbId" | "title" | "year" | "library" | "availability"> & {
   releaseDate?: string | null;
   posterPath: string | null;
-  library: LibraryRef;
-  availability: Availability;
 };
-// requestedAt: when this user asked (for someone else's, in the admin
-// overview: when it was first asked for). requesters: admins only.
-export type Request = Result & {
-  requestedAt: string;
-  mine: boolean;
-  requesters?: { name: string; requestedAt: string }[];
-};
+type Availability = Result["availability"];
 
 export const itemKey = (r: { mediaType: MediaType; tmdbId: number }) => `${r.mediaType}:${r.tmdbId}`;
 const TYPE_LABEL: Record<MediaType, string> = { movie: "Movie", tv: "Show" };
 
-type RequestsResponse = { Items: Request[]; all: boolean };
+const loadRequests = () => apiFetch<RequestsResponse>("/api/requests");
 
 // Only the not-yet-home-watchable states get a badge; fully out is normal.
 const STATUS_BADGE: Record<NonNullable<Availability>["status"], PosterBadge> = {
@@ -71,7 +55,7 @@ function statusBadge(item: Result, ownedLabel: string): PosterBadge | undefined 
 }
 
 function posterSrc(path: string | null): string | null {
-  return path ? `https://image.tmdb.org/t/p/w342${path}` : null;
+  return tmdbImage(path);
 }
 
 // The ✓ on a Discover tile that's already requested. Deliberately not a
@@ -123,27 +107,13 @@ const latestRequest = (r: Request) =>
 // everyone's (overview), with who asked. Arrived ones sort first (they're
 // the news), then the most wanted, then the most recently asked for.
 export function useRequests() {
-  const [items, setItems] = useState<Request[]>([]);
-  const [all, setAll] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const list = useLoad(loadRequests);
+  const items = list.data?.Items ?? [];
+  const all = list.data?.all ?? false;
   const [pending, setPending] = useState<Set<string>>(() => new Set());
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    try {
-      const res = await apiFetch<RequestsResponse>("/api/requests");
-      setItems(res.Items ?? []);
-      setAll(res.all);
-    } catch (e) {
-      setError(`Failed to load requests: ${(e as Error).message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Errors of what the user just did; the load's own error shows otherwise.
+  const [actionError, setError] = useState("");
+  const error = actionError || (list.error && `Failed to load requests: ${list.error}`);
 
   // everyone: an admin removing the request for all who asked.
   async function toggle(item: Result, requested: boolean, everyone = false) {
@@ -163,8 +133,8 @@ export function useRequests() {
           everyone,
         }),
       });
-      setItems(res.Items ?? []);
-      setAll(res.all);
+      list.setData(res);
+      setError("");
     } catch (e) {
       setError(`Couldn't update request: ${(e as Error).message}`);
     } finally {
@@ -189,7 +159,7 @@ export function useRequests() {
     overview: all,
     requestedKeys: new Set(mine.map(itemKey)),
     availableCount: shown.filter((r) => r.library).length,
-    loading,
+    loading: list.loading,
     pending,
     error,
     toggle,
@@ -205,10 +175,10 @@ export function useDiscover(q: string) {
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await apiFetch<{ Items: Result[] }>(`/api/discover?q=${encodeURIComponent(q)}`, {
+        const res = await apiFetch<DiscoverResponse>(`/api/discover?q=${encodeURIComponent(q)}`, {
           signal: ctrl.signal,
         });
-        setResults({ q, items: res.Items ?? [], error: "" });
+        setResults({ q, items: res.Items, error: "" });
       } catch (e) {
         if (ctrl.signal.aborted) return;
         setResults({ q, items: [], error: `TMDB search failed: ${(e as Error).message}` });
@@ -223,14 +193,29 @@ export function useDiscover(q: string) {
   return { items: loading ? [] : results!.items, loading, error: results?.error ?? "" };
 }
 
-
 type TileContext = {
   pending: Set<string>;
   toggle: (item: Result, requested: boolean, everyone?: boolean) => void;
 };
 
-// A search/trending result: + to request, ✓ once requested (not clickable).
-// Requested needs no badge — the filled ✓ already says so.
+// The bottom-right corner of anything that can be requested (Discover,
+// Releases): In library when it's owned, else + to request, ✓ once
+// requested (not clickable). Requested needs no badge — the filled ✓
+// already says so.
+export function RequestAction({ item, requested, ctx }: { item: Result; requested: boolean; ctx: TileContext }) {
+  if (item.library) return <CornerBadge badge={{ label: "In library", tone: "success" }} className="relative" />;
+  if (requested) return <RequestedMark />;
+  return (
+    <TileButton
+      icon={Plus}
+      label="Request"
+      disabled={ctx.pending.has(itemKey(item))}
+      onClick={() => ctx.toggle(item, false)}
+    />
+  );
+}
+
+// A search/trending result.
 export function ResultTile({ item, requested, ctx }: { item: Result; requested: boolean; ctx: TileContext }) {
   return (
     <PosterCard
@@ -238,19 +223,8 @@ export function ResultTile({ item, requested, ctx }: { item: Result; requested: 
       imageSrc={posterSrc(item.posterPath)}
       title={item.title}
       meta={metaLine(item)}
-      badge={statusBadge(item, "In library")}
-      action={
-        item.library ? undefined : requested ? (
-          <RequestedMark />
-        ) : (
-          <TileButton
-            icon={Plus}
-            label="Request"
-            disabled={ctx.pending.has(itemKey(item))}
-            onClick={() => ctx.toggle(item, false)}
-          />
-        )
-      }
+      badge={item.availability ? STATUS_BADGE[item.availability.status] : undefined}
+      action={<RequestAction item={item} requested={requested} ctx={ctx} />}
     />
   );
 }
@@ -260,9 +234,10 @@ function requesterNames(item: Request): string {
   return (item.requesters ?? []).map((q) => q.name).join(", ");
 }
 
-// One request: × removes it. In the admin's overview (item.requesters set)
-// the info line says who asked, a badge counts them once it's more than
-// one, and × removes it for all of them.
+// One request: × removes it; bottom left, a badge for each of the favorite
+// groups that have released it. In the admin's overview (item.requesters
+// set) the info line says who asked, a badge top left counts them once it's
+// more than one, and × removes it for all of them.
 export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) {
   const overview = Boolean(item.requesters);
   const count = item.requesters?.length ?? 0;
@@ -274,7 +249,8 @@ export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) 
       title={item.title}
       meta={overview ? [item.year, names].filter(Boolean).join(" · ") : metaLine(item)}
       badge={statusBadge(item, "Available")}
-      filterBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
+      filterBadge={item.releaseGroups.map((g) => ({ label: g, hint: `Released by ${g}` }))}
+      countBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
       action={
         <TileButton
           icon={X}

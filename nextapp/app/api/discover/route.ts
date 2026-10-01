@@ -1,8 +1,9 @@
-import { store } from "@/lib/store";
+import type { DiscoverResponse } from "@/lib/api-types";
 import { TMDB_API_KEY } from "@/lib/env";
 import { fetchTmdbTrending, searchTmdb } from "@/lib/tmdb";
 import { ensureMetadataLanguage } from "@/lib/sync-manager";
-import { libraryIndex, libraryRef, withAvailability } from "@/lib/requests";
+import { libraryIndex, libraryRef } from "@/lib/store";
+import { withAvailability } from "@/lib/availability";
 
 // Three full rows of the widest poster grid.
 const TRENDING_LIMIT = 18;
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
   try {
     const language = await ensureMetadataLanguage();
-    const index = libraryIndex(store);
+    const index = libraryIndex();
     const withLibrary = <T extends { mediaType: string; tmdbId: number }>(r: T) => ({
       ...r,
       library: libraryRef(index.get(r.mediaType + ":" + r.tmdbId)),
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
         .filter((r) => !r.library)
         .slice(0, TRENDING_LIMIT);
     }
-    return Response.json({ Items: await withAvailability(items, TMDB_API_KEY, language) });
+    return Response.json({ Items: await withAvailability(items, TMDB_API_KEY, language) } satisfies DiscoverResponse);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });
   }

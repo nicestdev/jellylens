@@ -11,15 +11,22 @@ const nextConfig: NextConfig = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   poweredByHeader: false,
-  // Hardening for a publicly reachable instance. Posters come from Jellylens
-  // itself and image.tmdb.org, so no script/img CSP is set; framing is shut
-  // off entirely (clickjacking). HSTS only takes effect over HTTPS.
+  // Hardening for a publicly reachable instance. Images and fonts only from
+  // Jellylens itself (posters go through its caches, next/font self-hosts
+  // Geist), so an injected <img> can't call out. Scripts and styles are left
+  // open: Next's inline scripts would need nonces, and React renders style
+  // attributes. Framing is shut off entirely (clickjacking). HSTS only takes
+  // effect over HTTPS.
   async headers() {
     return [
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+          {
+            key: "Content-Security-Policy",
+            value:
+              "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; img-src 'self' data: blob:; font-src 'self' data:",
+          },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "same-origin" },

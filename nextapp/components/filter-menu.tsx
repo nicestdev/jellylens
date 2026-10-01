@@ -18,7 +18,7 @@ export type Facet = {
   key: string;
   label: string;
   values: string[];
-  counts: Map<string, number>; // how many items each value matches
+  counts?: Map<string, number>; // how many items each value matches, if known
   selected: Set<string>;
   onToggle: (value: string) => void;
   format?: (value: string) => string;
@@ -52,7 +52,9 @@ function FacetOptions({ facet }: { facet: Facet }) {
           {checked ? <Check className="size-3" /> : null}
         </span>
         <span className="flex-1">{format(value)}</span>
-        <span className="ml-6 text-xs text-muted-foreground tabular-nums">{facet.counts.get(value) ?? 0}</span>
+        {facet.counts ? (
+          <span className="ml-6 text-xs text-muted-foreground tabular-nums">{facet.counts.get(value) ?? 0}</span>
+        ) : null}
       </DropdownMenuCheckboxItem>
     );
   });
@@ -97,26 +99,6 @@ export function FilterMenu({ facets }: { facets: Facet[] }) {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-// A copy of the set with value added or removed.
-export function toggled(set: Set<string>, value: string): Set<string> {
-  const next = new Set(set);
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
-  return next;
-}
-
-// Tallies a facet's values over all items: counts[value] = items that have it.
-export function countValues<T>(items: T[], valuesOf: (item: T) => string[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const item of items) for (const v of valuesOf(item)) counts.set(v, (counts.get(v) ?? 0) + 1);
-  return counts;
-}
-
-// A facet's values for its FilterMenu, most common first.
-export function byCount(counts: Map<string, number>): string[] {
-  return [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
 }
 
 export type FilterChip = { id: string; label: string; onRemove: () => void };

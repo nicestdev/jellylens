@@ -14,10 +14,15 @@ type Tab = "discover" | "requests";
 // Two tabs: Discover (TMDB search, or trending when the box is empty) and
 // the requests — the user's own, or for admins everyone's, with who asked.
 // The one search box serves both — on the requests tab it just filters the
-// list by title.
+// list by title. Switching tabs clears it, so each tab starts out whole
+// (Discover with what's trending).
 export default function RequestsPage() {
-  const [tab, setTab] = useState<Tab>("discover");
+  const [tab, setTabState] = useState<Tab>("discover");
   const [query, setQuery] = useState("");
+  const setTab = (t: Tab) => {
+    if (t !== tab) setQuery("");
+    setTabState(t);
+  };
   const q = query.trim();
   const r = useRequests();
   const discover = useDiscover(tab === "discover" ? q : "");

@@ -11,10 +11,31 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/jellylens
 
 jobs:
+  # Lint, types and tests first; no image is built from code that fails them.
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: nextapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: nextapp/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
   # Each platform builds on its own native runner (no QEMU emulation, which
   # made the arm64 build take 30+ minutes) and pushes by digest only; the
   # merge job then ties both digests together under the real tags.
   build:
+    needs: check
     strategy:
       fail-fast: false
       matrix:

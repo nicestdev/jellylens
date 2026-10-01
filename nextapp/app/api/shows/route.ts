@@ -1,19 +1,12 @@
-import { store, type JellyfinEpisode } from "@/lib/store";
+import type { LanguageCoverage, ShowsResponse } from "@/lib/api-types";
+import { getEpisodes, getMismatches, getMissingSeries, getShows, type JellyfinEpisode } from "@/lib/store";
 
 // How many owned episodes carry each audio language, overall and per season,
 // so the Shows page can flag series that aren't fully in a language.
-type LanguageCoverage = {
-  total: number;
-  byLang: Record<string, number>;
-  seasons: { season: number; total: number; byLang: Record<string, number> }[];
-};
-
 function languageCoverage(episodes: JellyfinEpisode[]): Map<string, LanguageCoverage> {
   const bySeries = new Map<string, LanguageCoverage>();
   for (const ep of episodes) {
-    // Episodes synced before AudioLanguages existed carry no data at all;
-    // skip them rather than counting them as "no language".
-    if (!ep.SeriesId || !ep.AudioLanguages) continue;
+    if (!ep.SeriesId) continue;
     let cov = bySeries.get(ep.SeriesId);
     if (!cov) {
       cov = { total: 0, byLang: {}, seasons: [] };
@@ -36,24 +29,17 @@ function languageCoverage(episodes: JellyfinEpisode[]): Map<string, LanguageCove
   return bySeries;
 }
 
-// Only what the Shows and Missing pages use, instead of passing the raw
-// Jellyfin items (blur hashes, user data, …) through.
+// The library's shows with what the missing recheck found and their audio
+// languages, for the TV Shows and Missing pages.
 export async function GET() {
-  const coverage = languageCoverage(store.jellyfin.episodes);
-  const items = store.jellyfin.shows.map((item) => ({
-    Id: item.Id,
-    Name: item.Name,
-    ServerId: item.ServerId,
-    ProductionYear: item.ProductionYear,
-    ProviderIds: { Tmdb: item.ProviderIds?.Tmdb },
-    ImageTags: { Primary: (item.ImageTags as { Primary?: string } | undefined)?.Primary },
-    Status: item.Status,
-    ChildCount: item.ChildCount,
-    RecursiveItemCount: item.RecursiveItemCount,
-    Genres: item.Genres,
-    MissingEpisodes: store.missing.bySeriesId[item.Id] || null,
-    Mismatches: store.mismatches.bySeriesId[item.Id] || null,
+  const coverage = languageCoverage(getEpisodes());
+  const missing = getMissingSeries();
+  const mismatches = getMismatches();
+  const items = getShows().map((item) => ({
+    ...item,
+    MissingEpisodes: missing[item.Id] || null,
+    Mismatches: mismatches[item.Id] || null,
     Languages: coverage.get(item.Id) ?? null,
   }));
-  return Response.json({ Items: items });
+  return Response.json({ Items: items } satisfies ShowsResponse);
 }

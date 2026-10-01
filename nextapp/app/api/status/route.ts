@@ -1,25 +1,28 @@
-import { store } from "@/lib/store";
+import { libraryCounts, missingCounts, syncedAt, tmdbCounts } from "@/lib/store";
+import { releaseCounts } from "@/lib/store";
+import { stageTriggers, type SyncStage } from "@/lib/sync-manager";
+import type { StageStatus, StatusResponse } from "@/lib/api-types";
+
+const stage = (name: SyncStage): StageStatus => ({
+  syncedAt: syncedAt(name),
+  running: stageTriggers[name].running(),
+  error: stageTriggers[name].lastError(),
+});
 
 export async function GET() {
+  const library = libraryCounts();
+  const tmdb = tmdbCounts();
+  const missing = missingCounts();
+  const releases = releaseCounts();
   return Response.json({
-    jellyfin: {
-      syncedAt: store.jellyfin.syncedAt,
-      movies: store.jellyfin.movies.length,
-      shows: store.jellyfin.shows.length,
-    },
-    tmdb: {
-      syncedAt: store.tmdb.syncedAt,
-      shows: Object.keys(store.tmdb.bySeriesId).length,
-      collections: Object.keys(store.tmdb.byCollectionId).length,
-    },
+    jellyfin: { ...stage("jellyfin"), movies: library.movies, shows: library.shows },
+    tmdb: { ...stage("tmdb"), shows: tmdb.shows, collections: tmdb.collections },
     missing: {
-      syncedAt: store.missing.syncedAt,
-      incompleteCount: Object.keys(store.missing.bySeriesId).length,
-      incompleteCollectionCount: Object.keys(store.missing.byCollectionId).length,
+      ...stage("missing"),
+      incompleteCount: missing.series,
+      incompleteCollectionCount: missing.collections,
+      mismatchCount: missing.mismatches,
     },
-    mismatches: {
-      syncedAt: store.mismatches.syncedAt,
-      mismatchCount: Object.keys(store.mismatches.bySeriesId).length,
-    },
-  });
+    releases: { ...stage("releases"), groups: releases.groups, releases: releases.releases },
+  } satisfies StatusResponse);
 }

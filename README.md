@@ -14,8 +14,6 @@ to add next.
 [![Image](https://img.shields.io/badge/ghcr.io-nicestdev%2Fjellylens-a78bfa?logo=docker&logoColor=white)](https://github.com/nicestdev/jellylens/pkgs/container/jellylens)
 [![License](https://img.shields.io/badge/license-MIT-a78bfa)](LICENSE)
 
-<img src="docs/screenshot-missing.jpg" width="90%" alt="Missing episodes and movies" />
-
 </div>
 
 ## Features
@@ -26,23 +24,10 @@ to add next.
 - 🔍 **Mismatch detection**: episodes and seasons TMDB doesn't know about, usually a wrong match or a duplicate file.
 - 🗣️ **Language coverage**: flags shows where only some seasons have your audio language.
 - 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin. Everyone has their own list; admins see all of them, most wanted first.
-- 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing and Settings are for Jellyfin admins only.
-- 🔄 **Automatic sync**: Jellyfin and TMDB refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync right away.
+- 📦 **Releases**: pick your favorite P2P groups in Settings, and Jellylens keeps their release lists from [xREL](https://www.xrel.to) in sync. The Releases page shows one poster per title with the qualities it comes in; search and filter by group, quality or type to see whether something is out from a group you like. Each title is checked against its release names, so a release xREL linked to the wrong movie doesn't show that movie's poster or title.
+- 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing, Releases and Settings are for Jellyfin admins only.
+- 🔄 **Automatic sync**: Jellyfin, TMDB and xREL refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync right away.
 - 📱 **Works on any device**: responsive, dark UI that works on desktop and phone.
-
-<details>
-<summary><b>More screenshots</b></summary>
-<br/>
-
-| Movies | TV Shows |
-| :---: | :---: |
-| <img src="docs/screenshot-movies.jpg" alt="Movies" /> | <img src="docs/screenshot-shows.jpg" alt="TV Shows" /> |
-| **Requests** | **Movie collections** |
-| <img src="docs/screenshot-requests.jpg" alt="Requests" /> | <img src="docs/screenshot-missing-movies.jpg" alt="Missing movies from a collection" /> |
-| **Settings** | |
-| <img src="docs/screenshot-settings.jpg" alt="Settings" /> | |
-
-</details>
 
 ## Installation
 
@@ -74,9 +59,10 @@ Available for `linux/amd64` and `linux/arm64`.
 | `JELLYFIN_SYNC_INTERVAL_HOURS` | | `6` | Hours between Jellyfin library syncs, `0` = off |
 | `TMDB_SYNC_INTERVAL_HOURS` | | `24` | Hours between TMDB metadata refreshes, `0` = off |
 | `MISSING_RECHECK_INTERVAL_HOURS` | | `24` | Hours between rechecks for missing episodes and movies, `0` = off |
+| `XREL_SYNC_INTERVAL_HOURS` | | `6` | Hours between syncs of your release groups' lists from xREL, `0` = off |
 | `AUTH_ENABLED` | | `true` | Sign in with Jellyfin accounts; `false` opens Jellylens to anyone who can reach it |
 
-All data (library cache, posters, requests, display settings) is stored in `/app/data`.
+All data is kept in `/app/data`: the SQLite database `jellylens.db` (library, requests, settings, releases) and the poster caches. The server runs as the unprivileged `node` user and takes ownership of that folder when the container starts, so a bind mount like `./data` works whoever owns it.
 
 ### Exposing Jellylens to the internet
 
@@ -123,12 +109,20 @@ Both services share the compose network, so the tunnel reaches Jellylens by its 
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.dev.yml up -d   # next dev, hot reload
+docker compose -f docker-compose.dev.yml up -d   # next dev
 docker compose up -d --build                     # local production build
 ```
 
-The app is a Next.js project in [`nextapp/`](nextapp). The README screenshots
-come from a fake Jellyfin with a free demo library, see [`docs/demo/`](docs/demo).
+Tests, lint and type checks run inside the dev container (CI runs the same
+before every image build):
+
+```bash
+docker compose -f docker-compose.dev.yml exec media-overview npm test
+docker compose -f docker-compose.dev.yml exec media-overview npm run lint
+docker compose -f docker-compose.dev.yml exec media-overview npm run typecheck
+```
+
+The app is a Next.js project in [`nextapp/`](nextapp).
 
 ## License
 

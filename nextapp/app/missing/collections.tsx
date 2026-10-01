@@ -14,36 +14,14 @@ import { EmptyState } from "@/components/empty-state";
 import { Poster } from "@/components/poster";
 import { CornerBadge } from "@/components/poster-card";
 import { itemKey, useRequests } from "@/components/request-tiles";
-import { tmdbUrl } from "@/lib/api-client";
+import { tmdbImage, tmdbUrl } from "@/lib/api-client";
+import type {
+  CollectionIgnore,
+  CollectionItem as MissingCollection,
+  CollectionPartItem as CollectionPart,
+} from "@/lib/api-types";
 import { cn } from "@/lib/utils";
 import { TONES } from "./shared";
-
-// Only released parts; unreleased ones come in once they're out.
-export type CollectionPart = {
-  tmdbId: number;
-  title: string;
-  releaseDate: string | null;
-  posterPath: string | null;
-  owned: boolean;
-  fileName?: string;
-};
-export type MissingCollection = {
-  id: string;
-  name: string;
-  posterPath: string | null;
-  count: number;
-  parts: CollectionPart[];
-};
-export type CollectionIgnore = { kind: "collection"; collectionId: string; movieId: number | null };
-
-export function isPartIgnored(ignored: CollectionIgnore[], collectionId: string, movieId: number): boolean {
-  return ignored.some((e) => e.collectionId === collectionId && (e.movieId === null || e.movieId === movieId));
-}
-
-// A collection's parts that aren't owned, minus ignored ones.
-export function missingParts(c: MissingCollection, ignored: CollectionIgnore[]): CollectionPart[] {
-  return c.parts.filter((p) => !p.owned && !isPartIgnored(ignored, c.id, p.tmdbId));
-}
 
 // TMDB names nearly every collection "… Filmreihe" / "… Collection"; on a
 // card that's all collections anyway, the suffix is just noise.
@@ -52,7 +30,7 @@ function displayName(name: string): string {
 }
 
 function posterSrc(path: string | null): string | null {
-  return path ? `https://image.tmdb.org/t/p/w185${path}` : null;
+  return tmdbImage(path, "w185");
 }
 
 const year = (p: CollectionPart) => p.releaseDate?.slice(0, 4) ?? "";

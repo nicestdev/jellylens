@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
 import { Footer } from "@/components/footer";
 import { Logo } from "@/components/logo";
 import { Nav } from "@/components/nav";
@@ -21,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Jellylens",
-  description: "Jellyfin library analyzer — missing episodes, incomplete movie collections, mismatches, and library overview.",
+  description: "See what's missing from your Jellyfin library: missing episodes, incomplete movie collections, mismatches, requests and releases.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,19 +29,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} antialiased`}>
       <body className="flex min-h-svh flex-col bg-background text-foreground">
-        <Providers>
-          <header className="sticky top-0 z-40 shrink-0 border-b bg-background/80 backdrop-blur-md">
-            <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-              <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-                <Logo className="size-7" />
-                <span>Jellylens</span>
-              </Link>
-              {user ? <Nav user={user} canSignOut={AUTH_ENABLED} /> : null}
-            </div>
-          </header>
-          {children}
-          {user ? <Footer /> : null}
-        </Providers>
+        <header className="sticky top-0 z-40 shrink-0 border-b bg-background/80 backdrop-blur-md">
+          <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+            <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+              <Logo className="size-7" />
+              <span>Jellylens</span>
+            </Link>
+            {user ? <Nav user={user} canSignOut={AUTH_ENABLED} /> : null}
+          </div>
+        </header>
+        {children}
+        {user ? <Footer /> : null}
       </body>
     </html>
   );

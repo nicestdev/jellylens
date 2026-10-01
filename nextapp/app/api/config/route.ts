@@ -1,3 +1,4 @@
+import type { ConfigResponse } from "@/lib/api-types";
 import {
   AUTH_ENABLED,
   JELLYFIN_URL,
@@ -6,6 +7,7 @@ import {
   JELLYFIN_SYNC_INTERVAL_HOURS,
   TMDB_SYNC_INTERVAL_HOURS,
   MISSING_RECHECK_INTERVAL_HOURS,
+  XREL_SYNC_INTERVAL_HOURS,
 } from "@/lib/env";
 
 function maskKey(key: string): string {
@@ -25,6 +27,7 @@ export async function GET() {
       jellyfin: JELLYFIN_SYNC_INTERVAL_HOURS,
       tmdb: TMDB_SYNC_INTERVAL_HOURS,
       missing: MISSING_RECHECK_INTERVAL_HOURS,
+      releases: XREL_SYNC_INTERVAL_HOURS,
     },
-  });
+  } satisfies ConfigResponse);
 }

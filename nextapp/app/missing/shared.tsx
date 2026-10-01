@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Shared by the TV Shows and Movies tabs of the Missing page.
@@ -16,10 +17,6 @@ export const TONES: Record<Tone, { badge: string; tile: string; ring: string }> 
   warning: { badge: "bg-warning/15 text-warning", tile: "bg-warning/15 text-warning ring-warning/40", ring: "ring-2 ring-warning/70" },
   info: { badge: "bg-info/15 text-info", tile: "bg-info/15 text-info ring-info/40", ring: "ring-2 ring-info/70" },
 };
-
-export function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
 
 // A clickable summary card: count of findings (unit) across how many
 // groups (shows, collections) — picking it shows that category below.
