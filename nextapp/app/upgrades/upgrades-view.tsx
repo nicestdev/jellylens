@@ -97,7 +97,7 @@ export function UpgradesView({ library }: { library: Library }) {
         <Alert className="mt-6">
           <Info />
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-            <span>Some releases have no size yet; the next releases sync fills them in.</span>
+            <span>Some groups haven&apos;t loaded all their releases yet; the next releases sync fetches the rest.</span>
             <Button variant="outline" size="sm" onClick={syncNow} disabled={syncing}>
               <RefreshCw className={syncing ? "animate-spin" : undefined} />
               {syncing ? "Syncing…" : "Sync now"}

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
 import { Poster } from "@/components/poster";
-import { CLICKABLE_BADGE, CornerBadge } from "@/components/poster-card";
+import { CornerBadge } from "@/components/poster-card";
 import { ReleasePanel, type PanelTitle } from "@/components/release-panel";
 import { itemKey, useRequests } from "@/components/request-tiles";
 import { tmdbImage, tmdbUrl } from "@/lib/api-client";
@@ -55,12 +55,11 @@ function PartTile({ part, highlight, ctx }: { part: CollectionPart; highlight: b
   const state = part.owned ? "owned" : "missing";
   return (
     <div className="relative w-24 shrink-0">
-      <a
-        href={tmdbUrl("movie", part.tmdbId)}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={() => ctx.showReleases(part)}
         title={`${part.title} (${year(part)}) · ${state}`}
-        className="group block"
+        className="group block w-full cursor-pointer text-left"
       >
         <div className="relative">
           <Poster
@@ -71,6 +70,12 @@ function PartTile({ part, highlight, ctx }: { part: CollectionPart; highlight: b
               highlight ? TONES.destructive.ring : "opacity-40 grayscale"
             )}
           />
+          {released.length ? (
+            <CornerBadge
+              badge={{ label: releasedLabel(released), hint: releasedHint(released) }}
+              className="bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)] truncate"
+            />
+          ) : null}
         </div>
         <div
           className={cn(
@@ -81,23 +86,7 @@ function PartTile({ part, highlight, ctx }: { part: CollectionPart; highlight: b
           {part.title}
         </div>
         <div className="text-center text-[10px] text-muted-foreground tabular-nums">{year(part)}</div>
-      </a>
-      {released.length ? (
-        // Outside the link, over the poster's corner: a box the poster's size.
-        <div className="pointer-events-none absolute inset-x-0 top-0 aspect-2/3">
-          <button
-            type="button"
-            aria-label={`Show releases of ${part.title}`}
-            onClick={() => ctx.showReleases(part)}
-            className="group/badge pointer-events-auto absolute bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)] cursor-pointer rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring"
-          >
-            <CornerBadge
-              badge={{ label: releasedLabel(released), hint: releasedHint(released) }}
-              className={cn("relative", CLICKABLE_BADGE)}
-            />
-          </button>
-        </div>
-      ) : null}
+      </button>
       {highlight ? (
         <button
           type="button"

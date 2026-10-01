@@ -1,5 +1,6 @@
 import type { ReleaseDetail } from "@/lib/api-types";
 import { matchInfo, setVerdict, tileOf, tileTitleKeys, titleReleases } from "@/lib/store";
+import { groupEpisodes } from "@/lib/release-labels";
 import { resolveTitles } from "@/lib/sync-releases";
 import { ensureMetadataLanguage } from "@/lib/sync-manager";
 import { TMDB_API_KEY } from "@/lib/env";
@@ -11,7 +12,7 @@ function detail(key: string): ReleaseDetail {
   return {
     key,
     titles: tileTitleKeys(key).map((titleKey) => {
-      const Items = titleReleases(titleKey);
+      const Items = groupEpisodes(titleReleases(titleKey));
       const { title, year } = parseReleaseName(Items[0]?.name ?? "");
       return { titleKey, label: year ? `${title} (${year})` : title, match: matchInfo(titleKey), Items };
     }),

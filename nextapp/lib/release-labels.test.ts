@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MatchInfo } from "./api-types";
-import { matchActions, matchNote, qualityLabel, releasedHint, releasedLabel, titleMeta } from "./release-labels";
+import type { TitleRelease } from "./store";
+import { groupEpisodes, matchActions, matchNote, qualityLabel, releasedHint, releasedLabel, titleMeta } from "./release-labels";
 
 describe("releasedLabel", () => {
   it("names the first group and how many more, and all of them on hover", () => {
@@ -48,5 +49,53 @@ describe("matchActions and matchNote", () => {
     expect(verdicts(match({ status: "confirmed", verdict: "xrel" }))).toEqual([null]);
     expect(verdicts(match({ status: "rejected", verdict: "wrong", candidate: { title: "Dune", year: null } }))).toEqual(["xrel", null]);
     expect(matchNote(match({ status: "rejected", verdict: "wrong" }))).toBe("Marked as a wrong match by you.");
+  });
+});
+
+describe("groupEpisodes", () => {
+  const r = (id: string, name: string, group = "WAYNE"): TitleRelease => ({
+    id,
+    name,
+    link: "https://www.xrel.to/release/" + id,
+    quality: "HD-1080p",
+    publishedAt: Number(id),
+    group,
+  });
+
+  it("puts a season's single episodes on one line, newest first, as many as it has", () => {
+    expect(
+      groupEpisodes([
+        r("4", "Silo.S01E03.German.DL.1080p.WEB.h264-WAYNE"),
+        r("3", "Silo.S01E01E02.German.DL.1080p.WEB.h264-WAYNE"),
+        r("2", "Silo.S02E01.German.DL.1080p.WEB.h264-WAYNE"),
+        r("1", "Silo.S02E02-E03.German.DL.1080p.WEB.h264-WAYNE"),
+      ])
+    ).toEqual([
+      { ...r("4", "Silo.S01.German.DL.1080p.WEB.h264-WAYNE"), episodes: 3 },
+      { ...r("2", "Silo.S02.German.DL.1080p.WEB.h264-WAYNE"), episodes: 3 },
+    ]);
+  });
+
+  it("keeps groups and versions apart", () => {
+    const grouped = groupEpisodes([
+      r("4", "Silo.S01E02.German.DL.1080p.WEB.h264-WAYNE"),
+      r("3", "Silo.S01E02.German.DL.1080p.WEB.h264-FuN", "FuN"),
+      r("2", "Silo.S01E01.German.DL.1080p.WEB.h264-WAYNE"),
+      r("1", "Silo.S01E01.German.DL.720p.WEB.h264-WAYNE"),
+    ]);
+    expect(grouped.map((g) => [g.name, g.episodes])).toEqual([
+      ["Silo.S01.German.DL.1080p.WEB.h264-WAYNE", 2],
+      ["Silo.S01E02.German.DL.1080p.WEB.h264-FuN", undefined],
+      ["Silo.S01E01.German.DL.720p.WEB.h264-WAYNE", undefined],
+    ]);
+  });
+
+  it("leaves season packs, movies and a lone episode as they are", () => {
+    const items = [
+      r("3", "Silo.S01.German.DL.1080p.WEB.h264-WAYNE"),
+      r("2", "Silo.S01E05.German.DL.1080p.WEB.h264-WAYNE"),
+      r("1", "Heat.1995.German.DL.1080p.BluRay.x264-WAYNE"),
+    ];
+    expect(groupEpisodes(items)).toEqual(items);
   });
 });

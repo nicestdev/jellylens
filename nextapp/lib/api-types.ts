@@ -115,9 +115,9 @@ export type ReleaseDetailTitle = { titleKey: string; label: string; match: Match
 export type ReleaseDetail = { key: string; titles: ReleaseDetailTitle[] };
 
 // GET, POST, DELETE /api/release-groups. syncing: its releases are being
-// fetched right now.
+// fetched right now; matching: the sync is checking titles on TMDB.
 export type ReleaseGroupItem = ReleaseGroup & { syncing: boolean };
-export type ReleaseGroupsResponse = { Items: ReleaseGroupItem[] };
+export type ReleaseGroupsResponse = { Items: ReleaseGroupItem[]; matching: boolean };
 
 // Ignore entries by kind, and the shapes inside the Missing page's data.
 export type { EpisodeState, IgnoreKind, MissingSeason } from "./store";

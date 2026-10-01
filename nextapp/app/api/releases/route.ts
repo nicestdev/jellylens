@@ -48,6 +48,6 @@ export async function GET(req: NextRequest) {
     })),
     facets: releaseFacets(),
     groups: releaseCounts().groups,
-    syncing: releaseSync.groupId !== null || releaseSync.matching,
+    syncing: releaseSync().groupId !== null || releaseSync().matching,
   } satisfies ReleasesResponse);
 }

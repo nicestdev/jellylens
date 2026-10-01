@@ -1,5 +1,6 @@
-import type { MatchInfo } from "./api-types";
+import type { MatchInfo, TitleRelease } from "./api-types";
 import { plural } from "./format";
+import { episodesOf } from "./upgrades";
 
 // How xREL releases and their matches read, on the Releases page's tiles
 // and in the release panel (components/release-panel.tsx), which Requests
@@ -52,4 +53,34 @@ export function matchActions(match: MatchInfo): { label: string; verdict: MatchI
   }
   if (match.verdict) actions.push({ label: "Match automatically", verdict: null });
   return actions;
+}
+
+// A show's single episodes, one entry per season, group and version, as
+// the panel lists them: "Show.S01E01.German.1080p.WEB-GRP" and its E02 are
+// "Show.S01.German.1080p.WEB-GRP · 2 episodes". The entry keeps the newest
+// one's id, link and date (the list is newest first); a lone episode stays
+// as it is, like season packs, movies and anything else.
+export function groupEpisodes(items: TitleRelease[]): TitleRelease[] {
+  const out: (TitleRelease | { name: string; releases: TitleRelease[]; episodes: Set<number> })[] = [];
+  const seasons = new Map<string, { name: string; releases: TitleRelease[]; episodes: Set<number> }>();
+  for (const r of items) {
+    const episodes = episodesOf(r.name)?.episodes;
+    if (!episodes) {
+      out.push(r);
+      continue;
+    }
+    const name = r.name.replace(/(\.S\d{1,2})E\d{1,3}(?:-?E\d{1,3})?(?=\.)/i, "$1");
+    const key = r.group + "\n" + name.toLowerCase();
+    let season = seasons.get(key);
+    if (!season) {
+      season = { name, releases: [], episodes: new Set() };
+      seasons.set(key, season);
+      out.push(season);
+    }
+    season.releases.push(r);
+    for (const e of episodes) season.episodes.add(e);
+  }
+  return out.map((e) =>
+    !("releases" in e) ? e : e.releases.length === 1 ? e.releases[0] : { ...e.releases[0], name: e.name, episodes: e.episodes.size }
+  );
 }

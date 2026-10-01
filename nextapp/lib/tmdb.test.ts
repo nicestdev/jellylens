@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   earliestReleases,
+  fetchImdbId,
   fetchTmdbShow,
   fetchTmdbTitles,
   findTmdbByImdb,
@@ -122,6 +123,25 @@ describe("findTmdbByImdb", () => {
     expect(await findTmdbByImdb("key", "tt1", "de-DE", "movie")).toMatchObject({ mediaType: "tv" });
     mockFetch(() => json({ movie_results: [], tv_results: [] }));
     expect(await findTmdbByImdb("key", "tt1", "de-DE", "movie")).toBeNull();
+  });
+});
+
+describe("fetchImdbId", () => {
+  it("gives a TMDB entry's IMDb id, or null if it has none or TMDB doesn't know it", async () => {
+    const fetch = mockFetch((url) => {
+      if (url.pathname === "/3/tv/1399/external_ids") return json({ imdb_id: "tt0944947" });
+      if (url.pathname === "/3/movie/2/external_ids") return json({ imdb_id: null });
+      return new Response("", { status: 404 });
+    });
+    expect(await fetchImdbId("key", "tv", 1399)).toBe("tt0944947");
+    expect(new URL(String(fetch.mock.calls[0][0])).searchParams.get("api_key")).toBe("key");
+    expect(await fetchImdbId("key", "movie", 2)).toBeNull();
+    expect(await fetchImdbId("key", "movie", 3)).toBeNull();
+  });
+
+  it("fails on other errors, which the caller handles", async () => {
+    mockFetch(() => new Response("", { status: 500 }));
+    await expect(fetchImdbId("key", "movie", 1)).rejects.toThrow(TmdbError);
   });
 });
 

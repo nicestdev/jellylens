@@ -177,6 +177,13 @@ export async function findTmdbByImdb(
   return hit ? toFindResult(mediaType, hit) : null;
 }
 
+// The other way round: a TMDB entry's IMDb id, null if it has none (or
+// TMDB doesn't know the entry). For the WCX search (app/api/wcx-search).
+export async function fetchImdbId(apiKey: string, mediaType: "movie" | "tv", tmdbId: number): Promise<string | null> {
+  const body = await getOrNull<{ imdb_id?: string | null }>(apiKey, `/${mediaType}/${tmdbId}/external_ids`);
+  return body?.imdb_id || null;
+}
+
 // TMDB's movie or show search, narrowed to a year when there is one, for
 // releases whose xREL link didn't check out. Best matches first.
 export async function searchTmdbTitle(

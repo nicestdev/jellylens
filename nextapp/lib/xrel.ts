@@ -130,13 +130,61 @@ export async function findGroup(name: string): Promise<{ id: string; name: strin
   return hit?.group ? { id: hit.group.id, name: hit.group.name } : null;
 }
 
-// Only P2P groups can be added: the API can't list a scene group's releases
-// (no group filter, and search stops at 50 hits). This tells a scene group
-// apart from a typo, for the error message. Unlike findGroup, "-NAME" finds
-// nothing among scene releases, so it searches the plain name.
-export async function isSceneGroup(name: string): Promise<boolean> {
+// A scene release as xREL's search returns it, only the fields we read.
+// Unlike a P2P one it has no category: its video_type is the source
+// ("Web-Rip"), not the resolution.
+export type XrelSceneRelease = {
+  id: string;
+  dirname: string;
+  link_href: string;
+  time: number;
+  group_name?: string;
+  size?: { number: number; unit: string };
+  ext_info?: { id?: string; type?: string; uris?: string[] };
+};
+
+function sizeMb(size?: { number: number; unit: string }): number | undefined {
+  if (!size?.number) return undefined;
+  if (size.unit === "GB") return Math.round(size.number * 1024);
+  if (size.unit === "MB") return Math.round(size.number);
+  return undefined;
+}
+
+// A scene release's quality by the name, in the P2P sub-categories' terms,
+// so the filters, SD_QUALITIES (lib/store/releases.ts) and Upgrades take
+// both alike.
+export function sceneQuality(name: string): string {
+  const res = /[._-](2160|1080|720)p[._-]/i.exec(name);
+  if (res) return `HD-${res[1]}p`;
+  return /xvid/i.test(name) ? "XviD" : "x264-SD";
+}
+
+export function toSceneRelease(r: XrelSceneRelease): Release {
+  return {
+    ...toRelease({ id: r.id, dirname: r.dirname, link_href: r.link_href, pub_time: r.time, ext_info: r.ext_info }),
+    quality: sceneQuality(r.dirname),
+    sizeMb: sizeMb(r.size),
+  };
+}
+
+// Scene groups have no list of their own on the API, so their releases come
+// from a search for the name, which only finds its latest (it stops at 100,
+// in practice about 50). Each sync adds what's new, so they pile up over
+// time. Unlike findGroup, "-NAME" finds nothing among scene releases, so
+// it searches the plain name and keeps the ones tagged with it.
+async function searchScene(name: string, reserve = 0): Promise<XrelSceneRelease[]> {
   const data = await throttledSearch(() =>
-    call<{ results?: { group_name?: string }[] }>("/search/releases.json", { q: name, scene: 1, p2p: 0, limit: 100 })
+    call<{ results?: XrelSceneRelease[] }>("/search/releases.json", { q: name, scene: 1, p2p: 0, limit: 100 }, reserve)
   );
-  return data.results?.some((r) => r.group_name?.toLowerCase() === name.toLowerCase()) ?? false;
+  const wanted = name.toLowerCase();
+  return (data.results ?? []).filter((r) => r.group_name?.toLowerCase() === wanted);
+}
+
+// The scene group's name as xREL spells it, or null if it has none.
+export async function findSceneGroup(name: string): Promise<string | null> {
+  return (await searchScene(name))[0]?.group_name ?? null;
+}
+
+export async function fetchSceneReleases(name: string): Promise<Release[]> {
+  return (await searchScene(name, RESERVE)).map(toSceneRelease);
 }

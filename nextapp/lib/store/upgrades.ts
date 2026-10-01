@@ -33,11 +33,10 @@ export function libraryReleases(library: Library): GroupRelease[] {
   );
 }
 
-// The favorite groups, in the order they were added; sizesPending: one of
-// them hasn't walked its whole list since sizes were stored, so some of
-// its releases have none yet.
+// The favorite groups, P2P and scene, A→Z; sizesPending: one of them
+// hasn't walked its whole list yet, so some of its releases are missing.
 export function upgradeGroups(): { favorites: string[]; sizesPending: boolean } {
-  const favorites = all<{ name: string }>("SELECT name FROM release_groups ORDER BY added_at, rowid").map((g) => g.name);
+  const favorites = all<{ name: string }>("SELECT name FROM release_groups ORDER BY lower(name)").map((g) => g.name);
   const pending = one<{ n: number }>("SELECT count(*) AS n FROM release_groups WHERE complete = 0")!.n;
   return { favorites, sizesPending: pending > 0 };
 }

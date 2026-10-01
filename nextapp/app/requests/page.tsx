@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { SearchInput } from "@/components/search-input";
 import { POSTER_GRID, PosterGridSkeleton } from "@/components/poster-card";
 import { ReleasePanel, type PanelTitle } from "@/components/release-panel";
-import { RequestTile, ResultTile, itemKey, useDiscover, useRequests } from "@/components/request-tiles";
+import { RequestTile, ResultTile, itemKey, useDiscover, useRequests, type Result } from "@/components/request-tiles";
 import { cn } from "@/lib/utils";
 
 type Tab = "discover" | "requests";
@@ -26,22 +26,19 @@ export default function RequestsPage() {
   };
   const q = query.trim();
   const r = useRequests();
-  // The releases panel a request's group badges open (admins).
+  // The releases panel a poster opens, for admins (everyone else's link to
+  // TMDB: the releases are admin only).
   const [releases, setReleases] = useState<PanelTitle | null>(null);
-  const tileCtx = {
-    ...r,
-    showReleases: r.admin
-      ? (item: (typeof r.requests)[number]) =>
-          setReleases({
-            key: itemKey(item),
-            title: item.title,
-            year: item.year,
-            posterPath: item.posterPath,
-            mediaType: item.mediaType,
-            tmdbId: item.tmdbId,
-          })
-      : undefined,
-  };
+  const showReleases = (item: Result) =>
+    setReleases({
+      key: itemKey(item),
+      title: item.title,
+      year: item.year,
+      posterPath: item.posterPath,
+      mediaType: item.mediaType,
+      tmdbId: item.tmdbId,
+    });
+  const tileCtx = { ...r, showReleases: r.admin ? showReleases : undefined };
   const discover = useDiscover(tab === "discover" ? q : "");
   const error = r.error || discover.error;
 
@@ -93,7 +90,7 @@ export default function RequestsPage() {
                 tab === t ? "bg-muted font-medium text-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {t === "discover" ? "Discover" : "Requests"}
+              {t === "discover" ? "Discover" : "Requested"}
               {t === "requests" && r.requests.length ? (
                 <span className="rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
                   {r.requests.length}
@@ -139,7 +136,7 @@ export default function RequestsPage() {
             ) : (
               <div className={POSTER_GRID}>
                 {discover.items.map((item) => (
-                  <ResultTile key={itemKey(item)} item={item} requested={r.requestedKeys.has(itemKey(item))} ctx={r} />
+                  <ResultTile key={itemKey(item)} item={item} requested={r.requestedKeys.has(itemKey(item))} ctx={tileCtx} />
                 ))}
               </div>
             )}

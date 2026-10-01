@@ -20,23 +20,48 @@ export const SD_QUALITIES = ["XviD", "x264-SD", "x265-SD", "DVD-R"];
 export const shownReleases = () =>
   getPreferences().showSdReleases ? "1" : `r.quality NOT IN (${SD_QUALITIES.map((q) => `'${q}'`).join(", ")})`;
 
-// ---- Groups, in the order they were added
+// ---- Groups, in the order they were added. A P2P group's releases come
+// from its list on xREL, a scene group's from a search (lib/xrel.ts).
 
-export type ReleaseGroup = { id: string; name: string; count: number; syncedAt: string | null; complete: boolean };
+export type GroupKind = "p2p" | "scene";
+export type ReleaseGroup = {
+  id: string;
+  kind: GroupKind;
+  name: string;
+  count: number;
+  syncedAt: string | null;
+  complete: boolean;
+};
+
+// A scene group has no id on xREL; it's stored under its name.
+export const sceneGroupId = (name: string) => "scene:" + name;
 
 export function listGroups(): ReleaseGroup[] {
-  return all<{ id: string; name: string; count: number; synced_at: string | null; complete: number }>(
-    `SELECT g.id, g.name, g.synced_at, g.complete, (SELECT count(*) FROM releases r WHERE r.group_id = g.id) AS count
+  return all<{ id: string; kind: GroupKind; name: string; count: number; synced_at: string | null; complete: number }>(
+    `SELECT g.id, g.kind, g.name, g.synced_at, g.complete, (SELECT count(*) FROM releases r WHERE r.group_id = g.id) AS count
        FROM release_groups g ORDER BY g.added_at, g.rowid`
-  ).map((g) => ({ id: g.id, name: g.name, count: g.count, syncedAt: g.synced_at, complete: Boolean(g.complete) }));
+  ).map((g) => ({
+    id: g.id,
+    kind: g.kind,
+    name: g.name,
+    count: g.count,
+    syncedAt: g.synced_at,
+    complete: Boolean(g.complete),
+  }));
 }
 
 export const groupExists = (id: string) => Boolean(one("SELECT 1 FROM release_groups WHERE id = ?", id));
-export const hasGroupNamed = (name: string) =>
-  Boolean(one("SELECT 1 FROM release_groups WHERE lower(name) = lower(?)", name));
+export const hasGroupNamed = (name: string, kind: GroupKind) =>
+  Boolean(one("SELECT 1 FROM release_groups WHERE kind = ? AND lower(name) = lower(?)", kind, name));
 
-export function addGroup(id: string, name: string) {
-  run("INSERT OR IGNORE INTO release_groups (id, name, added_at) VALUES (?, ?, ?)", id, name, new Date().toISOString());
+export function addGroup(id: string, name: string, kind: GroupKind = "p2p") {
+  run(
+    "INSERT OR IGNORE INTO release_groups (id, kind, name, added_at) VALUES (?, ?, ?, ?)",
+    id,
+    kind,
+    name,
+    new Date().toISOString()
+  );
 }
 
 // Its releases go with it (ON DELETE CASCADE).
@@ -383,7 +408,7 @@ function countTitles(w: { sql: string; params: unknown[] }): number {
 export const tileCount = () => countTitles(where({ words: [], group: [], quality: [], type: [] }));
 
 // What the filter menu offers, over everything so it doesn't shrink as you
-// narrow it down: groups in the order they were added, the rest A→Z.
+// narrow it down, A→Z.
 export type ReleaseFacets = Record<"group" | "quality" | "type", string[]>;
 
 export function releaseFacets(): ReleaseFacets {
@@ -393,12 +418,22 @@ export function releaseFacets(): ReleaseFacets {
     ).map((r) => r.v);
   const groups = all<{ name: string }>(
     `SELECT name FROM release_groups g WHERE EXISTS (SELECT 1 FROM releases r WHERE r.group_id = g.id AND ${shownReleases()})
-      ORDER BY added_at, rowid`
+      ORDER BY lower(name)`
   );
   return { group: groups.map((g) => g.name), quality: distinct("quality"), type: distinct("type") };
 }
 
-export type TitleRelease = { id: string; name: string; link: string; quality: string; publishedAt: number; group: string };
+// episodes: how many episodes one entry stands for (groupEpisodes in
+// lib/release-labels.ts), absent for a single release.
+export type TitleRelease = {
+  id: string;
+  name: string;
+  link: string;
+  quality: string;
+  publishedAt: number;
+  group: string;
+  episodes?: number;
+};
 
 // Every release of one title, newest first.
 export function titleReleases(titleKey: string): TitleRelease[] {
@@ -436,14 +471,38 @@ export function groupsByTile(keys: string[]): Map<string, string[]> {
   return groups;
 }
 
-// ---- WCX UIDs, looked up once and stored forever
+// ---- WCX pages: a hit is kept for good, a miss for an hour
 
-export function wcxUid(tmdbId: string): string | null {
-  return one<{ uid: string }>("SELECT uid FROM wcx WHERE tmdb_id = ?", tmdbId)?.uid ?? null;
+const hourAgo = () => new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+// What's known of an entry's WCX page: its uid, null for a recent miss,
+// undefined if WCX has to be asked (never, or the miss is an hour old).
+export function wcxUid(tmdbId: string): string | null | undefined {
+  const row = one<{ uid: string | null; checked_at: string }>("SELECT uid, checked_at FROM wcx WHERE tmdb_id = ?", tmdbId);
+  if (!row || (row.uid === null && row.checked_at < hourAgo())) return undefined;
+  return row.uid;
 }
 
-export function setWcxUid(tmdbId: string, uid: string) {
-  run("INSERT OR IGNORE INTO wcx (tmdb_id, uid) VALUES (?, ?)", tmdbId, uid);
+// uid null: WCX had nothing. A hit is never replaced by a later miss.
+export function setWcxUid(tmdbId: string, uid: string | null) {
+  run(
+    `INSERT INTO wcx (tmdb_id, uid, checked_at) VALUES (?, ?, ?)
+     ON CONFLICT (tmdb_id) DO UPDATE SET uid = excluded.uid, checked_at = excluded.checked_at WHERE wcx.uid IS NULL`,
+    tmdbId,
+    uid,
+    new Date().toISOString()
+  );
+}
+
+// The IMDb id behind a TMDB entry, if a release's lookup came across it.
+export function imdbIdOfTmdb(mediaType: "movie" | "tv", tmdbId: number): string | null {
+  return (
+    one<{ imdbId: string }>(
+      "SELECT max(imdb_id) AS imdbId FROM imdb_lookups WHERE media_type = ? AND tmdb_id = ?",
+      mediaType,
+      tmdbId
+    )?.imdbId ?? null
+  );
 }
 
 // The tile an xREL title is on now.

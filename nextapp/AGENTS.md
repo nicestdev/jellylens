@@ -12,7 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 A dashboard over a Jellyfin library: movies and shows, missing episodes and
 collection movies (checked against TMDB), mismatches, per-user requests, and
-the releases of favorite P2P groups (from xREL).
+the releases of favorite P2P and scene groups (from xREL).
 
 ## Stack
 
@@ -24,9 +24,10 @@ the releases of favorite P2P groups (from xREL).
 - All state in SQLite: `DATA_DIR/jellylens.db` (default `/app/data`), through
   better-sqlite3. `lib/db.ts` opens it and runs the migrations (one entry per
   schema version, tracked in `PRAGMA user_version`; never edit one that has
-  shipped). Data access is in `lib/store/`, one module per area (library,
-  files, tmdb, missing, ignored, requests, preferences, releases, posters,
-  sync-state, upgrades), all re-exported by `lib/store/index.ts`; SQL helpers in
+  shipped. The first is a baseline that every earlier version was folded
+  into on 2026-10-02). Data access is in `lib/store/`, one module per area
+  (library, files, tmdb, missing, ignored, requests, preferences, releases,
+  posters, sync-state, upgrades), all re-exported by `lib/store/index.ts`; SQL helpers in
   `lib/store/sql.ts`. Every read goes to the database, so a page always sees
   what the last sync wrote; each sync replaces its data in one transaction.
   Jellyfin items are stored with only the fields Jellylens reads
@@ -79,18 +80,28 @@ intervals.
 
 ## Releases (xREL)
 
-Admins add favorite P2P groups in Settings (`app/settings/release-groups.tsx`,
-`/api/release-groups`). xREL's API (`lib/xrel.ts`, no key) has no group
-lookup, so a name is resolved by searching releases for `-NAME`; a scene group
-gets its own error message (only P2P groups can list their releases). xREL
-allows 900 calls an hour: the client reads `x-ratelimit-*` and a sync stops
-with 10 left; searches are spaced 2.5 s apart.
+Admins add favorite groups in Settings (`app/settings/release-groups.tsx`,
+`/api/release-groups`), a list each for P2P and scene; both live in
+`release_groups` (`kind`) and their releases in `releases`. xREL's API
+(`lib/xrel.ts`, no key) has no group lookup, so a P2P name is resolved by
+searching P2P releases for `-NAME` (the API id is the group's), a scene
+name by searching scene releases for `NAME` (no API id: stored as
+`scene:NAME`); a name of the other kind gets a message pointing to the
+other list. xREL allows 900 calls an hour: the client reads
+`x-ratelimit-*` and a sync stops with 10 left; searches are spaced 2.5 s
+apart.
 
-A group's first sync walks its whole list (100 per page); later ones stop at
-the first page with a release already stored. Releases belong to xREL titles
-(`title_key`); a movie's are split further by the year in their names
-(`e1~1995`, `toRelease` in `lib/xrel.ts`), since xREL now and then files a
-remake under the original. xREL also sometimes links a release to the
+One sync does both kinds. A P2P group's first sync walks its whole list
+(100 per page); later ones stop at the first page with a release already
+stored. A scene group has no list on the API, only that search, which
+finds its latest releases (about 50): each sync adds what's new, so older
+ones pile up from when the group was added, and earlier ones never come
+in. Scene releases carry no resolution category, so their quality is read
+from the name (`sceneQuality`), in the P2P categories' terms.
+
+Releases belong to xREL titles (`title_key`); a movie's are split further
+by the year in their names (`e1~1995`, `toRelease` in `lib/xrel.ts`), since
+xREL now and then files a remake under the original. xREL also sometimes links a release to the
 wrong movie, so its IMDb id's TMDB entry (`imdb_lookups`) is
 only a candidate: `decideMatch` in `lib/title-match.ts` checks it against the
 release names (title by TMDB's localized, original or other titles, year ±1,
@@ -109,9 +120,14 @@ quality, type), sorts and pages tiles in SQL, nothing cached; the filter
 menu lists its values without counts, which would mean another scan of
 every release. `GET /api/releases/<key>` gives a tile's titles with their
 releases and matches (the panel, `components/release-panel.tsx`, which
-the group badges on Requests and Missing open too, for admins); `POST`
+the posters on Requests and Missing open too, for admins); `POST`
 takes a decision about one of them (`titleKey`) and answers with the tile,
-or the title's new one if it was the tile's last.
+or the title's new one if it was the tile's last. In the panel a show's
+single episodes are one line per season, group and version
+(`groupEpisodes` in `lib/release-labels.ts`). Its WCX link
+(`GET /api/wcx-search?tmdbId=`) searches WCX by the entry's IMDb id (from
+`imdb_lookups`, else TMDB's external ids); `wcx` keeps a hit for good and
+a miss for an hour, so reopening a panel asks nobody.
 
 ## Images
 
@@ -153,8 +169,11 @@ can be requested from the grid (`RequestAction` in
 
 Client components under `app/` that fetch from the routes above. Page data
 loads through `useLoad` (`hooks/use-load.ts`: load on mount, `reload()`,
-`setData()` after a change the server answered). What a page works out from
-that data (filtering, sorting, counts, tile texts) is plain functions in its
+`setData()` after a change the server answered); `usePoll`
+(`hooks/use-poll.ts`) reloads on an interval, skipping hidden tabs.
+Settings loads its status, config, preferences and groups together and
+polls them every 2 s while a sync runs, every 15 s otherwise. What a page
+works out from that data (filtering, sorting, counts, tile texts) is plain functions in its
 `logic.ts` next to it, tested without React; shared helpers are in
 `lib/facets.ts` (filter and sort) and `lib/format.ts` (plurals, numbers and
 dates German-style, relative times). Shared UI: `poster-card`
@@ -200,8 +219,9 @@ source groups (what you have now) and "adds original audio". Each row is
 what changes (group, quality, codec, audio as from → to chips), with the
 sizes and the change in storage; the tiles add it up, and the title opens
 the release panel on just the target's releases in that quality, codec
-and season (its `only`). Only favorites can be picked: scene groups'
-releases aren't on xREL's P2P lists.
+and season (its `only`). Only favorites can be picked, P2P or scene; a
+scene group rarely has a whole season (no packs, and only its latest
+releases), so for shows it seldom has anything to offer.
 
 ## Development
 

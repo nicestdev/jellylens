@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   addGroup,
   groupsByTile,
   hasGroupNamed,
+  imdbIdOfTmdb,
   insertReleases,
   listGroups,
   markGroupSynced,
@@ -13,6 +14,7 @@ import {
   removeGroup,
   saveImdbLookup,
   saveTitleMatch,
+  sceneGroupId,
   setVerdict,
   setWcxUid,
   tileCount,
@@ -52,11 +54,24 @@ describe("groups", () => {
     insertReleases("g1", [release("1"), release("2")]);
     markGroupSynced("g1", "2026-06-15T00:00:00Z");
     expect(listGroups()).toEqual([
-      { id: "g2", name: "VECTOR", count: 0, syncedAt: null, complete: false },
-      { id: "g1", name: "FuN", count: 2, syncedAt: "2026-06-15T00:00:00Z", complete: true },
+      { id: "g2", kind: "p2p", name: "VECTOR", count: 0, syncedAt: null, complete: false },
+      { id: "g1", kind: "p2p", name: "FuN", count: 2, syncedAt: "2026-06-15T00:00:00Z", complete: true },
     ]);
-    expect(hasGroupNamed("vector")).toBe(true);
     expect(releaseCounts()).toEqual({ groups: 2, releases: 2 });
+  });
+
+  it("keeps scene groups alongside, by name, and tells the kinds apart", () => {
+    addGroup("g1", "VECTOR");
+    addGroup(sceneGroupId("WAYNE"), "WAYNE", "scene");
+    insertReleases(sceneGroupId("WAYNE"), [release("1")]);
+    expect(listGroups().map((g) => [g.id, g.kind, g.count])).toEqual([
+      ["g1", "p2p", 0],
+      ["scene:WAYNE", "scene", 1],
+    ]);
+    expect(hasGroupNamed("vector", "p2p")).toBe(true);
+    expect(hasGroupNamed("vector", "scene")).toBe(false);
+    expect(hasGroupNamed("wayne", "scene")).toBe(true);
+    expect(releaseCounts()).toEqual({ groups: 2, releases: 1 });
   });
 
   it("takes a group's releases along when it's removed", () => {
@@ -64,6 +79,11 @@ describe("groups", () => {
     insertReleases("g1", [release("1")]);
     removeGroup("g1");
     expect(releaseCounts()).toEqual({ groups: 0, releases: 0 });
+  });
+
+  it("stores no group of a kind it doesn't know", () => {
+    addGroup("x", "X", "usenet" as "p2p");
+    expect(listGroups()).toEqual([]);
   });
 });
 
@@ -163,13 +183,13 @@ describe("queryTitles", () => {
 });
 
 describe("releaseFacets", () => {
-  it("lists the filter values, groups in the order they were added; counts the tiles", () => {
+  it("lists the filter values A→Z; counts the tiles", () => {
     addGroup("g2", "VECTOR");
     addGroup("g1", "FuN");
     addGroup("g3", "Empty");
     insertReleases("g1", [release("1", { titleKey: "a", quality: "HD-2160p" }), release("2", { titleKey: "a", type: "tv" })]);
     insertReleases("g2", [release("3", { titleKey: "b" })]);
-    expect(releaseFacets()).toEqual({ group: ["VECTOR", "FuN"], quality: ["HD-1080p", "HD-2160p"], type: ["movie", "tv"] });
+    expect(releaseFacets()).toEqual({ group: ["FuN", "VECTOR"], quality: ["HD-1080p", "HD-2160p"], type: ["movie", "tv"] });
     expect(tileCount()).toBe(2);
     removeGroup("g1");
     expect(releaseFacets()).toEqual({ group: ["VECTOR"], quality: ["HD-1080p"], type: ["movie"] });
@@ -218,10 +238,10 @@ describe("tiles", () => {
     expect(tileCount()).toBe(3);
   });
 
-  it("tells which groups released a TMDB entry, A→Z", () => {
+  it("tells which groups released a TMDB entry, P2P and scene alike, A→Z", () => {
     seed();
-    addGroup("g0", "FuN");
-    insertReleases("g0", [release("4", { titleKey: "heat-web", name: "Heat.1995.1080p.WEB.H264-FuN" })]);
+    addGroup("scene:FuN", "FuN", "scene");
+    insertReleases("scene:FuN", [release("4", { titleKey: "heat-web", name: "Heat.1995.1080p.WEB.H264-FuN" })]);
     saveTitleMatch("heat-web", "verified", heat, { title: "Heat", year: 1995 });
     expect(groupsByTile(["movie:949", "tv:1", "silo"])).toEqual(new Map([["movie:949", ["FuN", "VECTOR"]]]));
   });
@@ -299,12 +319,37 @@ describe("matching", () => {
 });
 
 describe("wcx UIDs", () => {
-  it("stores and retrieves a UID, ignoring duplicates", () => {
-    expect(wcxUid("movie:949")).toBeNull();
+  it("keeps a hit for good", () => {
+    expect(wcxUid("movie:949")).toBeUndefined();
     setWcxUid("movie:949", "abc123");
     expect(wcxUid("movie:949")).toBe("abc123");
     setWcxUid("movie:949", "other");
+    setWcxUid("movie:949", null);
     expect(wcxUid("movie:949")).toBe("abc123");
+  });
+
+  it("keeps a miss for an hour, then asks again; a later hit replaces it", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-01T00:00:00Z"));
+      setWcxUid("movie:1", null);
+      vi.setSystemTime(new Date("2026-10-01T00:59:00Z"));
+      expect(wcxUid("movie:1")).toBeNull();
+      vi.setSystemTime(new Date("2026-10-01T01:01:00Z"));
+      expect(wcxUid("movie:1")).toBeUndefined();
+      setWcxUid("movie:1", "found");
+      expect(wcxUid("movie:1")).toBe("found");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("finds a TMDB entry's IMDb id among the lookups", () => {
+    saveImdbLookup("tt0113277", heat);
+    saveImdbLookup("tt404", null);
+    expect(imdbIdOfTmdb("movie", 949)).toBe("tt0113277");
+    expect(imdbIdOfTmdb("tv", 949)).toBeNull();
+    expect(imdbIdOfTmdb("movie", 1)).toBeNull();
   });
 });
 

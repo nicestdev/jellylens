@@ -3,7 +3,7 @@ import { json, mockFetch } from "@/test/http";
 import type { SessionUser } from "@/lib/session";
 import { NextRequest } from "next/server";
 import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
-import { addGroup, insertReleases, replaceJellyfin, saveTitleMatch } from "@/lib/store";
+import { addGroup, insertReleases, replaceJellyfin, saveImdbLookup, saveTitleMatch } from "@/lib/store";
 import { movie, show } from "@/test/fixtures";
 
 // Route handlers, called directly with a Request. Who's signed in comes
@@ -363,40 +363,92 @@ describe("GET /api/upgrades", () => {
 });
 
 describe("/api/release-groups", () => {
-  it("adds a P2P group found on xREL", async () => {
+  // xREL's search: P2P hits for "-NAME", scene hits for "NAME". Whatever
+  // else the background sync asks gets an empty answer.
+  const xrel = ({ p2p = [] as string[], scene = [] as string[] } = {}) =>
     mockFetch((url) => {
-      if (url.pathname === "/v2/search/releases.json") return json({ p2p_results: [{ id: "r", dirname: "x", link_href: "", pub_time: 0, group: { id: "g1", name: "VECTOR" } }] });
-      // The sync it starts in the background.
+      if (url.pathname === "/v2/search/releases.json") {
+        const q = url.searchParams.get("q")!.toLowerCase();
+        if (url.searchParams.get("scene") === "1") {
+          const name = scene.find((n) => n.toLowerCase() === q);
+          return json({ results: name ? [{ id: "s1", dirname: `X.1080p.WEB-${name}`, link_href: "", time: 0, group_name: name }] : [] });
+        }
+        const name = p2p.find((n) => "-" + n.toLowerCase() === q);
+        return json({ p2p_results: name ? [{ id: "r", dirname: "x", link_href: "", pub_time: 0, group: { id: "g1", name } }] : [] });
+      }
       if (url.pathname === "/v2/p2p/releases.json") return json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 0 }, list: [] });
       if (url.pathname === "/System/Configuration") return json({});
     });
-    const { POST } = await import("./release-groups/route");
-    const res = await POST(post("/api/release-groups", { name: "vector" }));
-    expect(await res.json()).toMatchObject({ Items: [{ id: "g1", name: "VECTOR", count: 0 }] });
-  });
-
-  it("explains a scene group and a typo", async () => {
-    mockFetch((url) =>
-      json(url.searchParams.get("scene") === "1" ? { results: url.searchParams.get("q") === "WAYNE" ? [{ group_name: "WAYNE" }] : [] } : { p2p_results: [] })
-    );
-    const { POST } = await import("./release-groups/route");
+  // Searches are spaced 2.5 s apart; skip the waits.
+  async function withoutWaits<T>(fn: () => Promise<T>): Promise<T> {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     try {
-      const scene = POST(post("/api/release-groups", { name: "WAYNE" }));
+      const result = fn();
       await vi.advanceTimersByTimeAsync(10_000);
-      expect(await (await scene).json()).toEqual({ error: "WAYNE is a scene group. Only P2P groups can be added." });
-      const typo = POST(post("/api/release-groups", { name: "NOPE" }));
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect((await typo).status).toBe(404);
+      return await result;
     } finally {
       vi.useRealTimers();
     }
+  }
+  const route = () => import("./release-groups/route");
+
+  it("adds a P2P group found on xREL, spelled as xREL does", async () => {
+    xrel({ p2p: ["VECTOR"] });
+    const { POST } = await route();
+    const res = await POST(post("/api/release-groups", { name: "vector" }));
+    expect(await res.json()).toMatchObject({ Items: [{ id: "g1", kind: "p2p", name: "VECTOR", count: 0 }] });
+  });
+
+  it("adds a scene group found on xREL, spelled as xREL does", async () => {
+    xrel({ scene: ["FuN"] });
+    const { POST } = await route();
+    const res = await POST(post("/api/release-groups", { name: "fun", kind: "scene" }));
+    expect(await res.json()).toMatchObject({ Items: [{ id: "scene:FuN", kind: "scene", name: "FuN", count: 0 }] });
+  });
+
+  it("adds a group once", async () => {
+    const fetch = xrel({ scene: ["WAYNE"] });
+    const { POST } = await route();
+    await POST(post("/api/release-groups", { name: "WAYNE", kind: "scene" }));
+    const searches = () => fetch.mock.calls.filter(([u]) => String(u).includes("/search/")).length;
+    const before = searches();
+    const res = await POST(post("/api/release-groups", { name: "wayne", kind: "scene" }));
+    expect((await res.json()).Items).toHaveLength(1);
+    expect(searches()).toBe(before);
+  });
+
+  it("points to the other list when the group is of the other kind, and tells a typo apart", async () => {
+    xrel({ p2p: ["VECTOR"], scene: ["WAYNE"] });
+    const { POST } = await route();
+    const asP2p = await withoutWaits(() => POST(post("/api/release-groups", { name: "WAYNE" })));
+    expect(asP2p.status).toBe(404);
+    expect(await asP2p.json()).toEqual({ error: "WAYNE is a scene group — add it under Scene groups instead." });
+    const asScene = await withoutWaits(() => POST(post("/api/release-groups", { name: "VECTOR", kind: "scene" })));
+    expect(await asScene.json()).toEqual({ error: "VECTOR is a P2P group — add it under P2P groups instead." });
+    const typo = await withoutWaits(() => POST(post("/api/release-groups", { name: "NOPE", kind: "scene" })));
+    expect(await typo.json()).toEqual({ error: "xREL doesn't list a scene group called NOPE." });
+  });
+
+  it("says so when xREL is out of calls", async () => {
+    mockFetch(() => new Response("", { status: 429 }));
+    const { POST } = await route();
+    expect((await POST(post("/api/release-groups", { name: "VECTOR" }))).status).toBe(429);
   });
 
   it("rejects names that can't be a group", async () => {
-    const { POST } = await import("./release-groups/route");
+    const { POST } = await route();
     expect((await POST(post("/api/release-groups", { name: "a b" }))).status).toBe(400);
     expect((await POST(post("/api/release-groups", { name: "" }))).status).toBe(400);
+  });
+
+  it("removes a group by id", async () => {
+    addGroup("g1", "VECTOR");
+    addGroup("scene:WAYNE", "WAYNE", "scene");
+    const { DELETE, GET } = await route();
+    const res = await DELETE(post("/api/release-groups", { id: "scene:WAYNE" }, "DELETE"));
+    expect((await res.json()).Items.map((g: { name: string }) => g.name)).toEqual(["VECTOR"]);
+    expect((await (await GET()).json()).Items).toHaveLength(1);
+    expect((await DELETE(post("/api/release-groups", {}, "DELETE"))).status).toBe(400);
   });
 });
 
@@ -499,41 +551,77 @@ describe("GET /api/wcx-search", () => {
     const { GET } = await import("./wcx-search/route");
     return GET(new Request("http://jellylens.test/api/wcx-search?" + params));
   };
+  const heat = { mediaType: "movie" as const, tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null };
 
-  it("searches the external API and stores a positive hit", async () => {
-    mockFetch((url) => {
+  it("searches WCX by the IMDb id a release's lookup found, and stores a hit", async () => {
+    saveImdbLookup("tt0113277", heat);
+    const fetch = mockFetch((url) => {
       if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "abc123" }] } });
     });
-    const res = await call("q=Heat.1995.German-VECTOR&tmdbId=movie:949");
+    const res = await call("tmdbId=movie:949");
     expect(await res.json()).toEqual({ url: "https://wcx.test/detail/abc123" });
+    expect(new URL(String(fetch.mock.calls[0][0])).searchParams.get("q")).toBe("tt0113277");
 
-    // Second call returns the stored UID without hitting the external API.
+    // The second call answers from the database.
     const fetch2 = mockFetch(() => {
       throw new Error("should not be called");
     });
-    const res2 = await call("q=Heat.1995.German-VECTOR&tmdbId=movie:949");
+    const res2 = await call("tmdbId=movie:949");
     expect(await res2.json()).toEqual({ url: "https://wcx.test/detail/abc123" });
     expect(fetch2).not.toHaveBeenCalled();
   });
 
-  it("returns null without storing when the search has no results", async () => {
+  it("asks TMDB for the IMDb id when no release came across the entry", async () => {
+    const fetch = mockFetch((url) => {
+      if (url.pathname === "/3/tv/1399/external_ids") return json({ imdb_id: "tt0944947" });
+      if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "got" }] } });
+    });
+    expect(await (await call("tmdbId=tv:1399")).json()).toEqual({ url: "https://wcx.test/detail/got" });
+    const wcx = fetch.mock.calls.map(([u]) => new URL(String(u))).find((u) => u.hostname === "api.wcx.test");
+    expect(wcx?.searchParams.get("q")).toBe("tt0944947");
+  });
+
+  it("remembers that nobody knows the IMDb id, asking nobody the next time", async () => {
+    const fetch = mockFetch((url) => {
+      if (url.pathname === "/3/movie/1/external_ids") return new Response("", { status: 404 });
+    });
+    expect(await (await call("tmdbId=movie:1")).json()).toEqual({ url: null });
+    expect(fetch.mock.calls.some(([u]) => String(u).includes("api.wcx.test"))).toBe(false);
+    const fetch2 = mockFetch(() => undefined);
+    expect(await (await call("tmdbId=movie:1")).json()).toEqual({ url: null });
+    expect(fetch2).not.toHaveBeenCalled();
+  });
+
+  it("remembers that WCX has nothing, asking nobody the next time", async () => {
+    saveImdbLookup("tt0113277", heat);
     mockFetch((url) => {
       if (url.hostname === "api.wcx.test") return json({ items: { data: [] } });
     });
-    const res = await call("q=Unknown.Movie-GRP&tmdbId=movie:999");
-    expect(await res.json()).toEqual({ url: null });
+    expect(await (await call("tmdbId=movie:949")).json()).toEqual({ url: null });
+    const fetch2 = mockFetch(() => undefined);
+    expect(await (await call("tmdbId=movie:949")).json()).toEqual({ url: null });
+    expect(fetch2).not.toHaveBeenCalled();
+  });
 
-    // Next call still queries the API since nothing was stored.
-    const fetch2 = mockFetch((url) => {
+  it("asks again after a failed request, which isn't remembered", async () => {
+    saveImdbLookup("tt0113277", heat);
+    mockFetch(() => new Response("", { status: 503 }));
+    expect(await (await call("tmdbId=movie:949")).json()).toEqual({ url: null });
+    // TMDB failing for an entry no release came across isn't remembered either.
+    expect(await (await call("tmdbId=tv:5")).json()).toEqual({ url: null });
+
+    mockFetch((url) => {
+      if (url.pathname === "/3/tv/5/external_ids") return json({ imdb_id: "tt5" });
       if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "found" }] } });
     });
-    const res2 = await call("q=Unknown.Movie-GRP&tmdbId=movie:999");
-    expect(await res2.json()).toEqual({ url: "https://wcx.test/detail/found" });
-    expect(fetch2).toHaveBeenCalledOnce();
+    expect(await (await call("tmdbId=movie:949")).json()).toEqual({ url: "https://wcx.test/detail/found" });
+    expect(await (await call("tmdbId=tv:5")).json()).toEqual({ url: "https://wcx.test/detail/found" });
   });
 
-  it("requires both q and tmdbId", async () => {
-    expect((await call("q=Heat")).status).toBe(400);
-    expect((await call("tmdbId=movie:1")).status).toBe(400);
+  it("requires a TMDB entry", async () => {
+    expect((await call("")).status).toBe(400);
+    expect((await call("tmdbId=movie:abc")).status).toBe(400);
+    expect((await call("tmdbId=person:1")).status).toBe(400);
   });
 });
+

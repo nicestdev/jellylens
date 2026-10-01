@@ -115,12 +115,12 @@ describe("upgrades", () => {
     expect(libraryReleases("movies")).toHaveLength(2);
   });
 
-  it("lists the favorites, and whether a sync still has sizes to fill in", () => {
+  it("lists the favorites, P2P and scene A→Z, and whether a sync still has releases to load", () => {
     addGroup("g2", "VECTOR");
-    addGroup("g1", "FuN");
-    expect(upgradeGroups()).toEqual({ favorites: ["VECTOR", "FuN"], sizesPending: true });
-    markGroupSynced("g1", "2026-10-01T00:00:00Z");
+    addGroup("scene:FuN", "FuN", "scene");
+    expect(upgradeGroups()).toEqual({ favorites: ["FuN", "VECTOR"], sizesPending: true });
+    markGroupSynced("scene:FuN", "2026-10-01T00:00:00Z");
     markGroupSynced("g2", "2026-10-01T00:00:00Z");
-    expect(upgradeGroups()).toEqual({ favorites: ["VECTOR", "FuN"], sizesPending: false });
+    expect(upgradeGroups()).toEqual({ favorites: ["FuN", "VECTOR"], sizesPending: false });
   });
 });

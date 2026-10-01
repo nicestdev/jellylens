@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@/test/dom";
 import type { RequestItem } from "@/lib/api-types";
-import { RequestAction, RequestTile, type Result } from "./request-tiles";
+import { RequestAction, RequestTile, ResultTile, type Result } from "./request-tiles";
 
 const heat: Result = { mediaType: "movie", tmdbId: 949, title: "Heat", year: 1995, posterPath: null, library: null, availability: null };
 const ctx = (over: { pending?: Set<string> } = {}) => ({ pending: new Set<string>(), toggle: vi.fn(), ...over });
@@ -41,13 +41,17 @@ describe("RequestTile", () => {
   it("has one badge for the groups that released it", () => {
     render(<RequestTile item={request({ releaseGroups: ["FuN", "VECTOR"] })} ctx={ctx()} />);
     expect(screen.getByText("FuN +1")).toHaveAttribute("title", "Released by FuN, VECTOR");
-    expect(screen.queryByRole("button", { name: "Show releases of Heat" })).toBeNull();
   });
 
-  it("opens the releases from its group badges, for an admin", async () => {
+  it("links its poster to TMDB, or opens its releases for an admin", async () => {
+    const { unmount } = render(<RequestTile item={request()} ctx={ctx()} />);
+    expect(screen.getByRole("link", { name: /Heat/ })).toHaveAttribute("href", "https://www.themoviedb.org/movie/949");
+    unmount();
+
     const showReleases = vi.fn();
     render(<RequestTile item={request({ releaseGroups: ["FuN"] })} ctx={{ ...ctx(), showReleases }} />);
-    await userEvent.click(screen.getByRole("button", { name: "Show releases of Heat" }));
+    expect(screen.queryByRole("link", { name: /Heat/ })).toBeNull();
+    await userEvent.click(screen.getByTitle("Heat"));
     expect(showReleases).toHaveBeenCalledWith(expect.objectContaining({ tmdbId: 949 }));
   });
 
@@ -61,5 +65,18 @@ describe("RequestTile", () => {
     expect(screen.getByText("2 requests")).toHaveAttribute("title", "Anna, Ben");
     await userEvent.click(screen.getByRole("button", { name: "Remove for everyone" }));
     expect(c.toggle).toHaveBeenCalledWith(expect.objectContaining({ tmdbId: 949 }), true, true);
+  });
+});
+
+describe("ResultTile", () => {
+  it("links its poster to TMDB, or opens its releases for an admin", async () => {
+    const { unmount } = render(<ResultTile item={heat} requested={false} ctx={ctx()} />);
+    expect(screen.getByRole("link", { name: /Heat/ })).toHaveAttribute("href", "https://www.themoviedb.org/movie/949");
+    unmount();
+
+    const showReleases = vi.fn();
+    render(<ResultTile item={heat} requested={false} ctx={{ ...ctx(), showReleases }} />);
+    await userEvent.click(screen.getByTitle("Heat"));
+    expect(showReleases).toHaveBeenCalledWith(heat);
   });
 });

@@ -8,21 +8,23 @@ import {
   saveImdbLookup,
   saveTitleMatch,
   unlookedImdbIds,
+  type ReleaseGroup,
 } from "./store";
-import { fetchGroupReleases, RateLimitError } from "./xrel";
+import { fetchGroupReleases, fetchSceneReleases, RateLimitError } from "./xrel";
 import { fetchTmdbTitles, findTmdbByImdb, searchTmdbTitle } from "./tmdb";
 import { mapWithConcurrency } from "./async";
 import { decideMatch, type TitleLookup } from "./title-match";
 
 // What the sync is doing right now, for the Settings and Releases pages:
-// the group being fetched, or matching titles to TMDB.
+// the group being fetched, or matching titles to TMDB. Looked up on every
+// use, like all state on globalThis (see test/state.ts).
 const globalForSync = globalThis as unknown as { __releaseSync?: { groupId: string | null; matching: boolean } };
-export const releaseSync = (globalForSync.__releaseSync ??= { groupId: null, matching: false });
+export const releaseSync = () => (globalForSync.__releaseSync ??= { groupId: null, matching: false });
 
-// A group's first sync walks its whole list; after that it stops at the
+// A P2P group's first sync walks its whole list; after that it stops at the
 // first page with a release it already has. Releases are stored by id, so
 // a list that shifts while we page through it never duplicates any.
-async function syncGroup(group: { id: string; complete: boolean }): Promise<number> {
+async function syncP2pGroup(group: ReleaseGroup): Promise<number> {
   let added = 0;
   for (let page = 1; ; page++) {
     const { releases, totalPages } = await fetchGroupReleases(group.id, page);
@@ -32,6 +34,15 @@ async function syncGroup(group: { id: string; complete: boolean }): Promise<numb
     added += result.added;
     if (page >= totalPages || releases.length === 0 || (group.complete && result.known)) break;
   }
+  markGroupSynced(group.id, new Date().toISOString());
+  return added;
+}
+
+// A scene group's latest releases, from one search (fetchSceneReleases).
+async function syncSceneGroup(group: ReleaseGroup): Promise<number> {
+  const releases = await fetchSceneReleases(group.name);
+  if (!groupExists(group.id)) return 0;
+  const { added } = insertReleases(group.id, releases);
   markGroupSynced(group.id, new Date().toISOString());
   return added;
 }
@@ -67,12 +78,13 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
   });
 }
 
-// Syncs every favorite group in turn, then looks up and checks new titles
-// on TMDB. A group added while this runs is picked up before it ends, even
-// one added while the titles were checked (that takes minutes after a big
-// first sync): its releases load next, then their titles are checked. Out
-// of xREL calls, it stops and keeps what it has; the next run carries on (a
-// first sync that was cut off walks the list again, adding what's missing).
+// Syncs every favorite group in turn, P2P and scene, then looks up and
+// checks new titles on TMDB. A group added while this runs is picked up
+// before it ends, even one added while the titles were checked (that takes
+// minutes after a big first sync): its releases load next, then their
+// titles are checked. Out of xREL calls, it stops and keeps what it has;
+// the next run carries on (a first sync that was cut off walks the list
+// again, adding what's missing).
 export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: string; language: string }) {
   const done = new Set<string>();
   const nextGroup = () => listGroups().find((g) => !done.has(g.id));
@@ -82,24 +94,24 @@ export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: strin
     do {
       for (let group = nextGroup(); group; group = nextGroup()) {
         done.add(group.id);
-        releaseSync.groupId = group.id;
+        releaseSync().groupId = group.id;
         try {
-          added += await syncGroup(group);
+          added += await (group.kind === "scene" ? syncSceneGroup(group) : syncP2pGroup(group));
         } catch (e) {
           if (e instanceof RateLimitError) throw e;
           firstError ??= e as Error;
           console.error("[releases-sync] " + group.name + " failed:", (e as Error).message);
         }
       }
-      releaseSync.groupId = null;
-      releaseSync.matching = true;
+      releaseSync().groupId = null;
+      releaseSync().matching = true;
       if (tmdbApiKey) await lookUpImdbIds(tmdbApiKey, language);
       await resolveTitles(tmdbApiKey, language);
-      releaseSync.matching = false;
+      releaseSync().matching = false;
     } while (nextGroup());
   } finally {
-    releaseSync.groupId = null;
-    releaseSync.matching = false;
+    releaseSync().groupId = null;
+    releaseSync().matching = false;
   }
   if (firstError) throw firstError;
   setSyncedAt("releases", new Date().toISOString());

@@ -72,15 +72,14 @@ describe("CollectionList", () => {
     expect(screen.getByText(/Heat\.1995\.1080p/)).toBeInTheDocument();
   });
 
-  it("names the groups that released a missing movie in one badge, which opens its releases", async () => {
+  it("names the groups that released a missing movie in a badge, and opens the sidebar from the poster", async () => {
     api();
     list();
     expect(screen.getByText("FuN +1")).toHaveAttribute("title", "Released by FuN, VECTOR");
     // Neither the owned movie nor one nobody released has a badge.
-    expect(screen.queryByRole("button", { name: "Show releases of Heat" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Show releases of Heat 3" })).toBeNull();
+    expect(screen.queryAllByTitle(/^Released by/)).toHaveLength(1);
 
-    await userEvent.click(screen.getByRole("button", { name: "Show releases of Heat 2" }));
+    await userEvent.click(screen.getByTitle(/Heat 2.*missing/));
     const panel = await screen.findByRole("dialog");
     expect(within(panel).getByText("Heat 2")).toBeInTheDocument();
     expect(await within(panel).findByText(/Heat\.2\.2026\.German\.DL/)).toBeInTheDocument();

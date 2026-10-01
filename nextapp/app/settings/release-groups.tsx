@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Loader2, MoreHorizontal, Plus, Trash2, Users } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Loader2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +17,12 @@ import type { ReleaseGroupItem, ReleaseGroupsResponse } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
 
 type Group = ReleaseGroupItem;
+type GroupKind = Group["kind"];
+
+const KINDS: { kind: GroupKind; title: string; hint: string; example: string }[] = [
+  { kind: "p2p", title: "P2P groups", hint: "Their whole list on xREL, kept in sync.", example: "VECTOR" },
+  { kind: "scene", title: "Scene groups", hint: "Their latest releases on xREL; older ones pile up with each sync.", example: "WAYNE" },
+];
 
 function groupStatus(g: Group): string {
   const count = plural(g.count, "release");
@@ -24,39 +30,21 @@ function groupStatus(g: Group): string {
   return `${count} · ${g.syncing ? "syncing…" : `synced ${relativeTime(g.syncedAt)}`}`;
 }
 
-// The favorite P2P groups behind the Releases page. Adding one looks it up
-// on xREL, and its releases load in the background; the list polls while
-// they do. onChange lets the page refresh the Sync row's counts.
-export function ReleaseGroups({ onError, onChange }: { onError: (message: string) => void; onChange: () => void }) {
-  const [groups, setGroups] = useState<Group[] | null>(null);
-  const [name, setName] = useState("");
-  const [adding, setAdding] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      const res = await apiFetch<ReleaseGroupsResponse>("/api/release-groups");
-      setGroups(res.Items);
-      return res.Items;
-    } catch (e) {
-      onError(`Failed to load release groups: ${(e as Error).message}`);
-      return null;
-    }
-  }, [onError]);
-
-  const busy = groups?.some((g) => g.syncing || !g.complete) ?? false;
-  // First load right away, then every 3 s while releases are loading.
-  useEffect(() => {
-    if (groups !== null && !busy) return;
-    const poll = setTimeout(
-      async () => {
-        const next = await load();
-        // Just finished: the Sync row's counts are out of date.
-        if (groups && next && !next.some((g) => g.syncing || !g.complete)) onChange();
-      },
-      groups === null ? 0 : 3000
-    );
-    return () => clearTimeout(poll);
-  }, [groups, busy, load, onChange]);
+// The favorite groups behind the Releases page, a list each for P2P and
+// scene. Adding one looks it up on xREL, and its releases load in the
+// background. The page loads and polls the lists along with the rest
+// (data), so they follow a running sync live; onData takes what an add or
+// remove answered.
+export function ReleaseGroups({
+  data,
+  onData,
+  onError,
+}: {
+  data: ReleaseGroupsResponse | null;
+  onData: (data: ReleaseGroupsResponse) => void;
+  onError: (message: string) => void;
+}) {
+  const groups = data?.Items ?? null;
 
   async function change(method: "POST" | "DELETE", body: object) {
     const res = await apiFetch<ReleaseGroupsResponse>("/api/release-groups", {
@@ -64,23 +52,7 @@ export function ReleaseGroups({ onError, onChange }: { onError: (message: string
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    setGroups(res.Items);
-    onChange();
-  }
-
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onError("");
-    setAdding(true);
-    try {
-      await change("POST", { name: name.trim() });
-      setName("");
-    } catch (err) {
-      onError(`Couldn't add ${name.trim()}: ${(err as Error).message}`);
-    } finally {
-      setAdding(false);
-    }
+    onData(res);
   }
 
   async function remove(group: Group) {
@@ -93,17 +65,65 @@ export function ReleaseGroups({ onError, onChange }: { onError: (message: string
   }
 
   return (
-    <section className="rounded-xl border bg-card">
-      <div className="flex gap-3.5 border-b p-4">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Users className="size-4" />
-        </span>
-        <div className="min-w-0">
-          <h3 className="text-sm font-medium">Favorite P2P groups</h3>
-          <p className="text-sm text-muted-foreground">
-            Their releases on xREL show up on the Releases page and stay in sync.
-          </p>
-        </div>
+    <>
+      {data?.matching ? (
+        <p className="flex items-center gap-1.5 border-b px-4 py-2.5 text-xs text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          Checking titles on TMDB…
+        </p>
+      ) : null}
+      {KINDS.map((k) => (
+        <GroupList
+          key={k.kind}
+          {...k}
+          groups={groups?.filter((g) => g.kind === k.kind) ?? null}
+          add={(name) => change("POST", { name, kind: k.kind })}
+          remove={remove}
+          onError={onError}
+        />
+      ))}
+    </>
+  );
+}
+
+function GroupList({
+  title,
+  hint,
+  example,
+  groups,
+  add,
+  remove,
+  onError,
+}: (typeof KINDS)[number] & {
+  groups: Group[] | null;
+  add: (name: string) => Promise<void>;
+  remove: (group: Group) => void;
+  onError: (message: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const wanted = name.trim();
+    if (!wanted) return;
+    onError("");
+    setAdding(true);
+    try {
+      await add(wanted);
+      setName("");
+    } catch (err) {
+      onError(`Couldn't add ${wanted}: ${(err as Error).message}`);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <section aria-label={title} className="border-t first:border-t-0">
+      <div className="px-4 pt-3">
+        <h4 className="text-sm font-medium">{title}</h4>
+        <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
 
       {groups === null ? (
@@ -141,12 +161,12 @@ export function ReleaseGroups({ onError, onChange }: { onError: (message: string
         </ul>
       )}
 
-      <form onSubmit={add} className={cn("flex gap-2 p-4", groups?.length ? "border-t" : "")}>
+      <form onSubmit={submit} className={cn("flex gap-2 p-4", groups?.length ? "border-t" : "pt-3")}>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Group name, e.g. VECTOR"
-          aria-label="Group name"
+          placeholder={`Group name, e.g. ${example}`}
+          aria-label={`Add to ${title}`}
           className="h-8 w-full sm:w-64"
           disabled={adding}
         />

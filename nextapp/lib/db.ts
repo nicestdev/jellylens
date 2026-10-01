@@ -10,7 +10,9 @@ import { DATA_DIR } from "./env";
 const DB_FILE = path.join(DATA_DIR, "jellylens.db");
 
 // One entry per schema version, applied in order and tracked in
-// PRAGMA user_version. Never edit one that has shipped; add a new one.
+// PRAGMA user_version. Never edit one that has shipped; add a new one. (The
+// first is a baseline: on 2026-10-02 every earlier version was folded into
+// it, and the one existing database was copied over by hand.)
 const MIGRATIONS: string[] = [
   `
   -- When each sync stage last finished, and markers for one-time imports.
@@ -72,10 +74,13 @@ const MIGRATIONS: string[] = [
 
   -- ---- Releases (xREL)
 
-  -- Favorite P2P groups (id = xREL's API id). complete: the group's whole
-  -- list has been fetched once; later syncs only fetch what's new.
+  -- Favorite groups. kind p2p: id = xREL's API id; kind scene: xREL has
+  -- none, so id = 'scene:' || name. complete: the group's whole list has
+  -- been fetched once (a scene group's search, once); later syncs only fetch
+  -- what's new.
   CREATE TABLE release_groups (
     id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('p2p', 'scene')),
     name TEXT NOT NULL,
     added_at TEXT NOT NULL,
     synced_at TEXT,
@@ -83,7 +88,8 @@ const MIGRATIONS: string[] = [
   );
   -- title_key: xREL's id for the movie or show, so a title's releases share
   -- one tile. imdb_id: the IMDb id xREL links it to, which is sometimes
-  -- wrong (see title_matches). search: the name, folded for LIKE.
+  -- wrong (see title_matches). search: the name, folded for LIKE. size_mb:
+  -- how big it is (xREL's, NULL if it gives none; for Upgrades).
   CREATE TABLE releases (
     id TEXT PRIMARY KEY,
     group_id TEXT NOT NULL REFERENCES release_groups ON DELETE CASCADE,
@@ -94,7 +100,8 @@ const MIGRATIONS: string[] = [
     quality TEXT NOT NULL,
     published_at INTEGER NOT NULL,
     imdb_id TEXT,
-    search TEXT NOT NULL
+    search TEXT NOT NULL,
+    size_mb INTEGER
   );
   CREATE INDEX releases_group ON releases (group_id);
   CREATE INDEX releases_title ON releases (title_key);
@@ -137,8 +144,11 @@ const MIGRATIONS: string[] = [
     verdict TEXT NOT NULL CHECK (verdict IN ('wrong', 'xrel')),
     created_at TEXT NOT NULL
   );
-  `,
-  `
+  -- WCX pages by TMDB entry ("movie:949"). A found uid doesn't change; uid
+  -- NULL = WCX had nothing (or the entry has no IMDb id), asked again after
+  -- a while.
+  CREATE TABLE wcx (tmdb_id TEXT PRIMARY KEY, uid TEXT, checked_at TEXT NOT NULL);
+
   -- ---- Analytics: every file of the library, written by the Jellyfin sync
   -- (lib/analytics.ts reads the group, resolution and codec), so the file
   -- lists search, filter and page in SQL. kind: movie or episode. item_id:
@@ -173,19 +183,6 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (kind, item_id, idx)
   );
   CREATE INDEX media_files_grp ON media_files (kind, grp_key);
-  -- Files used to be kept in the movies' JSON; the next sync fills the table.
-  UPDATE movies SET data = json_remove(data, '$.Files');
-  `,
-  `
-  -- ---- Upgrades: how big each release is (xREL's size_mb, NULL if it
-  -- gives none). Releases stored before have none: every group walks its
-  -- whole list once more, filling them in.
-  ALTER TABLE releases ADD COLUMN size_mb INTEGER;
-  UPDATE release_groups SET complete = 0;
-  `,
-  `
-  -- WCX UIDs by TMDB entry; once resolved, they don't change.
-  CREATE TABLE wcx (tmdb_id TEXT PRIMARY KEY, uid TEXT NOT NULL);
   `,
 ];
 

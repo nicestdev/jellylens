@@ -196,12 +196,12 @@ export function useDiscover(q: string) {
   return { items: loading ? [] : results!.items, loading, error: results?.error ?? "" };
 }
 
-// showReleases: opens the releases of the groups on a request's badges
+// showReleases: opens a poster's releases instead of its TMDB page
 // (admins only).
 type TileContext = {
   pending: Set<string>;
   toggle: (item: Result, requested: boolean, everyone?: boolean) => void;
-  showReleases?: (item: Request) => void;
+  showReleases?: (item: Result) => void;
 };
 
 // The bottom-right corner of anything that can be requested (Discover,
@@ -225,7 +225,8 @@ export function RequestAction({ item, requested, ctx }: { item: Result; requeste
 export function ResultTile({ item, requested, ctx }: { item: Result; requested: boolean; ctx: TileContext }) {
   return (
     <PosterCard
-      href={tmdbUrl(item.mediaType, item.tmdbId)}
+      onClick={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
+      href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
       imageSrc={posterSrc(item.posterPath)}
       title={item.title}
       meta={metaLine(item)}
@@ -250,7 +251,8 @@ export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) 
   const names = requesterNames(item);
   return (
     <PosterCard
-      href={tmdbUrl(item.mediaType, item.tmdbId)}
+      onClick={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
+      href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
       imageSrc={posterSrc(item.posterPath)}
       title={item.title}
       meta={overview ? [item.year, names].filter(Boolean).join(" · ") : metaLine(item)}
@@ -260,8 +262,6 @@ export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) 
           ? { label: releasedLabel(item.releaseGroups), hint: releasedHint(item.releaseGroups) }
           : undefined
       }
-      onFilterBadge={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
-      filterBadgeLabel={`Show releases of ${item.title}`}
       countBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
       action={
         <TileButton

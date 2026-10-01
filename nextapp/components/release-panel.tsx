@@ -86,7 +86,7 @@ function ReleaseList({ items }: { items: Detail["titles"][number]["Items"] }) {
             <BreakableName name={r.name} />
           </a>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {[r.group, qualityLabel(r.quality), formatDate(r.publishedAt)].filter(Boolean).join(" · ")}
+            {[r.group, qualityLabel(r.quality), r.episodes ? plural(r.episodes, "episode") : null, formatDate(r.publishedAt)].filter(Boolean).join(" · ")}
           </p>
         </li>
       ))}
@@ -134,7 +134,7 @@ export function ReleasePanel({
   const [detail, setDetail] = useState<{ key: string; value: Detail } | null>(null);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
-  const [wcx, setWcx] = useState<{ name: string; url: string | null } | null>(null);
+  const [wcx, setWcx] = useState<{ tmdbId: string; url: string | null } | null>(null);
   const key = title?.key;
 
   useEffect(() => {
@@ -154,21 +154,18 @@ export function ReleasePanel({
     .map((t) => (only ? { ...t, Items: t.Items.filter(only.keep) } : t))
     .filter((t) => !only || t.Items.length);
 
-  const newestName = titles[0]?.Items[0]?.name;
   const tmdbId = title?.tmdbId && title.mediaType ? `${title.mediaType}:${title.tmdbId}` : null;
   useEffect(() => {
-    if (!newestName || !tmdbId) return;
+    if (!tmdbId) return;
     let cancelled = false;
-    apiFetch<WcxSearchResponse>(
-      `/api/wcx-search?q=${encodeURIComponent(newestName)}&tmdbId=${encodeURIComponent(tmdbId)}`
-    )
-      .then((res) => !cancelled && setWcx({ name: newestName, url: res.url }))
-      .catch(() => !cancelled && setWcx({ name: newestName, url: null }));
+    apiFetch<WcxSearchResponse>(`/api/wcx-search?tmdbId=${encodeURIComponent(tmdbId)}`)
+      .then((res) => !cancelled && setWcx({ tmdbId, url: res.url }))
+      .catch(() => !cancelled && setWcx({ tmdbId, url: null }));
     return () => {
       cancelled = true;
     };
-  }, [newestName, tmdbId]);
-  const wcxUrl = newestName && wcx?.name === newestName ? wcx.url : null;
+  }, [tmdbId]);
+  const wcxUrl = tmdbId && wcx?.tmdbId === tmdbId ? wcx.url : null;
 
   async function decide(titleKey: string, verdict: MatchInfo["verdict"]) {
     if (!key || !current) return;
