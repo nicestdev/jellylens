@@ -162,3 +162,6 @@ export type UpgradesResponse = {
   syncedAt: string | null;
 };
 export type { Alternative, Tier, Unit } from "./upgrades";
+
+// GET /api/wcx-search?q=&tmdbId= — WCX detail URL for a release, or null.
+export type WcxSearchResponse = { url: string | null };

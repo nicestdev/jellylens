@@ -14,12 +14,14 @@ import {
   saveImdbLookup,
   saveTitleMatch,
   setVerdict,
+  setWcxUid,
   tileCount,
   tileOf,
   tileTitleKeys,
   releaseFacets,
   titleReleases,
   unlookedImdbIds,
+  wcxUid,
   type TitleFilters,
   type TmdbEntry,
 } from "./releases";
@@ -293,6 +295,16 @@ describe("matching", () => {
       ["2", "VECTOR"],
       ["1", "VECTOR"],
     ]);
+  });
+});
+
+describe("wcx UIDs", () => {
+  it("stores and retrieves a UID, ignoring duplicates", () => {
+    expect(wcxUid("movie:949")).toBeNull();
+    setWcxUid("movie:949", "abc123");
+    expect(wcxUid("movie:949")).toBe("abc123");
+    setWcxUid("movie:949", "other");
+    expect(wcxUid("movie:949")).toBe("abc123");
   });
 });
 

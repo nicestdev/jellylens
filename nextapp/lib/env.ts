@@ -18,4 +18,7 @@ export const XREL_SYNC_INTERVAL_HOURS = hours("XREL_SYNC_INTERVAL_HOURS", 6);
 // Off, Jellylens is open to anyone who can reach it, as a single admin.
 export const AUTH_ENABLED = !/^(false|0|no|off)$/i.test(process.env.AUTH_ENABLED?.trim() ?? "");
 
+export const WCX_URL = (process.env.WCX_URL || "").replace(/\/+$/, "");
+export const WCX_API_URL = (process.env.WCX_API_URL || "").replace(/\/+$/, "");
+
 export const DATA_DIR = process.env.DATA_DIR || "/app/data";

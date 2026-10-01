@@ -11,6 +11,8 @@ services:
       MISSING_RECHECK_INTERVAL_HOURS: ${MISSING_RECHECK_INTERVAL_HOURS:-24}
       XREL_SYNC_INTERVAL_HOURS: ${XREL_SYNC_INTERVAL_HOURS:-6}
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      WCX_URL: ${WCX_URL:-}
+      WCX_API_URL: ${WCX_API_URL:-}
       DATA_DIR: /app/data
     volumes:
       - cache_data:/app/data

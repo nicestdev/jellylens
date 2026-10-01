@@ -34,8 +34,10 @@ const bluray = title("heat~1995", "Heat (1995)", ["Heat.1995.German.DL.2160p.UHD
 const rip = title("heat", "Heat", ["Heat.German.AC3.HDRip.XViD-VECTOR"], { status: "searched" });
 
 // Answers GET /api/releases/<key> with detail, POSTs with after(body).
+// Also handles /api/wcx-search, always returning null.
 function api(detail: ReleaseDetail, after?: (body: { titleKey: string; verdict: string | null }) => ReleaseDetail) {
   return mockFetch((url, init) => {
+    if (url.pathname === "/api/wcx-search") return json({ url: null });
     if (url.pathname !== "/api/releases/" + encodeURIComponent(detail.key)) return undefined;
     if (init?.method === "POST") return json(after!(JSON.parse(String(init.body))));
     return json(detail);
@@ -116,7 +118,10 @@ describe("ReleasePanel", () => {
   });
 
   it("says when the releases can't be loaded", async () => {
-    mockFetch(() => json({ error: "database is locked" }, { status: 500 }));
+    mockFetch((url) => {
+      if (url.pathname === "/api/wcx-search") return json({ url: null });
+      return json({ error: "database is locked" }, { status: 500 });
+    });
     render(<ReleasePanel title={tile} onClose={() => {}} onChanged={() => {}} />);
     expect(await screen.findByText("Failed to load releases: database is locked")).toBeInTheDocument();
   });

@@ -493,3 +493,47 @@ describe("POST /api/sync/<stage>", () => {
     expect((await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "toString" }) })).status).toBe(404);
   });
 });
+
+describe("GET /api/wcx-search", () => {
+  const call = async (params: string) => {
+    const { GET } = await import("./wcx-search/route");
+    return GET(new Request("http://jellylens.test/api/wcx-search?" + params));
+  };
+
+  it("searches the external API and stores a positive hit", async () => {
+    mockFetch((url) => {
+      if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "abc123" }] } });
+    });
+    const res = await call("q=Heat.1995.German-VECTOR&tmdbId=movie:949");
+    expect(await res.json()).toEqual({ url: "https://wcx.test/detail/abc123" });
+
+    // Second call returns the stored UID without hitting the external API.
+    const fetch2 = mockFetch(() => {
+      throw new Error("should not be called");
+    });
+    const res2 = await call("q=Heat.1995.German-VECTOR&tmdbId=movie:949");
+    expect(await res2.json()).toEqual({ url: "https://wcx.test/detail/abc123" });
+    expect(fetch2).not.toHaveBeenCalled();
+  });
+
+  it("returns null without storing when the search has no results", async () => {
+    mockFetch((url) => {
+      if (url.hostname === "api.wcx.test") return json({ items: { data: [] } });
+    });
+    const res = await call("q=Unknown.Movie-GRP&tmdbId=movie:999");
+    expect(await res.json()).toEqual({ url: null });
+
+    // Next call still queries the API since nothing was stored.
+    const fetch2 = mockFetch((url) => {
+      if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "found" }] } });
+    });
+    const res2 = await call("q=Unknown.Movie-GRP&tmdbId=movie:999");
+    expect(await res2.json()).toEqual({ url: "https://wcx.test/detail/found" });
+    expect(fetch2).toHaveBeenCalledOnce();
+  });
+
+  it("requires both q and tmdbId", async () => {
+    expect((await call("q=Heat")).status).toBe(400);
+    expect((await call("tmdbId=movie:1")).status).toBe(400);
+  });
+});

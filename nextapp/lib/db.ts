@@ -183,6 +183,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE releases ADD COLUMN size_mb INTEGER;
   UPDATE release_groups SET complete = 0;
   `,
+  `
+  -- WCX UIDs by TMDB entry; once resolved, they don't change.
+  CREATE TABLE wcx (tmdb_id TEXT PRIMARY KEY, uid TEXT NOT NULL);
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

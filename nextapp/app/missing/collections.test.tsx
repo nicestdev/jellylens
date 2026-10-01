@@ -48,6 +48,7 @@ function api() {
       }
       return json({ Items: requests, all: true, admin: true });
     }
+    if (url.pathname === "/api/wcx-search") return json({ url: null });
     if (url.pathname === "/api/releases/" + encodeURIComponent("movie:2")) return json(detail);
   });
 }

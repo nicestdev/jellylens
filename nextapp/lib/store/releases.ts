@@ -436,6 +436,16 @@ export function groupsByTile(keys: string[]): Map<string, string[]> {
   return groups;
 }
 
+// ---- WCX UIDs, looked up once and stored forever
+
+export function wcxUid(tmdbId: string): string | null {
+  return one<{ uid: string }>("SELECT uid FROM wcx WHERE tmdb_id = ?", tmdbId)?.uid ?? null;
+}
+
+export function setWcxUid(tmdbId: string, uid: string) {
+  run("INSERT OR IGNORE INTO wcx (tmdb_id, uid) VALUES (?, ?)", tmdbId, uid);
+}
+
 // The tile an xREL title is on now.
 export function tileOf(titleKey: string): string {
   const t = one<{ media_type: string | null; tmdb_id: number | null }>(

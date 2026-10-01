@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { ExternalLink, Link2, Loader2, MoreHorizontal, RotateCcw, Unlink, type LucideIcon } from "lucide-react";
+import { Link2, Loader2, MoreHorizontal, RotateCcw, Unlink, type LucideIcon } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Poster } from "@/components/poster";
 import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
-import type { MatchInfo, ReleaseDetail as Detail, TitleRelease } from "@/lib/api-types";
+import type { MatchInfo, ReleaseDetail as Detail, TitleRelease, WcxSearchResponse } from "@/lib/api-types";
 import { formatDate, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { matchActions, matchNote, qualityLabel, titleMeta } from "@/lib/release-labels";
@@ -134,6 +134,7 @@ export function ReleasePanel({
   const [detail, setDetail] = useState<{ key: string; value: Detail } | null>(null);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
+  const [wcx, setWcx] = useState<{ name: string; url: string | null } | null>(null);
   const key = title?.key;
 
   useEffect(() => {
@@ -152,6 +153,22 @@ export function ReleasePanel({
   const titles = (current?.titles ?? [])
     .map((t) => (only ? { ...t, Items: t.Items.filter(only.keep) } : t))
     .filter((t) => !only || t.Items.length);
+
+  const newestName = titles[0]?.Items[0]?.name;
+  const tmdbId = title?.tmdbId && title.mediaType ? `${title.mediaType}:${title.tmdbId}` : null;
+  useEffect(() => {
+    if (!newestName || !tmdbId) return;
+    let cancelled = false;
+    apiFetch<WcxSearchResponse>(
+      `/api/wcx-search?q=${encodeURIComponent(newestName)}&tmdbId=${encodeURIComponent(tmdbId)}`
+    )
+      .then((res) => !cancelled && setWcx({ name: newestName, url: res.url }))
+      .catch(() => !cancelled && setWcx({ name: newestName, url: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [newestName, tmdbId]);
+  const wcxUrl = newestName && wcx?.name === newestName ? wcx.url : null;
 
   async function decide(titleKey: string, verdict: MatchInfo["verdict"]) {
     if (!key || !current) return;
@@ -205,15 +222,20 @@ export function ReleasePanel({
                 <SheetDescription>{titleMeta(shown)}</SheetDescription>
                 {note ? <p className="mt-1.5 text-xs text-muted-foreground">{note}</p> : null}
                 {only ? <p className="mt-1.5 text-xs text-muted-foreground">{only.note}</p> : null}
-                {tmdb ? (
-                  <a
-                    href={tmdb}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
-                  >
-                    TMDB <ExternalLink className="size-3" />
-                  </a>
+                {tmdb || wcxUrl ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {tmdb ? (
+                      <a href={tmdb} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">
+                        TMDB
+                      </a>
+                    ) : null}
+                    {tmdb && wcxUrl ? " · " : null}
+                    {wcxUrl ? (
+                      <a href={wcxUrl} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-primary">
+                        WCX
+                      </a>
+                    ) : null}
+                  </p>
                 ) : null}
               </div>
               {single ? (
