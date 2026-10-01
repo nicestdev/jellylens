@@ -15,6 +15,7 @@ import type {
 import type { MatchInfo, ReleaseFacets, ReleaseGroup, TitleRelease, TitleRow } from "./store";
 import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
+import type { FileListRow, FilePart, FileTotals } from "./store";
 
 export type { IgnoreEntry, MatchInfo, Preferences, TitleRelease };
 
@@ -22,7 +23,7 @@ export type { IgnoreEntry, MatchInfo, Preferences, TitleRelease };
 export type LibraryRef = { id: string; serverId: string };
 
 // GET /api/movies — the stored movies without their file names (admins
-// only, see /api/collections).
+// only, see /api/collections and /api/analytics).
 export type MovieItem = Omit<JellyfinMovie, "FileName">;
 export type MoviesResponse = { Items: MovieItem[] };
 
@@ -43,7 +44,14 @@ export type ShowItem = JellyfinShow & {
 export type ShowsResponse = { Items: ShowItem[] };
 
 // GET /api/collections — file names only when the admin turned them on.
-export type CollectionItem = MissingCollection & { id: string; name: string; posterPath: string | null };
+// releaseGroups: the favorite groups that have released a part you don't
+// own (Releases page), A→Z.
+export type CollectionItem = Omit<MissingCollection, "parts"> & {
+  id: string;
+  name: string;
+  posterPath: string | null;
+  parts: (MissingCollection["parts"][number] & { releaseGroups: string[] })[];
+};
 export type CollectionsResponse = { Items: CollectionItem[] };
 
 // GET, POST, DELETE /api/ignored
@@ -77,6 +85,7 @@ export type DiscoverResponse = { Items: DiscoverItem[] };
 // admin's overview of someone else's: when it was first asked for).
 // requesters: admins only. all: the admin overview, everyone's requests.
 // releaseGroups: the favorite groups that have released it (Releases page).
+// admin: can see those releases (/api/releases), also with sign-in off.
 export type RequestItem = Omit<RequestEntry, "requesters"> & {
   mine: boolean;
   library: LibraryRef | null;
@@ -84,7 +93,7 @@ export type RequestItem = Omit<RequestEntry, "requesters"> & {
   releaseGroups: string[];
   requesters?: { name: string; requestedAt: string }[];
 };
-export type RequestsResponse = { Items: RequestItem[]; all: boolean };
+export type RequestsResponse = { Items: RequestItem[]; all: boolean; admin: boolean };
 
 // GET /api/releases — one entry per title; library: owned in Jellyfin, with
 // its poster's tag.
@@ -114,3 +123,26 @@ export type { EpisodeState, IgnoreKind, MissingSeason } from "./store";
 export type ShowIgnore = Exclude<IgnoreEntry, { kind: "collection" }>;
 export type CollectionIgnore = Extract<IgnoreEntry, { kind: "collection" }>;
 export type CollectionPartItem = CollectionItem["parts"][number];
+
+// GET /api/analytics — per library, the totals for the tiles and the share
+// chart, from the Jellyfin sync at syncedAt. titles: the movies or shows;
+// withFiles: those with files stored; pending: files not stored yet (until
+// the next sync). groups, resolutions, codecs: files and bytes per value,
+// most files first (group null: files without one; resolution or codec
+// "": unknown). languages: per audio language the same, "" for none
+// tagged; a file can have several, so these overlap.
+export type LibraryAnalytics = FileTotals & {
+  titles: number;
+  withFiles: number;
+  pending: boolean;
+  groups: FilePart<string | null>[];
+  resolutions: FilePart[];
+  codecs: FilePart[];
+  languages: FilePart[];
+};
+export type AnalyticsResponse = { movies: LibraryAnalytics; shows: LibraryAnalytics; syncedAt: string | null };
+
+// GET /api/analytics/files — one page of a library's file list (pageSize
+// files at most); matched: how many files the search and filters leave.
+export type FilesResponse = { matched: number; pageSize: number; Items: FileListRow[] };
+export type { FileListRow, FilePart };

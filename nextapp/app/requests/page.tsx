@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmptyState } from "@/components/empty-state";
 import { SearchInput } from "@/components/search-input";
 import { POSTER_GRID, PosterGridSkeleton } from "@/components/poster-card";
+import { ReleasePanel, type PanelTitle } from "@/components/release-panel";
 import { RequestTile, ResultTile, itemKey, useDiscover, useRequests } from "@/components/request-tiles";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,22 @@ export default function RequestsPage() {
   };
   const q = query.trim();
   const r = useRequests();
+  // The releases panel a request's group badges open (admins).
+  const [releases, setReleases] = useState<PanelTitle | null>(null);
+  const tileCtx = {
+    ...r,
+    showReleases: r.admin
+      ? (item: (typeof r.requests)[number]) =>
+          setReleases({
+            key: itemKey(item),
+            title: item.title,
+            year: item.year,
+            posterPath: item.posterPath,
+            mediaType: item.mediaType,
+            tmdbId: item.tmdbId,
+          })
+      : undefined,
+  };
   const discover = useDiscover(tab === "discover" ? q : "");
   const error = r.error || discover.error;
 
@@ -104,7 +121,7 @@ export default function RequestsPage() {
           ) : (
             <div className={POSTER_GRID}>
               {shownRequests.map((item) => (
-                <RequestTile key={itemKey(item)} item={item} ctx={r} />
+                <RequestTile key={itemKey(item)} item={item} ctx={tileCtx} />
               ))}
             </div>
           )
@@ -129,6 +146,7 @@ export default function RequestsPage() {
           </>
         )}
       </div>
+      <ReleasePanel title={releases} onClose={() => setReleases(null)} onChanged={() => void r.reload()} />
     </main>
   );
 }

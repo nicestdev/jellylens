@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { json, mockFetch } from "@/test/http";
 import type { SessionUser } from "@/lib/session";
+import { NextRequest } from "next/server";
+import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
+import { replaceJellyfin } from "@/lib/store";
+import { movie, show } from "@/test/fixtures";
 
 // Route handlers, called directly with a Request. Who's signed in comes
 // from a mocked currentUser; cookies go into a mocked jar. proxy.ts (tested
@@ -115,6 +119,7 @@ describe("/api/requests", () => {
     auth.user = admin;
     const { body } = await call("GET");
     expect(body.all).toBe(true);
+    expect(body.admin).toBe(true);
     expect(body.Items).toMatchObject([{ title: "Heat", mine: false, requesters: [{ name: "Bob" }] }]);
   });
 
@@ -160,10 +165,45 @@ describe("/api/requests", () => {
   });
 });
 
+describe("GET /api/collections", () => {
+  it("says which favorite groups have released each part you don't own", async () => {
+    const store = await import("@/lib/store");
+    const part = (tmdbId: number, title: string) => ({ tmdbId, title, releaseDate: "1995-12-15", posterPath: null });
+    store.replaceTmdb({}, { c1: { name: "Heat Collection", posterPath: null, parts: [part(949, "Heat"), part(1, "Heat 2")] } }, null);
+    store.replaceMissing(
+      {},
+      { c1: { count: 1, parts: [{ ...part(1, "Heat 2"), owned: false }, { ...part(949, "Heat"), owned: true, fileName: "Heat.mkv" }] } },
+      {},
+      null
+    );
+    store.addGroup("g1", "VECTOR");
+    store.insertReleases("g1", [
+      { id: "r1", name: "Heat.2.2026.German.DL.2160p.WEB.x265-VECTOR", link: "https://www.xrel.to/p2p/r1", type: "movie", quality: "HD-2160p", publishedAt: 1000, titleKey: "heat2", imdbId: "tt1" },
+      { id: "r2", name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", link: "https://www.xrel.to/p2p/r2", type: "movie", quality: "HD-2160p", publishedAt: 1000, titleKey: "heat", imdbId: "tt0113277" },
+    ]);
+    store.saveTitleMatch("heat2", "verified", { ...part(1, "Heat 2"), mediaType: "movie", originalTitle: "Heat 2", year: 2026 }, { title: "Heat 2", year: 2026 });
+    store.saveTitleMatch("heat", "verified", { ...part(949, "Heat"), mediaType: "movie", originalTitle: "Heat", year: 1995 }, { title: "Heat", year: 1995 });
+
+    const { GET } = await import("./collections/route");
+    const body = await (await GET()).json();
+    expect(body.Items[0].parts.map((p: { title: string; releaseGroups: string[]; fileName?: string }) => [p.title, p.releaseGroups, p.fileName])).toEqual([
+      ["Heat 2", ["VECTOR"], undefined],
+      ["Heat", [], undefined],
+    ]);
+  });
+});
+
 describe("PATCH /api/preferences", () => {
   it("takes known options and rejects anything else", async () => {
     const { PATCH } = await import("./preferences/route");
-    expect(await (await PATCH(post("/api/preferences", { showFileNames: true }, "PATCH"))).json()).toEqual({ showFileNames: true });
+    expect(await (await PATCH(post("/api/preferences", { showFileNames: true }, "PATCH"))).json()).toEqual({
+      showFileNames: true,
+      showSdReleases: false,
+    });
+    expect(await (await PATCH(post("/api/preferences", { showSdReleases: true }, "PATCH"))).json()).toEqual({
+      showFileNames: true,
+      showSdReleases: true,
+    });
     expect((await PATCH(post("/api/preferences", { showFileNames: "yes" }, "PATCH"))).status).toBe(400);
     expect((await PATCH(post("/api/preferences", { admin: true }, "PATCH"))).status).toBe(400);
   });
@@ -177,6 +217,89 @@ describe("/api/ignored", () => {
     expect(await (await route.DELETE(post("/api/ignored", entry, "DELETE"))).json()).toEqual({ Items: [] });
     expect((await route.POST(post("/api/ignored", { kind: "missing", seriesId: "s", season: "1" }))).status).toBe(400);
     expect((await route.POST(post("/api/ignored", { kind: "other", seriesId: "s", season: 1 }))).status).toBe(400);
+  });
+});
+
+describe("GET /api/movies and /api/analytics", () => {
+  const library = () => {
+    const item = (kind: "movie" | "episode", id: string, title: string, files: MediaFile[]): MediaItem => ({
+      kind,
+      id,
+      parentId: kind === "movie" ? id : "s1",
+      title,
+      year: null,
+      tmdbId: null,
+      season: kind === "movie" ? null : 1,
+      episode: kind === "movie" ? null : 1,
+      files,
+    });
+    replaceJellyfin(
+      {
+        movies: [movie({ Id: "m1", Name: "Heat", FileName: "Heat.1995.1080p.x264-GRP.mkv" }), movie({ Id: "m2", Name: "Alien" })],
+        shows: [show({ Id: "s1", Name: "Silo" })],
+        episodes: [],
+        files: storedFiles([
+          item("movie", "m1", "Heat", [{ Name: "Heat.1995.1080p.x264-GRP.mkv", Size: 42, Codec: "h264", Width: 1920, Height: 800 }]),
+          item("movie", "m2", "Alien", [{ Name: "Alien.mkv", Size: 8, Codec: "" }]),
+          item("episode", "e1", "Silo", [{ Name: "Silo.S01E01.1080p.WEB.h264-cnhd.mkv", Size: 3, Codec: "h264" }]),
+        ]),
+      },
+      "2026-10-01T00:00:00.000Z"
+    );
+  };
+  const files = async (query: string) => {
+    const { GET } = await import("./analytics/files/route");
+    return (await GET(new NextRequest("http://jellylens.test/api/analytics/files?" + query))).json();
+  };
+
+  it("keeps file names out of the movie list", async () => {
+    library();
+    const { GET } = await import("./movies/route");
+    const [item] = (await (await GET()).json()).Items;
+    expect(item).toMatchObject({ Id: "m1" });
+    expect(item).not.toHaveProperty("FileName");
+  });
+
+  it("sums up each library's files by group, resolution, codec and language", async () => {
+    library();
+    const { GET } = await import("./analytics/route");
+    const body = await (await GET()).json();
+    expect(body.shows).toMatchObject({ titles: 1, withFiles: 1, files: 1, groups: [{ value: "cnhd", files: 1, size: 3 }] });
+    expect({ ...body, shows: undefined }).toEqual({
+      movies: {
+        titles: 2,
+        withFiles: 2,
+        files: 2,
+        size: 50,
+        pending: false,
+        groups: [
+          { value: "GRP", files: 1, size: 42 },
+          { value: null, files: 1, size: 8 },
+        ],
+        resolutions: [
+          { value: "1080p", files: 1, size: 42 },
+          { value: "", files: 1, size: 8 },
+        ],
+        codecs: [
+          { value: "x264", files: 1, size: 42 },
+          { value: "", files: 1, size: 8 },
+        ],
+        languages: [{ value: "", files: 2, size: 50 }],
+      },
+      syncedAt: "2026-10-01T00:00:00.000Z",
+    });
+  });
+
+  it("pages the files, searched and filtered", async () => {
+    library();
+    expect(await files("")).toMatchObject({ matched: 2, pageSize: 50, Items: [{ title: "Alien" }, { title: "Heat" }] });
+    expect(await files("q=heat 1995")).toMatchObject({ matched: 1, Items: [{ fileName: "Heat.1995.1080p.x264-GRP.mkv" }] });
+    // An empty value: files without a group, or an unknown codec.
+    expect(await files("group=")).toMatchObject({ matched: 1, Items: [{ title: "Alien" }] });
+    expect(await files("group=grp&codec=x264&resolution=1080p")).toMatchObject({ matched: 1, Items: [{ title: "Heat" }] });
+    expect(await files("sort=size")).toMatchObject({ Items: [{ size: 42 }, { size: 8 }] });
+    expect(await files("sort=nonsense&offset=1")).toMatchObject({ matched: 2, Items: [{ title: "Heat" }] });
+    expect(await files("library=shows")).toMatchObject({ matched: 1, Items: [{ title: "Silo", season: 1, episode: 1 }] });
   });
 });
 

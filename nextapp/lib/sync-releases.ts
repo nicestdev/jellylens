@@ -68,31 +68,35 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
 }
 
 // Syncs every favorite group in turn, then looks up and checks new titles
-// on TMDB. A group added while this runs is picked up before it ends. Out
+// on TMDB. A group added while this runs is picked up before it ends, even
+// one added while the titles were checked (that takes minutes after a big
+// first sync): its releases load next, then their titles are checked. Out
 // of xREL calls, it stops and keeps what it has; the next run carries on (a
 // first sync that was cut off walks the list again, adding what's missing).
 export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: string; language: string }) {
   const done = new Set<string>();
+  const nextGroup = () => listGroups().find((g) => !done.has(g.id));
   let added = 0;
   let firstError: Error | null = null;
   try {
-    for (;;) {
-      const group = listGroups().find((g) => !done.has(g.id));
-      if (!group) break;
-      done.add(group.id);
-      releaseSync.groupId = group.id;
-      try {
-        added += await syncGroup(group);
-      } catch (e) {
-        if (e instanceof RateLimitError) throw e;
-        firstError ??= e as Error;
-        console.error("[releases-sync] " + group.name + " failed:", (e as Error).message);
+    do {
+      for (let group = nextGroup(); group; group = nextGroup()) {
+        done.add(group.id);
+        releaseSync.groupId = group.id;
+        try {
+          added += await syncGroup(group);
+        } catch (e) {
+          if (e instanceof RateLimitError) throw e;
+          firstError ??= e as Error;
+          console.error("[releases-sync] " + group.name + " failed:", (e as Error).message);
+        }
       }
-    }
-    releaseSync.groupId = null;
-    releaseSync.matching = true;
-    if (tmdbApiKey) await lookUpImdbIds(tmdbApiKey, language);
-    await resolveTitles(tmdbApiKey, language);
+      releaseSync.groupId = null;
+      releaseSync.matching = true;
+      if (tmdbApiKey) await lookUpImdbIds(tmdbApiKey, language);
+      await resolveTitles(tmdbApiKey, language);
+      releaseSync.matching = false;
+    } while (nextGroup());
   } finally {
     releaseSync.groupId = null;
     releaseSync.matching = false;

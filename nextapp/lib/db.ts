@@ -138,6 +138,44 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  `
+  -- ---- Analytics: every file of the library, written by the Jellyfin sync
+  -- (lib/analytics.ts reads the group, resolution and codec), so the file
+  -- lists search, filter and page in SQL. kind: movie or episode. item_id:
+  -- the movie or episode; parent_id: the movie, or the episode's show. title,
+  -- year, tmdb_id: the movie's or the show's. season, episode, episode_end,
+  -- episode_title: an episode's (NULL for movies). grp: the release group as
+  -- first spelled in the library, NULL if none; grp_key: lowercased, to tell
+  -- groups apart. resolution, codec: labels ("4K", "x265"), "" if unknown.
+  -- languages: the audio's, as a JSON array of codes ('["DE","EN"]',
+  -- lib/languages.ts), '[]' if none is tagged. search: titles and file
+  -- name, folded.
+  CREATE TABLE media_files (
+    kind TEXT NOT NULL CHECK (kind IN ('movie', 'episode')),
+    item_id TEXT NOT NULL,
+    idx INTEGER NOT NULL,
+    parent_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    year INTEGER,
+    tmdb_id TEXT,
+    season INTEGER,
+    episode INTEGER,
+    episode_end INTEGER,
+    episode_title TEXT,
+    file_name TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    grp TEXT,
+    grp_key TEXT,
+    resolution TEXT NOT NULL,
+    codec TEXT NOT NULL,
+    languages TEXT NOT NULL,
+    search TEXT NOT NULL,
+    PRIMARY KEY (kind, item_id, idx)
+  );
+  CREATE INDEX media_files_grp ON media_files (kind, grp_key);
+  -- Files used to be kept in the movies' JSON; the next sync fills the table.
+  UPDATE movies SET data = json_remove(data, '$.Files');
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

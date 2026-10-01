@@ -21,11 +21,11 @@ import {
   qualityBadges,
   releasesUrl,
   subtitle,
-  titleMeta,
   type FacetKey,
   type SortKey,
 } from "./logic";
-import { TitlePanel } from "./title-panel";
+import { ReleasePanel } from "@/components/release-panel";
+import { titleMeta } from "@/lib/release-labels";
 
 // Jellyfin's own poster for an owned title (the one the Movies page shows),
 // else TMDB's, both through Jellylens' caches.
@@ -212,7 +212,7 @@ export default function ReleasesPage() {
         </>
       )}
 
-      <TitlePanel title={open} onClose={() => setOpen(null)} onChanged={() => setReloads((n) => n + 1)} />
+      <ReleasePanel title={open} onClose={() => setOpen(null)} onChanged={() => setReloads((n) => n + 1)} />
     </main>
   );
 }

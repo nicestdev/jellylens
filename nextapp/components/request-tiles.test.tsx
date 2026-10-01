@@ -38,10 +38,17 @@ describe("RequestAction", () => {
 });
 
 describe("RequestTile", () => {
-  it("has a badge for each group that released it", () => {
+  it("has one badge for the groups that released it", () => {
     render(<RequestTile item={request({ releaseGroups: ["FuN", "VECTOR"] })} ctx={ctx()} />);
-    expect(screen.getByText("FuN")).toHaveAttribute("title", "Released by FuN");
-    expect(screen.getByText("VECTOR")).toBeInTheDocument();
+    expect(screen.getByText("FuN +1")).toHaveAttribute("title", "Released by FuN, VECTOR");
+    expect(screen.queryByRole("button", { name: "Show releases of Heat" })).toBeNull();
+  });
+
+  it("opens the releases from its group badges, for an admin", async () => {
+    const showReleases = vi.fn();
+    render(<RequestTile item={request({ releaseGroups: ["FuN"] })} ctx={{ ...ctx(), showReleases }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Show releases of Heat" }));
+    expect(showReleases).toHaveBeenCalledWith(expect.objectContaining({ tmdbId: 949 }));
   });
 
   it("counts who asked in an admin's overview, and removes it for all of them", async () => {

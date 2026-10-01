@@ -9,30 +9,36 @@ export type Trigger<T> = {
   lastError: () => string | null;
 };
 
+// The state lives on globalThis, by name: instrumentation.ts (the boot
+// sync) and the route handlers get their own copies of this module, and a
+// run one of them started must count for the other.
+type TriggerState = { inFlight: Promise<unknown> | null; lastError: string | null };
+const globalForTriggers = globalThis as unknown as { __jellylensTriggers?: Record<string, TriggerState> };
+
 export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {
-  let inFlight: Promise<T> | null = null;
-  let lastError: string | null = null;
+  const state = () => ((globalForTriggers.__jellylensTriggers ??= {})[name] ??= { inFlight: null, lastError: null });
   const trigger = () => {
-    if (!inFlight) {
+    const s = state();
+    if (!s.inFlight) {
       console.log("[" + name + "] started");
-      inFlight = fn()
+      s.inFlight = fn()
         .then((result) => {
           console.log("[" + name + "] done", result);
-          lastError = null;
+          s.lastError = null;
           return result;
         })
         .catch((e) => {
           console.error("[" + name + "] failed:", (e as Error).message);
-          lastError = (e as Error).message;
+          s.lastError = (e as Error).message;
           throw e;
         })
         .finally(() => {
-          inFlight = null;
+          s.inFlight = null;
         });
     }
-    return inFlight;
+    return s.inFlight as Promise<T>;
   };
-  return Object.assign(trigger, { running: () => inFlight !== null, lastError: () => lastError });
+  return Object.assign(trigger, { running: () => state().inFlight !== null, lastError: () => state().lastError });
 }
 
 // Starts a run without waiting for it, for routes that answer right away

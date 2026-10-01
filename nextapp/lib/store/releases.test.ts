@@ -23,6 +23,7 @@ import {
   type TitleFilters,
   type TmdbEntry,
 } from "./releases";
+import { setPreferences } from "./preferences";
 import { db } from "../db";
 import type { Release } from "../xrel";
 
@@ -159,11 +160,13 @@ describe("releaseFacets", () => {
 });
 
 describe("tiles", () => {
-  // xREL lists Heat twice: an old SD rip and the later BluRays.
+  // xREL lists Heat twice: an old SD rip and the later BluRays. SD shown
+  // here (see "releases below 720p" for hidden).
   function seed() {
+    setPreferences({ showSdReleases: true });
     addGroup("g1", "VECTOR");
     insertReleases("g1", [
-      release("1", { titleKey: "heat-sd", name: "Heat.German.AC3.HDRip.XViD-VECTOR", quality: "SD", publishedAt: 100 }),
+      release("1", { titleKey: "heat-sd", name: "Heat.German.AC3.HDRip.XViD-VECTOR", quality: "XviD", publishedAt: 100 }),
       release("2", { titleKey: "heat", name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", quality: "HD-2160p", publishedAt: 300 }),
       release("3", { titleKey: "silo", name: "Silo.2023.S01E01.German.DL.1080p-VECTOR", type: "tv", publishedAt: 200 }),
     ]);
@@ -178,7 +181,7 @@ describe("tiles", () => {
     const { matched, items } = query();
     expect(matched).toBe(2);
     expect(items.map((t) => [t.key, t.releases, t.qualities.sort()])).toEqual([
-      ["movie:949", 2, ["HD-2160p", "SD"]],
+      ["movie:949", 2, ["HD-2160p", "XviD"]],
       ["silo", 1, ["HD-1080p"]],
     ]);
     expect(tileCount()).toBe(2);
@@ -274,5 +277,57 @@ describe("matching", () => {
       ["2", "VECTOR"],
       ["1", "VECTOR"],
     ]);
+  });
+});
+
+describe("releases below 720p", () => {
+  // Heat has an XviD rip and a BluRay; Ronin only XviD and x264-SD rips.
+  function seed() {
+    addGroup("g1", "VECTOR");
+    addGroup("g2", "FuN");
+    insertReleases("g1", [
+      release("1", { titleKey: "heat", imdbId: "tt0113277", name: "Heat.German.AC3.HDRip.XViD-VECTOR", quality: "XviD" }),
+      release("2", { titleKey: "heat", imdbId: "tt0113277", name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR" }),
+    ]);
+    insertReleases("g2", [
+      release("3", { titleKey: "ronin", imdbId: "tt0122690", name: "Ronin.German.DVDRip.XviD-FuN", quality: "XviD" }),
+      release("4", { titleKey: "ronin", imdbId: "tt0122690", name: "Ronin.1998.German.BDRip.x264-FuN", quality: "x264-SD" }),
+    ]);
+  }
+
+  it("stores them, but leaves them off the page, the panel and the filters", () => {
+    seed();
+    expect(releaseCounts()).toEqual({ groups: 2, releases: 4 });
+    const { matched, items } = queryTitles(noFilters, "date", false, 0, 10);
+    expect(matched).toBe(1);
+    expect(items.map((t) => [t.key, t.releases, t.qualities])).toEqual([["heat", 1, ["HD-1080p"]]]);
+    expect(tileCount()).toBe(1);
+    expect(tileTitleKeys("ronin")).toEqual([]);
+    expect(titleReleases("heat").map((r) => r.id)).toEqual(["2"]);
+    expect(releaseFacets()).toEqual({ group: ["VECTOR"], quality: ["HD-1080p"], type: ["movie"] });
+  });
+
+  it("doesn't check titles on TMDB that have nothing else", () => {
+    seed();
+    expect(unlookedImdbIds().map((l) => l.imdbId)).toEqual(["tt0113277"]);
+    expect(pendingTitles()).toMatchObject([{ titleKey: "heat", names: ["Heat.1995.German.DL.1080p.BluRay.x264-VECTOR"] }]);
+  });
+
+  it("leaves them out of which groups released a TMDB entry", () => {
+    seed();
+    saveTitleMatch("heat", "verified", heat, { title: "Heat", year: 1995 });
+    insertReleases("g2", [release("5", { titleKey: "heat", name: "Heat.German.DVDRip.x265-FuN", quality: "x265-SD" })]);
+    expect(groupsByTile(["movie:949"])).toEqual(new Map([["movie:949", ["VECTOR"]]]));
+  });
+
+  it("shows them, and checks their titles, once turned on", () => {
+    seed();
+    setPreferences({ showSdReleases: true });
+    expect(queryTitles(noFilters, "date", false, 0, 10).items.map((t) => [t.key, t.releases])).toEqual([
+      ["heat", 2],
+      ["ronin", 2],
+    ]);
+    expect(releaseFacets().quality).toEqual(["HD-1080p", "XviD", "x264-SD"]);
+    expect(pendingTitles().map((t) => t.titleKey)).toEqual(["heat", "ronin"]);
   });
 });

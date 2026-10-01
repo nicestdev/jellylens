@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import type { MatchInfo, ReleaseDetail, ReleaseDetailTitle, ReleaseTitle } from "@/lib/api-types";
-import { TitlePanel } from "./title-panel";
+import { ReleasePanel } from "./release-panel";
 
 const heat = { title: "Heat", year: 1995, posterPath: "/heat.jpg", mediaType: "movie" as const, tmdbId: 949 };
 
@@ -42,14 +42,14 @@ function api(detail: ReleaseDetail, after?: (body: { titleKey: string; verdict: 
   });
 }
 
-describe("TitlePanel", () => {
+describe("ReleasePanel", () => {
   it("lists a single title's releases with its menu in the header", async () => {
     const fetch = api({ key: "movie:949", titles: [bluray] }, () => ({
       key: "heat~1995",
       titles: [{ ...bluray, match: match({ status: "rejected", verdict: "wrong", shown: { ...heat, posterPath: null, mediaType: null, tmdbId: null } }) }],
     }));
     const onChanged = vi.fn();
-    render(<TitlePanel title={tile} onClose={() => {}} onChanged={onChanged} />);
+    render(<ReleasePanel title={tile} onClose={() => {}} onChanged={onChanged} />);
 
     expect(await screen.findByText(/Heat\.1995\.German\.DL\.2160p/)).toBeInTheDocument();
     expect(screen.getByText("1995 · 1 release")).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe("TitlePanel", () => {
       key: "movie:949",
       titles: [titleKey === "heat" ? bluray : rip],
     }));
-    render(<TitlePanel title={tile} onClose={() => {}} onChanged={() => {}} />);
+    render(<ReleasePanel title={tile} onClose={() => {}} onChanged={() => {}} />);
 
     expect(await screen.findByText("Grouped from 2 titles, each matched on its own.")).toBeInTheDocument();
     expect(screen.getByText("1995 · 2 releases")).toBeInTheDocument();
@@ -88,9 +88,17 @@ describe("TitlePanel", () => {
     expect(JSON.parse(String(post[1]!.body))).toEqual({ titleKey: "heat", verdict: "wrong" });
   });
 
+  it("opens on a request or collection movie, counting its releases once they're in", async () => {
+    api({ key: "movie:949", titles: [bluray] });
+    render(<ReleasePanel title={{ key: "movie:949", ...heat }} onClose={() => {}} onChanged={() => {}} />);
+    expect(screen.getByText("1995")).toBeInTheDocument();
+    expect(await screen.findByText("1995 · 1 release")).toBeInTheDocument();
+    expect(screen.getByText(/Heat\.1995\.German\.DL\.2160p/)).toBeInTheDocument();
+  });
+
   it("says when the releases can't be loaded", async () => {
     mockFetch(() => json({ error: "database is locked" }, { status: 500 }));
-    render(<TitlePanel title={tile} onClose={() => {}} onChanged={() => {}} />);
+    render(<ReleasePanel title={tile} onClose={() => {}} onChanged={() => {}} />);
     expect(await screen.findByText("Failed to load releases: database is locked")).toBeInTheDocument();
   });
 });

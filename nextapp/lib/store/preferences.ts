@@ -5,8 +5,10 @@ import { all, run } from "./sql";
 // config, these are changed at runtime, so they live in the database.
 // showFileNames: owned movies' file names on the Missing page's collection
 // cards (to match the release group); off, they aren't sent at all.
-export type Preferences = { showFileNames: boolean };
-const DEFAULT_PREFERENCES: Preferences = { showFileNames: false };
+// showSdReleases: releases below 720p on the Releases page (see
+// SD_QUALITIES in ./releases); off, they're kept but left out.
+export type Preferences = { showFileNames: boolean; showSdReleases: boolean };
+const DEFAULT_PREFERENCES: Preferences = { showFileNames: false, showSdReleases: false };
 
 export function getPreferences(): Preferences {
   const stored = all<{ key: string; value: string }>("SELECT key, value FROM preferences");

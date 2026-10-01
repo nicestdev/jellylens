@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { AlertCircle, Check, EyeOff, MoreHorizontal, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
 import { Poster } from "@/components/poster";
-import { CornerBadge } from "@/components/poster-card";
+import { CLICKABLE_BADGE, CornerBadge } from "@/components/poster-card";
+import { ReleasePanel, type PanelTitle } from "@/components/release-panel";
 import { itemKey, useRequests } from "@/components/request-tiles";
 import { tmdbImage, tmdbUrl } from "@/lib/api-client";
 import type {
@@ -20,6 +21,7 @@ import type {
   CollectionItem as MissingCollection,
   CollectionPartItem as CollectionPart,
 } from "@/lib/api-types";
+import { releasedHint, releasedLabel } from "@/lib/release-labels";
 import { cn } from "@/lib/utils";
 import { TONES } from "./shared";
 
@@ -39,40 +41,63 @@ type RequestCtx = {
   requested: Set<string>;
   pending: Set<string>;
   request: (p: CollectionPart) => void;
+  showReleases: (p: CollectionPart) => void;
 };
 
 // One part in a collection's strip. Missing ones keep their color (and get
 // a red ring); owned or ignored ones fade to gray, the same way the episode
-// strip only colors the gaps.
+// strip only colors the gaps. A missing one a favorite group has released
+// says so in its bottom corner, which opens those releases.
 function PartTile({ part, highlight, ctx }: { part: CollectionPart; highlight: boolean; ctx: RequestCtx }) {
   const key = itemKey({ mediaType: "movie", tmdbId: part.tmdbId });
   const requested = ctx.requested.has(key);
+  const released = highlight ? part.releaseGroups : [];
+  const state = part.owned ? "owned" : "missing";
   return (
-    <div className="relative w-14 shrink-0">
+    <div className="relative w-24 shrink-0">
       <a
         href={tmdbUrl("movie", part.tmdbId)}
         target="_blank"
         rel="noopener noreferrer"
-        title={`${part.title} (${year(part)}) · ${part.owned ? "owned" : "missing"}`}
+        title={`${part.title} (${year(part)}) · ${state}`}
         className="group block"
       >
-        <Poster
-          imageSrc={posterSrc(part.posterPath)}
-          alt={part.title}
-          className={cn(
-            "w-full transition group-hover:opacity-100 group-hover:grayscale-0",
-            highlight ? TONES.destructive.ring : "opacity-40 grayscale"
-          )}
-        />
+        <div className="relative">
+          <Poster
+            imageSrc={posterSrc(part.posterPath)}
+            alt={part.title}
+            className={cn(
+              "w-full transition group-hover:opacity-100 group-hover:grayscale-0",
+              highlight ? TONES.destructive.ring : "opacity-40 grayscale"
+            )}
+          />
+        </div>
         <div
           className={cn(
-            "mt-1 text-center text-[10px] tabular-nums",
+            "mt-1 truncate text-center text-[11px]",
             highlight ? "font-medium text-foreground" : "text-muted-foreground"
           )}
         >
-          {year(part)}
+          {part.title}
         </div>
+        <div className="text-center text-[10px] text-muted-foreground tabular-nums">{year(part)}</div>
       </a>
+      {released.length ? (
+        // Outside the link, over the poster's corner: a box the poster's size.
+        <div className="pointer-events-none absolute inset-x-0 top-0 aspect-2/3">
+          <button
+            type="button"
+            aria-label={`Show releases of ${part.title}`}
+            onClick={() => ctx.showReleases(part)}
+            className="group/badge pointer-events-auto absolute bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)] cursor-pointer rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring"
+          >
+            <CornerBadge
+              badge={{ label: releasedLabel(released), hint: releasedHint(released) }}
+              className={cn("relative", CLICKABLE_BADGE)}
+            />
+          </button>
+        </div>
+      ) : null}
       {highlight ? (
         <button
           type="button"
@@ -81,13 +106,13 @@ function PartTile({ part, highlight, ctx }: { part: CollectionPart; highlight: b
           disabled={requested || ctx.pending.has(key)}
           onClick={() => ctx.request(part)}
           className={cn(
-            "absolute top-1 right-1 grid size-5 place-items-center rounded-full shadow-md backdrop-blur-md transition-colors",
+            "absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full shadow-md backdrop-blur-md transition-colors",
             requested
               ? "bg-primary text-primary-foreground"
               : "bg-background/80 text-foreground ring-1 ring-white/15 ring-inset hover:bg-primary hover:text-primary-foreground disabled:opacity-60"
           )}
         >
-          {requested ? <Check className="size-3" /> : <Plus className="size-3" />}
+          {requested ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
         </button>
       ) : null}
     </div>
@@ -117,7 +142,7 @@ function CollectionCard({
           <Poster
             imageSrc={posterSrc(collection.posterPath)}
             alt=""
-            className="w-20 transition-shadow group-hover:ring-2 group-hover:ring-primary/60"
+            className="w-28 transition-shadow group-hover:ring-2 group-hover:ring-primary/60"
           />
           <CornerBadge
             badge={{ label: `${owned}/${collection.parts.length}`, hint: `${owned} of ${collection.parts.length} owned` }}
@@ -165,7 +190,7 @@ function CollectionCard({
             </DropdownMenu>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-3">
             {collection.parts.map((p) => (
               <PartTile key={p.tmdbId} part={p} highlight={highlightIds.has(p.tmdbId)} ctx={ctx} />
             ))}
@@ -247,15 +272,21 @@ export function IgnoredCollections({
 }
 
 // The Movies category's cards: TMDB collections you own some of, each with
-// the parts you don't have (highlighted: missing and not ignored).
+// the parts you don't have (highlighted: missing and not ignored), and the
+// releases panel their badges open. onReleasesChanged: a match was fixed
+// there, so which groups released what may have changed.
 export function CollectionList({
   groups,
   onIgnore,
+  onReleasesChanged,
 }: {
   groups: { collection: MissingCollection; parts: CollectionPart[] }[];
   onIgnore: (entry: CollectionIgnore) => void;
+  onReleasesChanged: () => void;
 }) {
   const requests = useRequests();
+  const [releases, setReleases] = useState<PanelTitle | null>(null);
+  const yearOf = (p: CollectionPart) => (p.releaseDate ? Number(p.releaseDate.slice(0, 4)) : null);
 
   const ctx: RequestCtx = {
     requested: requests.requestedKeys,
@@ -266,7 +297,7 @@ export function CollectionList({
           mediaType: "movie",
           tmdbId: p.tmdbId,
           title: p.title,
-          year: p.releaseDate ? Number(p.releaseDate.slice(0, 4)) : null,
+          year: yearOf(p),
           releaseDate: p.releaseDate,
           posterPath: p.posterPath,
           library: null,
@@ -274,6 +305,15 @@ export function CollectionList({
         },
         false
       ),
+    showReleases: (p) =>
+      setReleases({
+        key: itemKey({ mediaType: "movie", tmdbId: p.tmdbId }),
+        title: p.title,
+        year: yearOf(p),
+        posterPath: p.posterPath,
+        mediaType: "movie",
+        tmdbId: p.tmdbId,
+      }),
   };
 
   return (
@@ -284,11 +324,12 @@ export function CollectionList({
           <AlertDescription>{requests.error}</AlertDescription>
         </Alert>
       ) : null}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3">
         {groups.map((g) => (
           <CollectionCard key={g.collection.id} collection={g.collection} highlighted={g.parts} ctx={ctx} onIgnore={onIgnore} />
         ))}
       </div>
+      <ReleasePanel title={releases} onClose={() => setReleases(null)} onChanged={onReleasesChanged} />
     </>
   );
 }

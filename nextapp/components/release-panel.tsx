@@ -13,10 +13,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Poster } from "@/components/poster";
 import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
-import type { MatchInfo, ReleaseDetail as Detail, ReleaseTitle as Title } from "@/lib/api-types";
+import type { MatchInfo, ReleaseDetail as Detail } from "@/lib/api-types";
 import { formatDate, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { matchActions, matchNote, qualityLabel, titleMeta } from "./logic";
+import { matchActions, matchNote, qualityLabel, titleMeta } from "@/lib/release-labels";
 
 const ACTION_ICONS: Record<string, LucideIcon> = { wrong: Unlink, xrel: Link2, auto: RotateCcw };
 
@@ -94,18 +94,33 @@ function ReleaseList({ items }: { items: Detail["titles"][number]["Items"] }) {
   );
 }
 
-// The panel a tile opens: every release on it, newest first, each linking
-// to its xREL page. A tile with several titles (one movie xREL lists twice,
-// or a movie's releases split by year, see toRelease in lib/xrel.ts) lists
-// them one after the other, each with its own ⋯ menu, since usually only one
-// of them is matched wrong. onChanged: the grid should reload, since the
-// tile changed.
-export function TitlePanel({
+// What the panel shows until its releases have loaded: a Releases tile, or
+// a request or collection movie (key: its TMDB entry, "movie:949"; their
+// number isn't known yet). library: owned in Jellyfin, with its poster.
+export type PanelTitle = {
+  key: string;
+  title: string;
+  year: number | null;
+  posterPath: string | null;
+  mediaType: "movie" | "tv" | null;
+  tmdbId: number | null;
+  releases?: number;
+  library?: { id: string; imageTag?: string | null } | null;
+};
+
+// The side panel a Releases tile opens, and the group badges on Requests
+// and Missing: every release of a tile, newest first, each linking to its
+// xREL page. A tile with several titles (one movie xREL lists twice, or a
+// movie's releases split by year, see toRelease in lib/xrel.ts) lists them
+// one after the other, each with its own ⋯ menu, since usually only one of
+// them is matched wrong. onChanged: what opened it should reload, since the
+// tile changed. Admins only, like /api/releases.
+export function ReleasePanel({
   title,
   onClose,
   onChanged,
 }: {
-  title: Title | null;
+  title: PanelTitle | null;
   onClose: () => void;
   onChanged: () => void;
 }) {

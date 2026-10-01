@@ -49,12 +49,12 @@ describe("proxy", () => {
 
   it("keeps admin pages and APIs to admins", async () => {
     const { proxy, cookie } = await load();
-    for (const path of ["/missing", "/releases", "/settings"]) {
+    for (const path of ["/missing", "/releases", "/analytics", "/settings"]) {
       const res = await proxy(request(path, { cookie: cookie(false) }));
       expect(res.headers.get("location"), path).toBe("http://jellylens.test/movies");
       expect(passes(await proxy(request(path, { cookie: cookie(true) }))), path).toBe(true);
     }
-    for (const path of ["/api/releases", "/api/releases/abc", "/api/release-groups", "/api/sync/tmdb", "/api/preferences", "/api/config"]) {
+    for (const path of ["/api/releases", "/api/releases/abc", "/api/release-groups", "/api/analytics", "/api/sync/tmdb", "/api/preferences", "/api/config"]) {
       expect((await proxy(request(path, { cookie: cookie(false) }))).status, path).toBe(403);
     }
   });

@@ -6,14 +6,10 @@ import {
   ArrowLeft,
   CheckCircle2,
   EyeOff,
-  Film,
-  GitCompareArrows,
   MoreHorizontal,
-  RefreshCw,
-  Tv,
-  type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -22,10 +18,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
+import { StatTile } from "@/components/stat-tile";
 import { Poster } from "@/components/poster";
 import { CornerBadge } from "@/components/poster-card";
-import { apiFetch, runSync, tmdbUrl } from "@/lib/api-client";
-import { relativeTime, seasonLabel } from "@/lib/format";
+import { apiFetch, tmdbUrl } from "@/lib/api-client";
+import { formatNumber, relativeTime, seasonLabel } from "@/lib/format";
 import type {
   CollectionsResponse,
   EpisodeState,
@@ -39,9 +36,9 @@ import type {
 } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { cn } from "@/lib/utils";
-import { CardSkeleton, StatCard, TONES, type Tone } from "./shared";
+import { CardSkeleton, TONES, type Tone } from "./shared";
 import { CollectionList, IgnoredCollections } from "./collections";
-import { episodeRanges, lineText, missingView, summary, type CategoryKey, type Group, type Line } from "./logic";
+import { cardHint, episodeRanges, lineText, missingView, summary, type CategoryKey, type Group, type Line } from "./logic";
 
 // Owned tiles stay neutral gray so only the gaps (in the category's tone)
 // carry color; upcoming is a faint outline — nothing to own yet.
@@ -59,33 +56,31 @@ const SEGMENT_LABEL: Record<EpisodeState["state"], string> = {
   upcoming: "not aired yet",
 };
 
-// Shows (missing episodes — gaps, whole seasons and seasons still airing),
-// Movies (collection parts) and Mismatches, one card each.
+// Movies (collection parts) under the Movies tab; missing episodes (gaps,
+// whole seasons, seasons still airing) and Mismatches under TV Shows, one
+// card each: gaps you'll want to fill, whole seasons you may have skipped
+// on purpose, and airing ones you may just not have caught up on.
+type Library = "movies" | "shows";
+const LIBRARIES: { key: Library; label: string }[] = [
+  { key: "movies", label: "Movies" },
+  { key: "shows", label: "TV Shows" },
+];
+
 type Category = {
   key: CategoryKey;
+  library: Library;
   label: string;
   hint: string;
   empty: { title: string; hint: string }; // shown when the category has nothing
   tone: Tone;
-  icon: LucideIcon;
   unit: string; // what the stat card counts
   groupUnit: string; // what it counts them in
 };
 
 const CATEGORIES: Category[] = [
   {
-    key: "shows",
-    icon: Tv,
-    unit: "episode",
-    groupUnit: "show",
-    label: "Shows",
-    hint: "Episodes you don't have. Seasons still airing are marked — often you're just not caught up yet.",
-    empty: { title: "No gaps", hint: "Every season you've started is complete." },
-    tone: "destructive",
-  },
-  {
     key: "movies",
-    icon: Film,
+    library: "movies",
     unit: "movie",
     groupUnit: "collection",
     label: "Movies",
@@ -94,8 +89,38 @@ const CATEGORIES: Category[] = [
     tone: "destructive",
   },
   {
+    key: "gaps",
+    library: "shows",
+    unit: "episode",
+    groupUnit: "show",
+    label: "Missing episodes",
+    hint: "Gaps in seasons that have finished airing.",
+    empty: { title: "No gaps", hint: "Every finished season you've started is complete." },
+    tone: "destructive",
+  },
+  {
+    key: "seasons",
+    library: "shows",
+    unit: "episode",
+    groupUnit: "show",
+    label: "Missing seasons",
+    hint: "Fully aired seasons you own none of.",
+    empty: { title: "No missing seasons", hint: "You have episodes from every season that has finished airing." },
+    tone: "destructive",
+  },
+  {
+    key: "airing",
+    library: "shows",
+    unit: "episode",
+    groupUnit: "show",
+    label: "Currently airing",
+    hint: "Seasons still airing — often you're just not caught up yet.",
+    empty: { title: "All caught up", hint: "Nothing missing from seasons that are still airing." },
+    tone: "warning",
+  },
+  {
     key: "mismatch",
-    icon: GitCompareArrows,
+    library: "shows",
     unit: "issue",
     groupUnit: "show",
     label: "Mismatches",
@@ -357,21 +382,8 @@ export default function MissingPage() {
   // Errors of what the user just did; the load's own error shows otherwise.
   const [actionError, setActionError] = useState("");
   const error = actionError || (page.error && `Failed to load: ${page.error}`);
-  const [rechecking, setRechecking] = useState(false);
+  const [library, setLibrary] = useState<Library | null>(null);
   const [view, setView] = useState<CategoryKey | "ignored" | null>(null);
-
-  async function recheck() {
-    setRechecking(true);
-    setActionError("");
-    try {
-      await runSync("missing", 500);
-      await page.reload();
-    } catch (e) {
-      setActionError(`Recheck failed: ${(e as Error).message}`);
-    } finally {
-      setRechecking(false);
-    }
-  }
 
   async function updateIgnored(method: "POST" | "DELETE", entry: IgnoreEntry) {
     try {
@@ -390,15 +402,24 @@ export default function MissingPage() {
   const ignore = (entry: IgnoreEntry) => updateIgnored("POST", entry);
   const unignore = (entry: IgnoreEntry) => updateIgnored("DELETE", entry);
 
-  const { showIgnored, collectionIgnored, missingShows, mismatches, collectionGroups, counts, airingCount } = missingView(
+  const { showIgnored, collectionIgnored, showGroups, collectionGroups, counts } = missingView(
     shows,
     collections,
     ignored
   );
 
-  // Until the user picks a card, land on the first category with anything in it.
-  const activeView = view ?? CATEGORIES.find((c) => counts[c.key].groups)?.key ?? "shows";
-  const activeCategory = CATEGORIES.find((c) => c.key === activeView);
+  // Until the user picks a tab, land on the first library with anything
+  // missing; in it, until they pick a card, on its first category with
+  // anything in it. Switching tabs starts over at that category.
+  const activeLibrary =
+    library ?? LIBRARIES.find((l) => CATEGORIES.some((c) => c.library === l.key && counts[c.key].groups))?.key ?? "movies";
+  const categories = CATEGORIES.filter((c) => c.library === activeLibrary);
+  const activeView = view ?? categories.find((c) => counts[c.key].groups)?.key ?? categories[0].key;
+  const activeCategory = categories.find((c) => c.key === activeView);
+  // Missing episodes come as strips of tiles, with a legend.
+  const strips = activeCategory !== undefined && activeCategory.key !== "movies" && activeCategory.key !== "mismatch";
+  // The Ignored list is the tab's own.
+  const tabIgnored = activeLibrary === "shows" ? showIgnored.length : collectionIgnored.length;
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
@@ -409,10 +430,23 @@ export default function MissingPage() {
             {loading ? "Loading…" : `${summary(counts)} missing · checked ${relativeTime(page.data?.checkedAt ?? null)}`}
           </p>
         </div>
-        <Button variant="outline" className="ml-auto" onClick={recheck} disabled={rechecking || loading}>
-          <RefreshCw className={cn(rechecking && "animate-spin")} />
-          {rechecking ? "Rechecking…" : "Recheck"}
-        </Button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Tabs
+            value={activeLibrary}
+            onValueChange={(v) => {
+              setLibrary(v as Library);
+              setView(null);
+            }}
+          >
+            <TabsList>
+              {LIBRARIES.map((l) => (
+                <TabsTrigger key={l.key} value={l.key} className="px-3">
+                  {l.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
       {error ? (
@@ -422,18 +456,14 @@ export default function MissingPage() {
         </Alert>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {CATEGORIES.map((c) => (
-          <StatCard
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {categories.map((c) => (
+          <StatTile
             key={c.key}
             label={c.label}
-            icon={c.icon}
-            tone={c.tone}
-            unit={c.unit}
-            groupUnit={c.groupUnit}
-            count={counts[c.key].count}
-            groups={counts[c.key].groups}
-            detail={c.key === "shows" && airingCount ? `${airingCount} airing` : undefined}
+            value={formatNumber(counts[c.key].count)}
+            hint={cardHint(counts[c.key].count, counts[c.key].groups, c.unit, c.groupUnit)}
+            muted={!counts[c.key].count}
             active={activeView === c.key}
             loading={loading}
             onClick={() => setView(c.key)}
@@ -454,10 +484,10 @@ export default function MissingPage() {
           <div className="ml-auto flex w-full items-center justify-end gap-3 sm:w-auto">
             {/* Full width (its own line) on phones — whether it fit next to the
                 hint depended on the hint's length, so it jumped between cards. */}
-            {activeCategory.key === "shows" ? <StripLegend tone={activeCategory.tone} upcoming={airingCount > 0} /> : null}
-            {ignored.length ? (
+            {strips ? <StripLegend tone={activeCategory.tone} upcoming={activeCategory.key === "airing"} /> : null}
+            {tabIgnored ? (
               <>
-                {activeCategory.key === "shows" ? <span className="h-4 w-px bg-border" /> : null}
+                {strips ? <span className="h-4 w-px bg-border" /> : null}
                 <Button
                   variant="ghost"
                   className="-mr-2.5 shrink-0 text-muted-foreground"
@@ -465,7 +495,7 @@ export default function MissingPage() {
                 >
                   <EyeOff />
                   Ignored
-                  <span className="font-mono text-xs tabular-nums">{ignored.length}</span>
+                  <span className="font-mono text-xs tabular-nums">{tabIgnored}</span>
                 </Button>
               </>
             ) : null}
@@ -474,38 +504,30 @@ export default function MissingPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
+        <div className={cn("grid grid-cols-1 gap-3", activeLibrary === "shows" && "lg:grid-cols-2")}>
+          {Array.from({ length: 3 }, (_, i) => (
+            <CardSkeleton key={i} collection={activeLibrary === "movies"} />
+          ))}
         </div>
       ) : !activeCategory ? (
-        <div className="space-y-6">
-          {showIgnored.length ? (
-            <section>
-              <h2 className="mb-2 text-sm font-medium">Shows</h2>
-              <IgnoredList entries={showIgnored} shows={shows} onUnignore={unignore} />
-            </section>
-          ) : null}
-          {collectionIgnored.length ? (
-            <section>
-              <h2 className="mb-2 text-sm font-medium">Movies</h2>
-              <IgnoredCollections entries={collectionIgnored} collections={collections} onUnignore={unignore} />
-            </section>
-          ) : null}
-          {ignored.length ? null : <EmptyState icon={EyeOff} title="Nothing ignored" hint="Ignored shows and movies show up here." />}
-        </div>
+        activeLibrary === "shows" ? (
+          <IgnoredList entries={showIgnored} shows={shows} onUnignore={unignore} />
+        ) : collectionIgnored.length ? (
+          <IgnoredCollections entries={collectionIgnored} collections={collections} onUnignore={unignore} />
+        ) : (
+          <EmptyState icon={EyeOff} title="Nothing ignored" hint="Ignored collections and movies show up here." />
+        )
       ) : counts[activeCategory.key].groups === 0 ? (
         <EmptyState icon={CheckCircle2} title={activeCategory.empty.title} hint={activeCategory.empty.hint} />
       ) : activeCategory.key === "movies" ? (
-        <CollectionList groups={collectionGroups} onIgnore={ignore} />
+        <CollectionList groups={collectionGroups} onIgnore={ignore} onReleasesChanged={() => void page.reload()} />
       ) : (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {(activeCategory.key === "shows" ? missingShows : mismatches).map((group) => (
+          {showGroups[activeCategory.key].map((group) => (
             <ShowCard
               key={group.item.Id}
               group={group}
-              kind={activeCategory.key === "shows" ? "missing" : "mismatch"}
+              kind={activeCategory.key === "mismatch" ? "mismatch" : "missing"}
               tone={activeCategory.tone}
               onIgnore={ignore}
             />

@@ -12,8 +12,9 @@ import { apiFetch, tmdbUrl } from "@/lib/api-client";
 import type { MovieItem as Movie, MoviesResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { byCount, toggled, type SortDir } from "@/lib/facets";
+import { resolutionLabel } from "@/lib/format";
 import { languageName } from "@/lib/languages";
-import { SORTS, movieMeta, movieView, resolutionLabel, type SortKey } from "./logic";
+import { SORTS, movieMeta, movieView, type SortKey } from "./logic";
 
 function MovieCard({ item, href }: { item: Movie; href?: string }) {
   const res = resolutionLabel(item.Width, item.Height);

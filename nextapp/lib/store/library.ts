@@ -1,5 +1,6 @@
 import { db, fromJson, toJson, tx } from "../db";
 import { all, one, run, type DataRow } from "./sql";
+import { replaceFiles, type StoredFile } from "./files";
 import { setSyncedAt } from "./sync-state";
 
 // A movie or show as stored: only the fields Jellylens reads, picked out
@@ -16,7 +17,8 @@ type JellyfinBase = {
 };
 
 // FileName: the file's name without its folder, to match the release group
-// on the Missing page. AudioLanguages: normalized codes (lib/languages.ts).
+// on the Missing page (every version's file is in media_files, see
+// lib/store/files.ts). AudioLanguages: normalized codes (lib/languages.ts).
 export type JellyfinMovie = JellyfinBase & {
   Width?: number;
   Height?: number;
@@ -108,8 +110,14 @@ export function libraryCounts() {
   )!;
 }
 
+// files: the movies' and episodes' files, for Analytics.
 export function replaceJellyfin(
-  { movies, shows, episodes }: { movies: JellyfinMovie[]; shows: JellyfinShow[]; episodes: JellyfinEpisode[] },
+  {
+    movies,
+    shows,
+    episodes,
+    files = [],
+  }: { movies: JellyfinMovie[]; shows: JellyfinShow[]; episodes: JellyfinEpisode[]; files?: StoredFile[] },
   at: string | null
 ) {
   tx(() => {
@@ -136,6 +144,7 @@ export function replaceJellyfin(
         toJson(e.AudioLanguages)
       );
     }
+    replaceFiles(files);
     setSyncedAt("jellyfin", at);
   });
 }

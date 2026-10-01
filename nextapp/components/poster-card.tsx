@@ -14,6 +14,11 @@ const BADGE_TONES: Record<BadgeTone, string> = {
   warning: "bg-warning/90 text-background",
 };
 
+const FILTER_STACK = "absolute bottom-2 left-2 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1";
+// A badge inside a button (group/badge): truncated, primary on hover.
+export const CLICKABLE_BADGE =
+  "block max-w-full truncate leading-5 transition-colors group-hover/badge:bg-primary group-hover/badge:text-primary-foreground";
+
 // hint shows on hovering the badge itself (the tile's own title is the name).
 export type PosterBadge = { label: string; tone?: BadgeTone; hint?: string };
 
@@ -37,11 +42,13 @@ export function CornerBadge({ badge, className }: { badge: PosterBadge; classNam
 // for how it relates to an active filter (Requests: who released it), top
 // left for a count (Requests: how many asked) — then title and a muted info
 // line. badge can be several, side by side (Releases: one per quality it
-// comes in); filterBadge too, stacked (Requests: one per group). The whole
+// comes in); filterBadge too, stacked (TV Shows: the languages filtered
+// by). The whole
 // tile links to href (TMDB), when there is one, or is a button for onClick
 // (Releases opens a panel). action is a button over the
 // poster's bottom-right corner, kept outside the link so it's valid,
-// clickable HTML.
+// clickable HTML; with onFilterBadge the filter badges are one too
+// (Requests: the releases of the groups they name).
 export function PosterCard({
   href,
   onClick,
@@ -54,6 +61,8 @@ export function PosterCard({
   filterBadge,
   countBadge,
   action,
+  onFilterBadge,
+  filterBadgeLabel,
 }: {
   href?: string;
   onClick?: () => void;
@@ -66,6 +75,8 @@ export function PosterCard({
   filterBadge?: PosterBadge | PosterBadge[];
   countBadge?: PosterBadge;
   action?: ReactNode;
+  onFilterBadge?: () => void;
+  filterBadgeLabel?: string;
 }) {
   const badges = badge ? [badge].flat() : [];
   const filterBadges = filterBadge ? [filterBadge].flat() : [];
@@ -99,9 +110,9 @@ export function PosterCard({
             </div>
           ) : null}
           {countBadge ? <CornerBadge badge={countBadge} className="top-2 left-2" /> : null}
-          {filterBadges.length ? (
+          {filterBadges.length && !onFilterBadge ? (
             // Stacked; stops short of the action button in the other corner.
-            <div className="absolute bottom-2 left-2 flex max-w-[calc(100%-3.5rem)] flex-col items-start gap-1">
+            <div className={FILTER_STACK}>
               {filterBadges.map((b) => (
                 <CornerBadge key={b.label} badge={b} className="relative block max-w-full truncate leading-5" />
               ))}
@@ -111,10 +122,22 @@ export function PosterCard({
         <div className="mt-2 truncate text-sm font-medium transition-colors group-hover:text-primary">{title}</div>
         {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}
       </Tile>
-      {action ? (
-        // Same box as the poster, so the button lands on its corner.
+      {action || (filterBadges.length && onFilterBadge) ? (
+        // Same box as the poster, so the buttons land on its corners.
         <div className="pointer-events-none absolute inset-x-0 top-0 aspect-2/3">
-          <div className="pointer-events-auto absolute right-2 bottom-2">{action}</div>
+          {filterBadges.length && onFilterBadge ? (
+            <button
+              type="button"
+              onClick={onFilterBadge}
+              aria-label={filterBadgeLabel}
+              className={cn(FILTER_STACK, "group/badge pointer-events-auto cursor-pointer rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring")}
+            >
+              {filterBadges.map((b) => (
+                <CornerBadge key={b.label} badge={b} className={cn("relative", CLICKABLE_BADGE)} />
+              ))}
+            </button>
+          ) : null}
+          {action ? <div className="pointer-events-auto absolute right-2 bottom-2">{action}</div> : null}
         </div>
       ) : null}
     </div>

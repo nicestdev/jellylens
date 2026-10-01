@@ -137,9 +137,9 @@ describe("requests", () => {
 
 describe("preferences", () => {
   it("defaults, and keeps what's set", () => {
-    expect(getPreferences()).toEqual({ showFileNames: false });
+    expect(getPreferences()).toEqual({ showFileNames: false, showSdReleases: false });
     setPreferences({ showFileNames: true });
-    expect(getPreferences()).toEqual({ showFileNames: true });
+    expect(getPreferences()).toEqual({ showFileNames: true, showSdReleases: false });
   });
 });
 

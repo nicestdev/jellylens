@@ -20,13 +20,14 @@ to add next.
 
 - 🎬 **Library overview**: poster grids for movies and shows. Search, sort, and filter by genre, audio language or airing status.
 - 🧩 **Missing episodes**: gaps, whole missing seasons and seasons that are still airing, all checked against TMDB. Ignore anything you don't care about.
-- 🎞️ **Movie collections**: for every TMDB collection you own part of (*The Lord of the Rings*, *Bourne*, …), the movies you don't have yet. Only those out on disc or digital count, and each one can be requested right from its card. Optionally shows the file names you own, so you can get the rest from the same release group.
+- 🎞️ **Movie collections**: for every TMDB collection you own part of (*The Lord of the Rings*, *Bourne*, …), the movies you don't have yet. Only those out on disc or digital count, and each one can be requested right from its card. A badge shows which of your favorite release groups have released a missing movie; click it to see the releases. Optionally shows the file names you own, so you can get the rest from the same release group.
 - 🔍 **Mismatch detection**: episodes and seasons TMDB doesn't know about, usually a wrong match or a duplicate file.
 - 🗣️ **Language coverage**: flags shows where only some seasons have your audio language.
-- 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin. Everyone has their own list; admins see all of them, most wanted first.
-- 📦 **Releases**: pick your favorite P2P groups in Settings, and Jellylens keeps their release lists from [xREL](https://www.xrel.to) in sync. The Releases page shows one poster per title with the qualities it comes in; search and filter by group, quality or type to see whether something is out from a group you like. Each title is checked against its release names, so a release xREL linked to the wrong movie doesn't show that movie's poster or title.
-- 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing, Releases and Settings are for Jellyfin admins only.
-- 🔄 **Automatic sync**: Jellyfin, TMDB and xREL refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync right away.
+- 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin. Everyone has their own list; admins see all of them, most wanted first, with a badge for the favorite release groups that have released each one, which opens its releases.
+- 📦 **Releases**: pick your favorite P2P groups in Settings, and Jellylens keeps their release lists from [xREL](https://www.xrel.to) in sync. The Releases page shows one poster per title with the qualities it comes in; search and filter by group, quality or type to see whether something is out from a group you like. Releases below 720p (XviD, SD, DVD) are hidden unless you turn them on in Settings. Each title is checked against its release names, so a release xREL linked to the wrong movie doesn't show that movie's poster or title.
+- 📊 **Analytics**: what your movies' and episodes' files are made of: totals, and charts of files and storage by release group, resolution, codec and audio language. Click a piece of a chart to list its files, or search, filter and sort every file below.
+- 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing, Releases, Analytics and Settings are for Jellyfin admins only.
+- 🔄 **Automatic sync**: Jellyfin, TMDB and xREL refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync or recheck what's missing right away.
 - 📱 **Works on any device**: responsive, dark UI that works on desktop and phone.
 
 ## Installation

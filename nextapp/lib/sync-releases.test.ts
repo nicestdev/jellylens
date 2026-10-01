@@ -104,6 +104,28 @@ describe("syncReleases", () => {
     expect(syncedAt("releases")).toBeNull();
   });
 
+  it("picks up a group added while the titles are checked", async () => {
+    addGroup("g1", "VECTOR");
+    let added = false;
+    mockFetch((url) => {
+      if (url.hostname === "api.xrel.to") {
+        const group = url.searchParams.get("group_id")!;
+        const list = [p2p(group === "g1" ? 1 : 2, `Heat.1995.German-${group}`, "tt1")];
+        return json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 1 }, list });
+      }
+      // VECTOR's titles are being checked: FuN is added now.
+      if (!added) addGroup("g2", "FuN");
+      added = true;
+      return new Response("", { status: 404 });
+    });
+
+    expect(await run()).toEqual({ groups: 2, added: 2 });
+    expect(listGroups().map((g) => [g.name, g.count, g.complete])).toEqual([
+      ["VECTOR", 1, true],
+      ["FuN", 1, true],
+    ]);
+  });
+
   it("without a TMDB key, shows release names' titles and asks TMDB nothing", async () => {
     addGroup("g1", "VECTOR");
     const fetch = apis({ g1: [[p2p(1, "Heat.1995.German.DL.1080p-VECTOR", "tt1")]] });

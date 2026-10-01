@@ -1,0 +1,154 @@
+import { describe, expect, it } from "vitest";
+import type { AnalyticsResponse, FilePart } from "@/lib/api-types";
+import {
+  SERIES_COLORS,
+  codecSegments,
+  fileFacets,
+  filesUrl,
+  groupSegments,
+  languageSegments,
+  noListFilters,
+  overviewTiles,
+  pageText,
+  percent,
+  resolutionSegments,
+  selectedSegments,
+  subtitle,
+  type ListFilters,
+} from "./logic";
+
+const GB = 1024 ** 3;
+const part = <V = string>(value: V, files: number, size = files): FilePart<V> => ({ value, files, size });
+
+// As /api/analytics sends them: most files first.
+const movies = (over: Partial<AnalyticsResponse["movies"]> = {}): AnalyticsResponse["movies"] => ({
+  titles: 3,
+  withFiles: 3,
+  files: 4,
+  size: 4 * GB,
+  pending: false,
+  groups: [part<string | null>("FuN", 2, GB), part<string | null>("GRP", 1, 2 * GB), part<string | null>(null, 1, GB)],
+  resolutions: [part("1080p", 3), part("4K", 1)],
+  codecs: [part("x265", 3), part("", 1)],
+  languages: [part("DE", 4), part("EN", 2)],
+  ...over,
+});
+
+describe("overview", () => {
+  it("has a tile each for movies, their average and total size, and groups", () => {
+    expect(overviewTiles(movies())).toEqual([
+      { label: "Movies", value: "3", hint: "in the library" },
+      { label: "Average size", value: "1,33 GB", hint: "per movie" },
+      { label: "Total size", value: "4,00 GB", hint: "in 4 files" },
+      { label: "Release groups", value: "2", hint: "named in 75 % of files" },
+    ]);
+  });
+
+  it("counts a show's episodes as its files", () => {
+    expect(overviewTiles(movies({ titles: 5, withFiles: 2 }), "shows").slice(0, 3)).toEqual([
+      { label: "Shows", value: "5", hint: "in the library" },
+      { label: "Files", value: "4", hint: "episodes of 2 shows" },
+      { label: "Total size", value: "4,00 GB", hint: "Ø 2,00 GB per show" },
+    ]);
+  });
+
+  it("says where the numbers are from", () => {
+    expect(subtitle(null)).toBe("Loading…");
+    expect(subtitle({ movies: movies(), shows: movies(), syncedAt: null })).toBe("From the Jellyfin sync never");
+  });
+});
+
+describe("share chart segments", () => {
+  it("colors the groups with the most files and folds the rest", () => {
+    const groups = ["B", "C", "D", "F", "E", "A", "G"].map((g, i) => part<string | null>(g, 9 - i));
+    const segments = groupSegments(movies({ groups: [...groups, part<string | null>(null, 3)] }));
+    expect(segments.map((s) => [s.label, s.files, s.muted, s.values])).toEqual([
+      ["B", 9, false, ["B"]],
+      ["C", 8, false, ["C"]],
+      ["D", 7, false, ["D"]],
+      ["F", 6, false, ["F"]],
+      ["E", 5, false, ["E"]],
+      ["2 other groups", 7, true, ["A", "G"]],
+      ["n/a", 3, true, [""]],
+    ]);
+    expect(segments.slice(0, 5).map((s) => s.color)).toEqual(SERIES_COLORS);
+    expect(new Set(segments.map((s) => s.color)).size).toBe(segments.length);
+  });
+
+  it("does the same for resolutions and codecs, unknown last", () => {
+    const m = movies({
+      resolutions: [part("", 5), part("1080p", 3), part("4K", 1)],
+      codecs: ["x265", "x264", "AV1", "VC-1", "MPEG-2", "VP9", "PRORES"].map((c, i) => part(c, 9 - i)),
+    });
+    expect(resolutionSegments(m).map((s) => [s.label, s.values])).toEqual([
+      ["1080p", ["1080p"]],
+      ["4K", ["4K"]],
+      ["Unknown", [""]],
+    ]);
+    expect(codecSegments(m).map((s) => s.label)).toEqual(["x265", "x264", "AV1", "VC-1", "MPEG-2", "2 other codecs"]);
+  });
+
+  it("gives German, English and Spanish a ring each, in fixed colors", () => {
+    const languages = ["EN", "DE", "JA", "FR", "ES", "IT"].map((c, i) => part(c, 9 - i));
+    const segments = languageSegments(movies({ languages: [...languages, part("", 2)] }));
+    expect(segments.map((s) => [s.label, s.files, s.values, s.color])).toEqual([
+      ["German", 8, ["DE"], SERIES_COLORS[0]],
+      ["English", 9, ["EN"], SERIES_COLORS[1]],
+      ["Spanish", 5, ["ES"], SERIES_COLORS[2]],
+    ]);
+    // Spanish missing: no ring, the others keep their colors.
+    expect(languageSegments(movies()).map((s) => [s.label, s.color])).toEqual([
+      ["German", SERIES_COLORS[0]],
+      ["English", SERIES_COLORS[1]],
+    ]);
+  });
+
+  it("leaves out empty parts", () => {
+    expect(groupSegments(movies({ groups: [part<string | null>("A", 1)] })).map((s) => s.key)).toEqual(["groups:A"]);
+  });
+
+  it("knows which pieces the filters list exactly", () => {
+    const m = movies({ codecs: ["x265", "x264", "AV1", "VP9", "PRORES", "VC-1", "MPEG-2"].map((c, i) => part(c, 9 - i)) });
+    const segments = [...codecSegments(m), ...resolutionSegments(m)];
+    const pick = (over: Partial<ListFilters>) => [...selectedSegments(segments, { ...noListFilters(), ...over })];
+    expect(pick({ codecs: new Set(["VC-1", "MPEG-2"]) })).toEqual(["codecs-other"]);
+    expect(pick({ codecs: new Set(["x265"]), resolutions: new Set(["4K"]) })).toEqual(["codecs:x265", "resolutions:4K"]);
+    expect(pick({ codecs: new Set(["x265", "x264"]) })).toEqual([]);
+    expect(pick({})).toEqual([]);
+  });
+});
+
+describe("percent", () => {
+  it("rounds, and shows a sliver as <1 %", () => {
+    expect(percent(58, 100)).toBe("58 %");
+    expect(percent(1, 1000)).toBe("<1 %");
+    // Not all of it: 648 of 649.
+    expect(percent(648, 649)).toBe(">99 %");
+    expect(percent(649, 649)).toBe("100 %");
+    expect(percent(0, 100)).toBe("0 %");
+    expect(percent(0, 0)).toBe("0 %");
+  });
+});
+
+describe("the file list", () => {
+  it("lists the menus' values over every file: unknown last, resolutions best first", () => {
+    const facets = fileFacets(movies({ resolutions: [part("1080p", 3), part("", 2), part("4K", 1)] }));
+    expect(facets.groups.values).toEqual(["FuN", "GRP", ""]);
+    expect(facets.groups.counts.get("")).toBe(1);
+    expect(facets.resolutions.values).toEqual(["4K", "1080p", ""]);
+    expect(facets.codecs.values).toEqual(["x265", ""]);
+  });
+
+  it("asks the server for a page, filters repeated", () => {
+    const filters = { ...noListFilters(), groups: new Set(["FuN", ""]), codecs: new Set(["x265"]), languages: new Set(["EN"]) };
+    expect(filesUrl("shows", " heat ", filters, "size", "desc", 50)).toBe(
+      "/api/analytics/files?library=shows&q=heat&sort=size&dir=desc&offset=50&group=FuN&group=&codec=x265&language=EN"
+    );
+  });
+
+  it("says which files a page shows", () => {
+    expect(pageText(0, 50, 103)).toBe("1–50 of 103 files");
+    expect(pageText(100, 3, 103)).toBe("101–103 of 103 files");
+    expect(pageText(0, 0, 0)).toBe("No files");
+  });
+});

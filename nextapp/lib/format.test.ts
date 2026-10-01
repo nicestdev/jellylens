@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatNumber, plural, relativeTime, seasonLabel } from "./format";
+import { episodeCode, formatBytes, formatDate, formatNumber, plural, relativeTime, resolutionLabel, seasonLabel } from "./format";
 
 describe("plural", () => {
   it("adds s, or es after a hissing sound", () => {
@@ -39,5 +39,35 @@ describe("seasonLabel", () => {
   it("calls season 0 Specials", () => {
     expect(seasonLabel(0)).toBe("Specials");
     expect(seasonLabel(4)).toBe("Season 4");
+  });
+});
+
+describe("formatBytes", () => {
+  it("picks a binary unit, always with two decimals", () => {
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(900)).toBe("900 B");
+    expect(formatBytes(512 * 1024 ** 2)).toBe("512,00 MB");
+    expect(formatBytes(45.6 * 1024 ** 3)).toBe("45,60 GB");
+    expect(formatBytes(1.234 * 1024 ** 4)).toBe("1,23 TB");
+    expect(formatBytes(1.999 * 1024 ** 3)).toBe("2,00 GB");
+  });
+});
+
+describe("resolutionLabel", () => {
+  it("goes by width or height, so cropped films still count", () => {
+    expect(resolutionLabel()).toBe("");
+    expect(resolutionLabel(3840, 1600)).toBe("4K");
+    expect(resolutionLabel(1920, 800)).toBe("1080p");
+    expect(resolutionLabel(1280, 536)).toBe("720p");
+    expect(resolutionLabel(720, 576)).toBe("SD");
+  });
+});
+
+describe("episodeCode", () => {
+  it("numbers an episode, a double one too", () => {
+    expect(episodeCode(1, 2)).toBe("S01E02");
+    expect(episodeCode(10, 101, 102)).toBe("S10E101-E102");
+    expect(episodeCode(1, 2, 2)).toBe("S01E02");
+    expect(episodeCode(null, 2)).toBe("");
   });
 });

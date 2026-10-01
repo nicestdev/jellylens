@@ -16,6 +16,23 @@ describe("makeTrigger", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it("shares the run with another copy of the module (boot hook vs. routes)", async () => {
+    let finish!: (value: number) => void;
+    const fn = vi.fn(() => new Promise<number>((resolve) => (finish = resolve)));
+    const boot = makeTrigger("test", fn);
+    const route = makeTrigger("test", fn);
+
+    const a = boot();
+    expect(route.running()).toBe(true);
+    const b = route();
+    finish(42);
+
+    expect(await b).toBe(42);
+    expect(await a).toBe(42);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(route.running()).toBe(false);
+  });
+
   it("runs again once the last run ended, even after a failure", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const fn = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce("ok");

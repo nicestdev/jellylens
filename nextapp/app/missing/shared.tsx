@@ -1,9 +1,6 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { plural } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 // Shared by the TV Shows and Movies tabs of the Missing page.
 
@@ -18,83 +15,24 @@ export const TONES: Record<Tone, { badge: string; tile: string; ring: string }> 
   info: { badge: "bg-info/15 text-info", tile: "bg-info/15 text-info ring-info/40", ring: "ring-2 ring-info/70" },
 };
 
-// A clickable summary card: count of findings (unit) across how many
-// groups (shows, collections) — picking it shows that category below.
-export function StatCard({
-  label,
-  icon: Icon,
-  tone,
-  unit,
-  groupUnit,
-  count,
-  groups,
-  detail,
-  active,
-  loading,
-  onClick,
-}: {
-  label: string;
-  icon: LucideIcon;
-  tone: Tone;
-  unit: string;
-  groupUnit: string;
-  count: number;
-  groups: number;
-  detail?: string; // extra note after "in N shows"
-  active: boolean;
-  loading: boolean;
-  onClick: () => void;
-}) {
-  const empty = !loading && count === 0;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded-xl border bg-card p-4 text-left transition-colors outline-none hover:border-foreground/20 focus-visible:ring-3 focus-visible:ring-ring/50",
-        active && "border-primary/60 ring-1 ring-primary/40 hover:border-primary/60"
-      )}
-    >
-      <div className="flex items-center gap-2.5">
-        <span
-          className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-lg",
-            empty ? "bg-muted text-muted-foreground" : TONES[tone].badge
-          )}
-        >
-          <Icon className="size-4" />
-        </span>
-        <span className="text-sm leading-tight font-medium">{label}</span>
-      </div>
-      {loading ? (
-        <>
-          <Skeleton className="mt-4 h-7 w-24" />
-          <Skeleton className="mt-1.5 h-3 w-16" />
-        </>
-      ) : (
-        <>
-          <div className="mt-4 flex items-baseline gap-1.5">
-            <span className={cn("text-2xl font-semibold tracking-tight tabular-nums", empty && "text-muted-foreground")}>
-              {count}
-            </span>
-            <span className="text-sm text-muted-foreground">{count === 1 ? unit : `${unit}s`}</span>
-          </div>
-          <div className="mt-0.5 text-xs text-muted-foreground">{empty ? "Nothing to do" : [`in ${plural(groups, groupUnit)}`, detail].filter(Boolean).join(" · ")}</div>
-        </>
-      )}
-    </button>
-  );
-}
-
-export function CardSkeleton() {
+// A card while loading: a show's, or with collection a collection's (a
+// row of its own, the bigger poster and a strip of its movies').
+export function CardSkeleton({ collection }: { collection?: boolean }) {
   return (
     <div className="flex gap-4 rounded-xl border bg-card p-4">
-      <Skeleton className="aspect-2/3 w-20" />
+      <Skeleton className={collection ? "aspect-2/3 w-28" : "aspect-2/3 w-20"} />
       <div className="flex-1 space-y-2 pt-1">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="h-3 w-24" />
-        <Skeleton className="mt-4 h-5 w-full max-w-md" />
+        {collection ? (
+          <div className="flex gap-3 pt-2">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="aspect-2/3 w-24" />
+            ))}
+          </div>
+        ) : (
+          <Skeleton className="mt-4 h-5 w-full max-w-md" />
+        )}
       </div>
     </div>
   );

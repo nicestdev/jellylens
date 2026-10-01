@@ -7,6 +7,7 @@ import {
   Globe,
   ListChecks,
   Lock,
+  MonitorPlay,
   PackageSearch,
   RefreshCw,
   Server,
@@ -258,6 +259,27 @@ export default function SettingsPage() {
               checked={prefs.showFileNames}
               onCheckedChange={(checked) => setPref({ showFileNames: checked })}
               aria-label="File names on missing movies"
+            />
+          ) : (
+            <Skeleton className="h-[18px] w-8 rounded-full" />
+          )}
+        </label>
+        <label className="flex cursor-pointer items-center gap-3.5 border-t p-4">
+          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+            <MonitorPlay className="size-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">Releases below 720p</span>
+            <span className="block text-sm text-muted-foreground">
+              Shows XviD, SD and DVD releases on the Releases page. When off, titles with nothing else are not checked
+              on TMDB either.
+            </span>
+          </span>
+          {prefs ? (
+            <Switch
+              checked={prefs.showSdReleases}
+              onCheckedChange={(checked) => setPref({ showSdReleases: checked })}
+              aria-label="Releases below 720p"
             />
           ) : (
             <Skeleton className="h-[18px] w-8 rounded-full" />

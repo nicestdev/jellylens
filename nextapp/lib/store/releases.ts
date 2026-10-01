@@ -1,12 +1,24 @@
 import { db, tx } from "../db";
 import { fold, foldTitle } from "../text";
 import type { Release } from "../xrel";
+import { getPreferences } from "./preferences";
 import { all, one, run } from "./sql";
 
 // The release tables (release_groups, releases, imdb_lookups, title_matches,
 // match_overrides in lib/db.ts).
 
 const monthAgo = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+// xREL's sub-categories below 720p (its /p2p/categories). Unless the
+// showSdReleases preference is on, their releases are stored but left out
+// everywhere else: no tile, panel or filter shows them, and a title with
+// nothing else isn't checked on TMDB. Stored, so turning it on shows them
+// at once and a group's sync still knows where it left off.
+export const SD_QUALITIES = ["XviD", "x264-SD", "x265-SD", "DVD-R"];
+
+// The condition on releases (as r) that keeps them to the ones shown.
+const shownReleases = () =>
+  getPreferences().showSdReleases ? "1" : `r.quality NOT IN (${SD_QUALITIES.map((q) => `'${q}'`).join(", ")})`;
 
 // ---- Groups, in the order they were added
 
@@ -87,7 +99,7 @@ export function unlookedImdbIds(): { imdbId: string; type: string }[] {
   return all(
     `SELECT r.imdb_id AS imdbId, max(r.type) AS type
        FROM releases r LEFT JOIN imdb_lookups l ON l.imdb_id = r.imdb_id
-      WHERE r.imdb_id IS NOT NULL AND (l.imdb_id IS NULL OR (l.tmdb_id IS NULL AND l.checked_at < ?))
+      WHERE r.imdb_id IS NOT NULL AND ${shownReleases()} AND (l.imdb_id IS NULL OR (l.tmdb_id IS NULL AND l.checked_at < ?))
       GROUP BY r.imdb_id`,
     monthAgo()
   );
@@ -167,7 +179,7 @@ export function pendingTitles(only?: string): PendingTitle[] {
   const rows = all<{ titleKey: string; type: string; imdbId: string | null; names: string }>(
     `SELECT r.title_key AS titleKey, max(r.type) AS type, max(r.imdb_id) AS imdbId, json_group_array(r.name) AS names
        FROM releases r LEFT JOIN title_matches t ON t.title_key = r.title_key
-      WHERE ${only ? "r.title_key = ?" : "t.title_key IS NULL OR (t.status = 'unverified' AND t.checked_at < ?)"}
+      WHERE ${shownReleases()} AND (${only ? "r.title_key = ?" : "t.title_key IS NULL OR (t.status = 'unverified' AND t.checked_at < ?)"})
       GROUP BY r.title_key`,
     only ?? monthAgo()
   );
@@ -295,7 +307,7 @@ const FROM = `FROM releases r
 // Every word must be in a release name or the checked titles; facet values
 // of one kind are alternatives.
 function where(f: TitleFilters): { sql: string; params: unknown[] } {
-  const clauses: string[] = [];
+  const clauses: string[] = [shownReleases()];
   const params: unknown[] = [];
   for (const w of f.words) {
     clauses.push("(r.search LIKE ? ESCAPE '\\' OR ifnull(t.search, '') LIKE ? ESCAPE '\\')");
@@ -310,7 +322,7 @@ function where(f: TitleFilters): { sql: string; params: unknown[] } {
     clauses.push(`${column} IN (${values.map(() => "?").join(", ")})`);
     params.push(...values);
   }
-  return { sql: clauses.length ? "WHERE " + clauses.join(" AND ") : "", params };
+  return { sql: "WHERE " + clauses.join(" AND "), params };
 }
 
 export function queryTitles(
@@ -363,7 +375,7 @@ function countTitles(w: { sql: string; params: unknown[] }): number {
 }
 
 // Every tile, for "42 of 11.314 titles".
-export const tileCount = () => countTitles({ sql: "", params: [] });
+export const tileCount = () => countTitles(where({ words: [], group: [], quality: [], type: [] }));
 
 // What the filter menu offers, over everything so it doesn't shrink as you
 // narrow it down: groups in the order they were added, the rest A→Z.
@@ -371,9 +383,11 @@ export type ReleaseFacets = Record<"group" | "quality" | "type", string[]>;
 
 export function releaseFacets(): ReleaseFacets {
   const distinct = (column: "quality" | "type") =>
-    all<{ v: string }>(`SELECT DISTINCT ${column} AS v FROM releases WHERE ${column} <> '' ORDER BY v`).map((r) => r.v);
+    all<{ v: string }>(
+      `SELECT DISTINCT r.${column} AS v FROM releases r WHERE r.${column} <> '' AND ${shownReleases()} ORDER BY v`
+    ).map((r) => r.v);
   const groups = all<{ name: string }>(
-    `SELECT name FROM release_groups g WHERE EXISTS (SELECT 1 FROM releases r WHERE r.group_id = g.id)
+    `SELECT name FROM release_groups g WHERE EXISTS (SELECT 1 FROM releases r WHERE r.group_id = g.id AND ${shownReleases()})
       ORDER BY added_at, rowid`
   );
   return { group: groups.map((g) => g.name), quality: distinct("quality"), type: distinct("type") };
@@ -386,7 +400,7 @@ export function titleReleases(titleKey: string): TitleRelease[] {
   return all<TitleRelease>(
     `SELECT r.id, r.name, r.link, r.quality, r.published_at AS publishedAt, g.name AS "group"
        FROM releases r JOIN release_groups g ON g.id = r.group_id
-      WHERE r.title_key = ? ORDER BY r.published_at DESC`,
+      WHERE r.title_key = ? AND ${shownReleases()} ORDER BY r.published_at DESC`,
     titleKey
   );
 }
@@ -396,7 +410,7 @@ export function tileTitleKeys(key: string): string[] {
   const tmdb = key.match(TMDB_TILE);
   return all<{ titleKey: string }>(
     `SELECT r.title_key AS titleKey FROM releases r LEFT JOIN title_matches t ON t.title_key = r.title_key
-      WHERE ${tmdb ? "t.media_type = ? AND t.tmdb_id = ?" : "r.title_key = ? AND t.tmdb_id IS NULL"}
+      WHERE ${shownReleases()} AND ${tmdb ? "t.media_type = ? AND t.tmdb_id = ?" : "r.title_key = ? AND t.tmdb_id IS NULL"}
       GROUP BY r.title_key ORDER BY max(r.published_at) DESC, r.title_key`,
     ...(tmdb ? [tmdb[1], Number(tmdb[2])] : [key])
   ).map((r) => r.titleKey);
@@ -408,7 +422,7 @@ export function groupsByTile(keys: string[]): Map<string, string[]> {
   const rows = all<{ key: string; name: string }>(
     `SELECT t.media_type || ':' || t.tmdb_id AS key, g.name
        FROM title_matches t JOIN releases r ON r.title_key = t.title_key JOIN release_groups g ON g.id = r.group_id
-      WHERE t.tmdb_id IS NOT NULL AND t.media_type || ':' || t.tmdb_id IN (SELECT value FROM json_each(?))
+      WHERE t.tmdb_id IS NOT NULL AND ${shownReleases()} AND t.media_type || ':' || t.tmdb_id IN (SELECT value FROM json_each(?))
       GROUP BY key, g.id ORDER BY lower(g.name)`,
     JSON.stringify(keys)
   );

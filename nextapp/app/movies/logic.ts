@@ -5,15 +5,6 @@ import { countValues, matchesAny, sortedBy, type SortDir } from "@/lib/facets";
 // for its filter menus. No React here, so it's tested on its own
 // (logic.test.ts).
 
-export function resolutionLabel(width?: number, height?: number): string {
-  const w = width || 0, h = height || 0;
-  if (!w && !h) return "";
-  if (w >= 3800 || h >= 2100) return "4K";
-  if (w >= 1900 || h >= 1060) return "1080p";
-  if (w >= 1260 || h >= 700) return "720p";
-  return "SD";
-}
-
 // "2010 · 148 min" under the poster.
 export function movieMeta(item: MovieItem): string {
   const minutes = item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null;

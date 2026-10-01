@@ -8,6 +8,7 @@ const GLOBALS = [
   "__movieReleases",
   "__releaseSync",
   "__jellylensSyncState",
+  "__jellylensTriggers",
 ];
 
 export function resetServerState() {

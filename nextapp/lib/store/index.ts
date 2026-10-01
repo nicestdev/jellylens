@@ -2,6 +2,7 @@
 // module per area. Each sync replaces its area's data in one transaction.
 export * from "./sync-state";
 export * from "./library";
+export * from "./files";
 export * from "./tmdb";
 export * from "./missing";
 export * from "./ignored";

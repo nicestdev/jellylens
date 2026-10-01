@@ -25,7 +25,7 @@ the releases of favorite P2P groups (from xREL).
   better-sqlite3. `lib/db.ts` opens it and runs the migrations (one entry per
   schema version, tracked in `PRAGMA user_version`; never edit one that has
   shipped). Data access is in `lib/store/`, one module per area (library,
-  tmdb, missing, ignored, requests, preferences, releases, posters,
+  files, tmdb, missing, ignored, requests, preferences, releases, posters,
   sync-state), all re-exported by `lib/store/index.ts`; SQL helpers in
   `lib/store/sql.ts`. Every read goes to the database, so a page always sees
   what the last sync wrote; each sync replaces its data in one transaction.
@@ -54,7 +54,11 @@ intervals.
    `JELLYFIN_SYNC_INTERVAL_HOURS`, default 6): movies, shows and episodes of
    the first admin user (resolved at boot). Movies keep their file's name
    (for matching the release group) but not its path; `/api/movies` leaves
-   it out. Chains a missing recheck once TMDB has synced.
+   it out. Every movie's and episode's file goes to `media_files` for
+   Analytics (its name and size, audio languages, and the group, resolution
+   and codec `storedFiles` in `lib/analytics.ts` reads), in the same
+   transaction. Chains a missing
+   recheck once TMDB has synced.
 2. **TMDB** (`lib/sync-tmdb.ts`, stage `tmdb`,
    `TMDB_SYNC_INTERVAL_HOURS`, default 24): season/episode lists of every
    show matched to TMDB, and every TMDB collection an owned movie belongs to
@@ -104,7 +108,8 @@ own (key: its `title_key`). `GET /api/releases` searches, filters (group,
 quality, type), sorts and pages tiles in SQL, nothing cached; the filter
 menu lists its values without counts, which would mean another scan of
 every release. `GET /api/releases/<key>` gives a tile's titles with their
-releases and matches (the panel, `app/releases/title-panel.tsx`); `POST`
+releases and matches (the panel, `components/release-panel.tsx`, which
+the group badges on Requests and Missing open too, for admins); `POST`
 takes a decision about one of them (`titleKey`) and answers with the tile,
 or the title's new one if it was the tile's last.
 
@@ -130,8 +135,8 @@ out right away); Jellylens keeps its own HMAC-signed cookie (`lib/session.ts`,
 user list (cached a minute) on every request. Failed sign-ins are limited per
 IP and per username (`lib/rate-limit.ts`, 5 per 15 min). `proxy.ts` also
 rejects state changes with a cross-site `Sec-Fetch-Site`; `next.config.ts`
-sets the security headers. Jellyfin admins get Missing, Releases, Settings
-and the sync/ignore/config APIs (`ADMIN_ONLY`); everyone gets Movies, TV
+sets the security headers. Jellyfin admins get Missing, Releases, Analytics,
+Settings and the sync/ignore/config APIs (`ADMIN_ONLY`); everyone gets Movies, TV
 Shows and their own Requests. Server code reads the user with `currentUser()`
 (`lib/auth.ts`). `AUTH_ENABLED=false` turns it all off: everyone is
 `LOCAL_USER`, an admin, and requests are one shared list.
@@ -139,7 +144,8 @@ Shows and their own Requests. Server code reads the user with `currentUser()`
 Requests are one entry per title (`requests`) with everyone who asked
 (`requesters`); admins see everyone's, most wanted first. Each request
 lists the favorite groups that have released it (`groupsByTile` in
-`lib/store/releases.ts`, by TMDB entry), and Releases tiles matched to TMDB
+`lib/store/releases.ts`, by TMDB entry; Missing's collection movies you
+don't own say the same, `/api/collections`), and Releases tiles matched to TMDB
 can be requested from the grid (`RequestAction` in
 `components/request-tiles.tsx`).
 
@@ -153,10 +159,27 @@ that data (filtering, sorting, counts, tile texts) is plain functions in its
 `lib/facets.ts` (filter and sort) and `lib/format.ts` (plurals, numbers and
 dates German-style, relative times). Shared UI: `poster-card`
 (grid tile with corner badges, link or button), `filter-menu`, `sort-menu`,
-`search-input`, `empty-state`. Missing has one card per category (shows,
-collection movies, mismatches; `app/missing/`); ignore entries are
+`search-input`, `empty-state`, `stat-tile` (a number with a label and hint;
+a button that picks a category on Missing). Missing has a Movies and a TV Shows tab like
+Analytics, with one card per category (`app/missing/`): collection movies,
+and missing episodes (gaps in finished seasons), missing seasons, currently
+airing and mismatches; ignore entries are
 `{ kind: "missing" | "mismatch", seriesId, season }` or
 `{ kind: "collection", collectionId, movieId }` (`null` = all of it).
+Analytics (`app/analytics/`) has a tab each for the movies' and the
+episodes' files (`library=movies|shows`): `GET /api/analytics` has both
+libraries' totals for the tiles and the share charts (files and storage by
+group, files by resolution and by codec as donuts, and by audio language as
+radial bars, a ring each for German, English and Spanish out of every
+file, since a file can have several; in a sideways carousel), and
+`GET /api/analytics/files` searches, filters, sorts and pages a library's
+file list in SQL (`lib/store/files.ts`), like the Releases page, since a
+show library has tens of thousands. The donuts count files, not titles, so
+their parts add up to the whole; clicking a piece sets the file list's
+filter for its dimension. `releaseGroupOf` reads the group from the end of
+a scene-style or Sonarr/Radarr name, from the front of a lowercase scene
+short name ("pl3x-heman.s01e01"), or else from the file's folder (season
+packs); files without one are "n/a".
 
 ## Development
 

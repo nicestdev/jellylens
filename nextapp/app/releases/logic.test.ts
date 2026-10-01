@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { MatchInfo, ReleasesResponse } from "@/lib/api-types";
+import type { ReleasesResponse } from "@/lib/api-types";
 import {
   facetValues,
-  matchActions,
-  matchNote,
   noFilters,
   qualityBadges,
   releasesUrl,
   subtitle,
-  titleMeta,
 } from "./logic";
 
 describe("releasesUrl", () => {
@@ -38,16 +35,12 @@ describe("facetValues", () => {
   });
 });
 
-describe("tile texts", () => {
+describe("qualityBadges", () => {
   it("badges the HD resolutions a title comes in, 4K last", () => {
     expect(qualityBadges(["HD-2160p", "SD", "HD-1080p"])).toEqual([{ label: "1080p" }, { label: "4K", tone: "accent" }]);
     expect(qualityBadges(["DVDR"])).toEqual([]);
   });
 
-  it("shows the year and the number of releases", () => {
-    expect(titleMeta({ year: 2021, releases: 3 })).toBe("2021 · 3 releases");
-    expect(titleMeta({ year: null, releases: 1 })).toBe("1 release");
-  });
 });
 
 describe("subtitle", () => {
@@ -67,31 +60,5 @@ describe("subtitle", () => {
     expect(subtitle(data({}), false)).toBe("11.337 titles from 3 groups");
     expect(subtitle(data({ groups: 1 }), false)).toBe("11.337 titles from 1 group");
     expect(subtitle(data({}), true)).toBe("42 of 11.337 titles");
-  });
-});
-
-describe("matchActions and matchNote", () => {
-  const match = (over: Partial<MatchInfo>): MatchInfo => ({ status: "verified", shown: null, verdict: null, candidate: null, ...over });
-  const verdicts = (m: MatchInfo) => matchActions(m).map((a) => a.verdict);
-
-  it("offers to reject an automatic match", () => {
-    expect(verdicts(match({}))).toEqual(["wrong"]);
-    expect(verdicts(match({ status: "searched" }))).toEqual(["wrong"]);
-    expect(matchNote(match({}))).toBeNull();
-  });
-
-  it("offers xREL's candidate when it wasn't taken", () => {
-    const candidate = { title: "Dune", year: 2021 };
-    expect(matchActions(match({ status: "unverified", candidate }))).toEqual([
-      { label: "Use xREL's match: Dune (2021)", verdict: "xrel" },
-    ]);
-    expect(verdicts(match({ status: "unverified" }))).toEqual([]);
-    expect(matchNote(match({ status: "unverified" }))).toBe("Not matched: TMDB doesn't know this title.");
-  });
-
-  it("offers to undo a decision by hand", () => {
-    expect(verdicts(match({ status: "confirmed", verdict: "xrel" }))).toEqual([null]);
-    expect(verdicts(match({ status: "rejected", verdict: "wrong", candidate: { title: "Dune", year: null } }))).toEqual(["xrel", null]);
-    expect(matchNote(match({ status: "rejected", verdict: "wrong" }))).toBe("Marked as a wrong match by you.");
   });
 });

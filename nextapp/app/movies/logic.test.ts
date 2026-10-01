@@ -1,22 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { movie } from "@/test/fixtures";
-import { movieMeta, movieView, resolutionLabel, type MovieFilters } from "./logic";
+import { movieMeta, movieView, type MovieFilters } from "./logic";
 
 const noFilters = (over: Partial<MovieFilters> = {}): MovieFilters => ({
   query: "",
   genres: new Set(),
   langs: new Set(),
   ...over,
-});
-
-describe("resolutionLabel", () => {
-  it("goes by width or height, so cropped films still count", () => {
-    expect(resolutionLabel()).toBe("");
-    expect(resolutionLabel(3840, 1600)).toBe("4K");
-    expect(resolutionLabel(1920, 800)).toBe("1080p");
-    expect(resolutionLabel(1280, 536)).toBe("720p");
-    expect(resolutionLabel(720, 576)).toBe("SD");
-  });
 });
 
 describe("movieMeta", () => {

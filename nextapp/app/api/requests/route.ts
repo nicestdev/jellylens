@@ -43,7 +43,7 @@ async function listResponse(user: SessionUser) {
   const withAvail = TMDB_API_KEY
     ? await withAvailability(items, TMDB_API_KEY, await ensureMetadataLanguage())
     : items.map((r) => ({ ...r, availability: null }));
-  return Response.json({ Items: withAvail, all: overview } satisfies RequestsResponse);
+  return Response.json({ Items: withAvail, all: overview, admin: user.admin } satisfies RequestsResponse);
 }
 
 // Requests made while sign-in was off belong to the local user; the first

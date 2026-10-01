@@ -6,6 +6,7 @@ import { CornerBadge, PosterCard, type PosterBadge } from "@/components/poster-c
 import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
 import type { DiscoverItem, DiscoverResponse, RequestItem as Request, RequestsResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
+import { releasedHint, releasedLabel } from "@/lib/release-labels";
 
 type MediaType = "movie" | "tv";
 
@@ -157,6 +158,8 @@ export function useRequests() {
   return {
     requests: sorted,
     overview: all,
+    admin: list.data?.admin ?? false,
+    reload: list.reload,
     requestedKeys: new Set(mine.map(itemKey)),
     availableCount: shown.filter((r) => r.library).length,
     loading: list.loading,
@@ -193,9 +196,12 @@ export function useDiscover(q: string) {
   return { items: loading ? [] : results!.items, loading, error: results?.error ?? "" };
 }
 
+// showReleases: opens the releases of the groups on a request's badges
+// (admins only).
 type TileContext = {
   pending: Set<string>;
   toggle: (item: Result, requested: boolean, everyone?: boolean) => void;
+  showReleases?: (item: Request) => void;
 };
 
 // The bottom-right corner of anything that can be requested (Discover,
@@ -234,8 +240,8 @@ function requesterNames(item: Request): string {
   return (item.requesters ?? []).map((q) => q.name).join(", ");
 }
 
-// One request: × removes it; bottom left, a badge for each of the favorite
-// groups that have released it. In the admin's overview (item.requesters
+// One request: × removes it; bottom left, a badge for the favorite groups
+// that have released it ("FuN +1"), which opens their releases for an admin. In the admin's overview (item.requesters
 // set) the info line says who asked, a badge top left counts them once it's
 // more than one, and × removes it for all of them.
 export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) {
@@ -249,7 +255,13 @@ export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) 
       title={item.title}
       meta={overview ? [item.year, names].filter(Boolean).join(" · ") : metaLine(item)}
       badge={statusBadge(item, "Available")}
-      filterBadge={item.releaseGroups.map((g) => ({ label: g, hint: `Released by ${g}` }))}
+      filterBadge={
+        item.releaseGroups.length
+          ? { label: releasedLabel(item.releaseGroups), hint: releasedHint(item.releaseGroups) }
+          : undefined
+      }
+      onFilterBadge={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
+      filterBadgeLabel={`Show releases of ${item.title}`}
       countBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
       action={
         <TileButton
