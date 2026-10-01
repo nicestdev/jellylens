@@ -107,6 +107,26 @@ describe("ShareChart", () => {
     expect(screen.getAllByText("1 file")).toHaveLength(2);
   });
 
+  it("steps through the charts one at a time with the arrows", async () => {
+    const user = userEvent.setup();
+    chart();
+    // No layout in the test: a track 600 wide over 1500 of cards 294 wide.
+    const track = screen.getByText("Files by group").closest("figure")!.parentElement!.parentElement!;
+    Object.defineProperties(track, {
+      clientWidth: { value: 600 },
+      scrollWidth: { value: 1500 },
+      scrollLeft: { value: 0, writable: true },
+    });
+    for (const card of track.children) vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ width: 294 } as DOMRect);
+    const scrollBy = vi.fn();
+    track.scrollBy = scrollBy;
+    fireEvent.scroll(track);
+
+    expect(screen.getByRole("button", { name: "Previous charts" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "More charts" }));
+    expect(scrollBy).toHaveBeenCalledWith({ left: 294, behavior: "smooth" });
+  });
+
   it("draws nothing without files", () => {
     const { container } = render(
       <ShareChart stats={{ ...movies, files: 0, size: 0, groups: [], resolutions: [], codecs: [], languages: [] }} filters={noListFilters()} onSelect={() => {}} />

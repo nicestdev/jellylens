@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         {children}
-        {user ? <Footer /> : null}
+        <Footer />
       </body>
     </html>
   );

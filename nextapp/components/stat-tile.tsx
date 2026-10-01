@@ -42,7 +42,7 @@ export function StatTile({
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active}
+      aria-pressed={Boolean(active)}
       className={cn(
         "rounded-xl border bg-card p-4 text-left transition-colors outline-none hover:border-foreground/20 focus-visible:ring-3 focus-visible:ring-ring/50",
         active && "border-primary/60 ring-1 ring-primary/40 hover:border-primary/60"

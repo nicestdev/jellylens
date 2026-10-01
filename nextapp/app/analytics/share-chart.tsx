@@ -286,7 +286,8 @@ function Carousel({ title, children }: { title: string; children: ReactNode[] })
     const el = track.current;
     const card = el?.firstElementChild;
     if (!el || !card) return;
-    el.scrollBy({ left: dir * (card.getBoundingClientRect().width + parseFloat(getComputedStyle(el).columnGap)), behavior: "smooth" });
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+    el.scrollBy({ left: dir * (card.getBoundingClientRect().width + gap), behavior: "smooth" });
   };
 
   return (

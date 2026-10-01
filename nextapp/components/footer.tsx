@@ -11,7 +11,8 @@ function GitHubMark({ className }: { className?: string }) {
   );
 }
 
-// Version and a link to the repo, at the bottom of every signed-in page.
+// Version and a link to the repo, at the bottom of every page (the sign-in
+// page too).
 export function Footer() {
   return (
     <footer className="mt-auto shrink-0">
