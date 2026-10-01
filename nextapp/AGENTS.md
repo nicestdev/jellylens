@@ -26,7 +26,7 @@ the releases of favorite P2P groups (from xREL).
   schema version, tracked in `PRAGMA user_version`; never edit one that has
   shipped). Data access is in `lib/store/`, one module per area (library,
   files, tmdb, missing, ignored, requests, preferences, releases, posters,
-  sync-state), all re-exported by `lib/store/index.ts`; SQL helpers in
+  sync-state, upgrades), all re-exported by `lib/store/index.ts`; SQL helpers in
   `lib/store/sql.ts`. Every read goes to the database, so a page always sees
   what the last sync wrote; each sync replaces its data in one transaction.
   Jellyfin items are stored with only the fields Jellylens reads
@@ -136,7 +136,7 @@ user list (cached a minute) on every request. Failed sign-ins are limited per
 IP and per username (`lib/rate-limit.ts`, 5 per 15 min). `proxy.ts` also
 rejects state changes with a cross-site `Sec-Fetch-Site`; `next.config.ts`
 sets the security headers. Jellyfin admins get Missing, Releases, Analytics,
-Settings and the sync/ignore/config APIs (`ADMIN_ONLY`); everyone gets Movies, TV
+Upgrades, Settings and the sync/ignore/config APIs (`ADMIN_ONLY`); everyone gets Movies, TV
 Shows and their own Requests. Server code reads the user with `currentUser()`
 (`lib/auth.ts`). `AUTH_ENABLED=false` turns it all off: everyone is
 `LOCAL_USER`, an admin, and requests are one shared list.
@@ -158,7 +158,8 @@ that data (filtering, sorting, counts, tile texts) is plain functions in its
 `logic.ts` next to it, tested without React; shared helpers are in
 `lib/facets.ts` (filter and sort) and `lib/format.ts` (plurals, numbers and
 dates German-style, relative times). Shared UI: `poster-card`
-(grid tile with corner badges, link or button), `filter-menu`, `sort-menu`,
+(grid tile with corner badges, link or button), `filter-menu` (multi-select
+sections, or `single` ones that always have one picked), `sort-menu`,
 `search-input`, `empty-state`, `stat-tile` (a number with a label and hint;
 a button that picks a category on Missing). Missing has a Movies and a TV Shows tab like
 Analytics, with one card per category (`app/missing/`): collection movies,
@@ -180,6 +181,27 @@ filter for its dimension. `releaseGroupOf` reads the group from the end of
 a scene-style or Sonarr/Radarr name, from the front of a lowercase scene
 short name ("pl3x-heman.s01e01"), or else from the file's folder (season
 packs); files without one are "n/a".
+
+Upgrades (`app/upgrades/`) compares the files with the favorite groups'
+releases, a Movies and a TV Shows tab again. `GET /api/upgrades?library=`
+has every owned movie, or season of a show, as a unit (`lib/upgrades.ts`:
+its files' groups, quality, codec, audio and size) with what each favorite
+group has of it (by TMDB entry through `title_matches`): a movie's
+releases, a season's pack or all of its owned episodes one by one
+(`episodesOf` reads `S01`, `S01E02`; a group with only some has nothing
+to offer), per quality and codec, with xREL's size (`releases.size_mb`,
+filled in for releases stored before by every group walking its list once
+more) and DL/ML, quality and codec from the name. Nothing is stored: each
+request works it out anew, so a Jellyfin sync that sees a swapped file
+takes it off the list. The page adds it up itself (`app/upgrades/logic.ts`),
+so the filter needs no request: a target group (the one to switch to),
+quality and codec, one of each and remembered per library in the browser;
+source groups (what you have now) and "adds original audio". Each row is
+what changes (group, quality, codec, audio as from → to chips), with the
+sizes and the change in storage; the tiles add it up, and the title opens
+the release panel on just the target's releases in that quality, codec
+and season (its `only`). Only favorites can be picked: scene groups'
+releases aren't on xREL's P2P lists.
 
 ## Development
 

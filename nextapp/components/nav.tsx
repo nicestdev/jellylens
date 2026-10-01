@@ -28,6 +28,7 @@ const allLinks: { href: string; label: string; admin?: boolean }[] = [
   { href: "/missing", label: "Missing", admin: true },
   { href: "/releases", label: "Releases", admin: true },
   { href: "/analytics", label: "Analytics", admin: true },
+  { href: "/upgrades", label: "Upgrades", admin: true },
   { href: "/settings", label: "Settings", admin: true },
 ];
 
@@ -128,16 +129,17 @@ export function Nav({ user, canSignOut }: { user: SessionUser; canSignOut: boole
           <div
             style={{ transitionDelay: open ? `${60 + links.length * 40}ms` : "0ms" }}
             className={cn(
-              "mt-8 flex items-center justify-between gap-4 border-t pt-6 transition-[opacity,transform] duration-300 ease-out",
+              "mt-8 border-t pt-6 transition-[opacity,transform] duration-300 ease-out",
               open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
             )}
           >
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium">{user.name}</div>
-              <div className="text-xs text-muted-foreground">{roleLabel(user)}</div>
-            </div>
-            <button type="button" onClick={signOut} className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}>
-              <LogOut />
+            {/* Reads like the links above, one size down. */}
+            <button
+              type="button"
+              onClick={signOut}
+              className="-my-2 flex items-center gap-2.5 py-2 text-xl font-semibold tracking-tight text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <LogOut className="size-5" />
               Sign out
             </button>
           </div>

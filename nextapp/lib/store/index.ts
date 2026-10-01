@@ -10,3 +10,4 @@ export * from "./requests";
 export * from "./preferences";
 export * from "./posters";
 export * from "./releases";
+export * from "./upgrades";

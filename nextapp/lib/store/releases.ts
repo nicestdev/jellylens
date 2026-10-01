@@ -17,7 +17,7 @@ const monthAgo = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOStri
 export const SD_QUALITIES = ["XviD", "x264-SD", "x265-SD", "DVD-R"];
 
 // The condition on releases (as r) that keeps them to the ones shown.
-const shownReleases = () =>
+export const shownReleases = () =>
   getPreferences().showSdReleases ? "1" : `r.quality NOT IN (${SD_QUALITIES.map((q) => `'${q}'`).join(", ")})`;
 
 // ---- Groups, in the order they were added
@@ -55,16 +55,20 @@ export function releaseCounts() {
 }
 
 // Adds one page of a group's releases. known: some were stored already,
-// which tells an incremental sync it has caught up.
+// which tells an incremental sync it has caught up. A stored one without
+// a size gets it now (stored before sizes were).
 export function insertReleases(groupId: string, releases: Release[]): { added: number; known: boolean } {
   return tx(() => {
-    const insert = db().prepare(
-      `INSERT OR IGNORE INTO releases (id, group_id, title_key, name, link, type, quality, published_at, imdb_id, search)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    const exists = db().prepare("SELECT 1 FROM releases WHERE id = ?");
+    const upsert = db().prepare(
+      `INSERT INTO releases (id, group_id, title_key, name, link, type, quality, published_at, imdb_id, search, size_mb)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET size_mb = excluded.size_mb WHERE releases.size_mb IS NULL`
     );
     let added = 0;
     for (const r of releases) {
-      added += insert.run(
+      if (!exists.get(r.id)) added++;
+      upsert.run(
         r.id,
         groupId,
         r.titleKey,
@@ -74,8 +78,9 @@ export function insertReleases(groupId: string, releases: Release[]): { added: n
         r.quality,
         r.publishedAt,
         r.imdbId ?? null,
-        fold(r.name)
-      ).changes;
+        fold(r.name),
+        r.sizeMb ?? null
+      );
     }
     return { added, known: added < releases.length };
   });

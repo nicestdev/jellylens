@@ -12,6 +12,7 @@ export type XrelP2pRelease = {
   link_href: string;
   category?: { meta_cat?: string; sub_cat?: string };
   pub_time: number;
+  size_mb?: number;
   group?: { id: string; name: string };
   ext_info?: { id?: string; type?: string; uris?: string[] };
 };
@@ -30,7 +31,8 @@ type XrelPage = {
 // the ones matched to the same movie back on one tile). Not a show's: its
 // seasons' releases often carry their own year. imdbId: the IMDb id xREL
 // links it to, only a candidate (see title_matches in lib/db.ts). quality:
-// xREL's sub-category ("HD-1080p", "HD-2160p"); type: movie/tv.
+// xREL's sub-category ("HD-1080p", "HD-2160p"); type: movie/tv. sizeMb:
+// how big it is, if xREL says.
 export type Release = {
   id: string;
   name: string;
@@ -38,6 +40,7 @@ export type Release = {
   type: string;
   quality: string;
   publishedAt: number; // unix seconds
+  sizeMb?: number;
   titleKey: string;
   imdbId?: string;
 };
@@ -89,6 +92,7 @@ export function toRelease(r: XrelP2pRelease): Release {
     type,
     quality: r.category?.sub_cat || "",
     publishedAt: r.pub_time,
+    sizeMb: r.size_mb || undefined,
     titleKey: r.ext_info?.id ? r.ext_info.id + (year ? "~" + year : "") : "release:" + r.id,
     imdbId: imdb,
   };

@@ -96,6 +96,25 @@ describe("ReleasePanel", () => {
     expect(screen.getByText(/Heat\.1995\.German\.DL\.2160p/)).toBeInTheDocument();
   });
 
+  it("lists only the releases it's told to keep, saying which", async () => {
+    const fun = { ...bluray, Items: [...bluray.Items, { ...bluray.Items[0], id: "fun", name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-FuN", group: "FuN" }] };
+    api({ key: "movie:949", titles: [fun, rip] });
+    render(
+      <ReleasePanel
+        title={tile}
+        onClose={() => {}}
+        onChanged={() => {}}
+        only={{ keep: (r) => r.group === "FuN", note: "Only FuN's releases" }}
+      />
+    );
+    expect(await screen.findByText(/x265-FuN/)).toBeInTheDocument();
+    expect(screen.getByText("Only FuN's releases")).toBeInTheDocument();
+    // The VECTOR releases, and the title with none left, are gone.
+    expect(screen.getByText("1995 · 1 release")).toBeInTheDocument();
+    expect(screen.queryByText(/x265-VECTOR/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/HDRip/)).not.toBeInTheDocument();
+  });
+
   it("says when the releases can't be loaded", async () => {
     mockFetch(() => json({ error: "database is locked" }, { status: 500 }));
     render(<ReleasePanel title={tile} onClose={() => {}} onChanged={() => {}} />);

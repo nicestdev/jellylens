@@ -13,6 +13,7 @@ const p2p = (over: Partial<xrel.XrelP2pRelease> = {}): xrel.XrelP2pRelease => ({
   link_href: "https://www.xrel.to/p2p/1-Heat/nfo.html",
   category: { meta_cat: "movie", sub_cat: "HD-1080p" },
   pub_time: 1790000000,
+  size_mb: 11800,
   group: { id: "g1", name: "VECTOR" },
   ext_info: { id: "e1", type: "movie", uris: ["imdb:tt0113277"] },
   ...over,
@@ -27,6 +28,7 @@ describe("toRelease", () => {
       type: "movie",
       quality: "HD-1080p",
       publishedAt: 1790000000,
+      sizeMb: 11800,
       titleKey: "e1~1995",
       imdbId: "tt0113277",
     });
@@ -36,6 +38,11 @@ describe("toRelease", () => {
     expect(xrel.toRelease(p2p({ dirname: "Heat.German.AC3.HDRip.XViD-VECTOR" })).titleKey).toBe("e1");
     const show = p2p({ dirname: "The.Boys.2019.S04E08.German.DL.2160p.WEB.H265-ZeroTwo", ext_info: { id: "e2", type: "tv" } });
     expect(xrel.toRelease(show).titleKey).toBe("e2");
+  });
+
+  it("has no size when xREL gives none", () => {
+    expect(xrel.toRelease(p2p({ size_mb: undefined })).sizeMb).toBeUndefined();
+    expect(xrel.toRelease(p2p({ size_mb: 0 })).sizeMb).toBeUndefined();
   });
 
   it("lets a release without a title stand alone", () => {

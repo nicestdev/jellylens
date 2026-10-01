@@ -3,13 +3,15 @@ import { cn } from "@/lib/utils";
 
 // A number with what it is and a hint (Analytics, Missing). With onClick
 // it's a button that picks what's shown below (active: picked). muted: a
-// zero, nothing to see.
+// zero, nothing to see. tone: the number is good or bad news (Upgrades:
+// storage freed or taken).
 export function StatTile({
   label,
   value,
   hint,
   loading,
   muted,
+  tone,
   active,
   onClick,
 }: {
@@ -18,6 +20,7 @@ export function StatTile({
   hint: string;
   loading?: boolean;
   muted?: boolean;
+  tone?: "good" | "bad";
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -31,7 +34,16 @@ export function StatTile({
         </>
       ) : (
         <>
-          <div className={cn("mt-1 text-2xl font-semibold tracking-tight", muted && "text-muted-foreground")}>{value}</div>
+          <div
+            className={cn(
+              "mt-1 text-2xl font-semibold tracking-tight",
+              muted && "text-muted-foreground",
+              !muted && tone === "good" && "text-emerald-400",
+              !muted && tone === "bad" && "text-red-400"
+            )}
+          >
+            {value}
+          </div>
           <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>
         </>
       )}

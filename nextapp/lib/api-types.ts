@@ -16,6 +16,7 @@ import type { MatchInfo, ReleaseFacets, ReleaseGroup, TitleRelease, TitleRow } f
 import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
 import type { FileListRow, FilePart, FileTotals } from "./store";
+import type { Unit } from "./upgrades";
 
 export type { IgnoreEntry, MatchInfo, Preferences, TitleRelease };
 
@@ -146,3 +147,18 @@ export type AnalyticsResponse = { movies: LibraryAnalytics; shows: LibraryAnalyt
 // files at most); matched: how many files the search and filters leave.
 export type FilesResponse = { matched: number; pageSize: number; Items: FileListRow[] };
 export type { FileListRow, FilePart };
+
+// GET /api/upgrades?library=movies|shows — every owned movie, or season of
+// a show, with what the favorite groups have released of it (Upgrades
+// page). groups: every release group of the library's files, most files
+// first (null: none named). favorites: the favorite groups, in the order
+// they were added. sizesPending: a releases sync still has to fill in
+// some of their sizes.
+export type UpgradesResponse = {
+  units: Unit[];
+  groups: FilePart<string | null>[];
+  favorites: string[];
+  sizesPending: boolean;
+  syncedAt: string | null;
+};
+export type { Alternative, Tier, Unit } from "./upgrades";

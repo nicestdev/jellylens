@@ -335,7 +335,7 @@ function Carousel({ title, children }: { title: string; children: ReactNode[] })
 
 // What makes up the library: the files and storage by release group (the
 // same groups in the same colors in both, so hovering one picks it out in
-// both), then the files by resolution, by codec and by audio language. A piece's files are
+// both), then the files by audio language, by resolution and by codec. A piece's files are
 // listed below on click (onSelect), which sets the file list's filters;
 // a piece stays picked out while they list exactly its files.
 export function ShareChart({
@@ -354,16 +354,16 @@ export function ShareChart({
   const rings: Ring[] = [
     { key: "group-files", title: "Files by group", segments: groups, measure: "files" },
     { key: "group-size", title: "Storage by group", segments: groups, measure: "size" },
+    {
+      key: "language",
+      title: "Files by audio language",
+      segments: languageSegments(stats),
+      measure: "files",
+      overlap: { total: stats.files },
+    },
     { key: "resolution", title: "Files by resolution", segments: resolutionSegments(stats), measure: "files" },
     { key: "codec", title: "Files by codec", segments: codecSegments(stats), measure: "files" },
   ];
-  rings.push({
-    key: "language",
-    title: "Files by audio language",
-    segments: languageSegments(stats),
-    measure: "files",
-    overlap: { total: stats.files },
-  });
   const selected = selectedSegments(rings.flatMap((r) => r.segments), filters);
 
   return (

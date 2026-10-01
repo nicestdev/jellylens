@@ -176,6 +176,13 @@ const MIGRATIONS: string[] = [
   -- Files used to be kept in the movies' JSON; the next sync fills the table.
   UPDATE movies SET data = json_remove(data, '$.Files');
   `,
+  `
+  -- ---- Upgrades: how big each release is (xREL's size_mb, NULL if it
+  -- gives none). Releases stored before have none: every group walks its
+  -- whole list once more, filling them in.
+  ALTER TABLE releases ADD COLUMN size_mb INTEGER;
+  UPDATE release_groups SET complete = 0;
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

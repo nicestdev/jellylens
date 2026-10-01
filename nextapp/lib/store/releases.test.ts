@@ -71,6 +71,22 @@ describe("insertReleases", () => {
     expect(insertReleases("g1", [release("1"), release("2")])).toEqual({ added: 2, known: false });
     expect(insertReleases("g1", [release("3"), release("2")])).toEqual({ added: 1, known: true });
   });
+
+  it("keeps each release's size, filling in one stored before sizes were", () => {
+    addGroup("g1", "FuN");
+    insertReleases("g1", [release("1"), release("2", { sizeMb: 4200 })]);
+    const sizes = () => db().prepare("SELECT id, size_mb AS sizeMb FROM releases ORDER BY id").all();
+    expect(sizes()).toEqual([
+      { id: "1", sizeMb: null },
+      { id: "2", sizeMb: 4200 },
+    ]);
+    // Seen again with a size: filled in, but not counted as new.
+    expect(insertReleases("g1", [release("1", { sizeMb: 7000 }), release("2", { sizeMb: 1 })])).toEqual({ added: 0, known: true });
+    expect(sizes()).toEqual([
+      { id: "1", sizeMb: 7000 },
+      { id: "2", sizeMb: 4200 },
+    ]);
+  });
 });
 
 describe("queryTitles", () => {

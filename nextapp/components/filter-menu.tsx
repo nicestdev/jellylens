@@ -14,6 +14,9 @@ import {
 import { cn } from "@/lib/utils";
 
 // One multi-select facet (Status, Genre, Language, …) of the toolbar filter.
+// single: one value always picked, like a radio group (Upgrades: the
+// group, the quality); onToggle picks it. It counts as one filter while
+// it's off its default (changed).
 export type Facet = {
   key: string;
   label: string;
@@ -22,7 +25,11 @@ export type Facet = {
   selected: Set<string>;
   onToggle: (value: string) => void;
   format?: (value: string) => string;
+  single?: boolean;
+  changed?: boolean;
 };
+
+const activeIn = (f: Facet) => (f.single ? Number(Boolean(f.changed)) : f.selected.size);
 
 function CountPill({ n }: { n: number }) {
   return (
@@ -43,14 +50,25 @@ function FacetOptions({ facet }: { facet: Facet }) {
         // look for a multi-select list.
         className="gap-2.5 pr-2 [&>[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden"
       >
-        <span
-          className={cn(
-            "grid size-4 shrink-0 place-items-center rounded-[4px] border transition-colors",
-            checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
-          )}
-        >
-          {checked ? <Check className="size-3" /> : null}
-        </span>
+        {facet.single ? (
+          <span
+            className={cn(
+              "grid size-4 shrink-0 place-items-center rounded-full border transition-colors",
+              checked ? "border-primary" : "border-input"
+            )}
+          >
+            {checked ? <span className="size-2 rounded-full bg-primary" /> : null}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "grid size-4 shrink-0 place-items-center rounded-[4px] border transition-colors",
+              checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
+            )}
+          >
+            {checked ? <Check className="size-3" /> : null}
+          </span>
+        )}
         <span className="flex-1">{format(value)}</span>
         {facet.counts ? (
           <span className="ml-6 text-xs text-muted-foreground tabular-nums">{facet.counts.get(value) ?? 0}</span>
@@ -67,7 +85,7 @@ function FacetOptions({ facet }: { facet: Facet }) {
 export function FilterMenu({ facets }: { facets: Facet[] }) {
   const shown = facets.filter((f) => f.values.length > 0);
   if (shown.length === 0) return null;
-  const active = shown.reduce((sum, f) => sum + f.selected.size, 0);
+  const active = shown.reduce((sum, f) => sum + activeIn(f), 0);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -91,7 +109,7 @@ export function FilterMenu({ facets }: { facets: Facet[] }) {
             {/* Sticky, so the section you're scrolling through stays named. */}
             <DropdownMenuLabel className="sticky top-0 z-10 flex items-center gap-2 bg-popover pt-2">
               <span className="flex-1">{facet.label}</span>
-              {facet.selected.size > 0 ? <CountPill n={facet.selected.size} /> : null}
+              {activeIn(facet) > 0 ? <CountPill n={activeIn(facet)} /> : null}
             </DropdownMenuLabel>
             <FacetOptions facet={facet} />
           </DropdownMenuGroup>

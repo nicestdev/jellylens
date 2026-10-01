@@ -3,7 +3,7 @@ import { json, mockFetch } from "@/test/http";
 import type { SessionUser } from "@/lib/session";
 import { NextRequest } from "next/server";
 import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
-import { replaceJellyfin } from "@/lib/store";
+import { addGroup, insertReleases, replaceJellyfin, saveTitleMatch } from "@/lib/store";
 import { movie, show } from "@/test/fixtures";
 
 // Route handlers, called directly with a Request. Who's signed in comes
@@ -300,6 +300,65 @@ describe("GET /api/movies and /api/analytics", () => {
     expect(await files("sort=size")).toMatchObject({ Items: [{ size: 42 }, { size: 8 }] });
     expect(await files("sort=nonsense&offset=1")).toMatchObject({ matched: 2, Items: [{ title: "Heat" }] });
     expect(await files("library=shows")).toMatchObject({ matched: 1, Items: [{ title: "Silo", season: 1, episode: 1 }] });
+  });
+});
+
+describe("GET /api/upgrades", () => {
+  const upgrades = async (query: string) => {
+    const { GET } = await import("./upgrades/route");
+    return (await GET(new NextRequest("http://jellylens.test/api/upgrades?" + query))).json();
+  };
+
+  it("has each owned movie with the favorites' releases of it, and the library's groups", async () => {
+    replaceJellyfin(
+      {
+        movies: [movie({ Id: "m1", Name: "Heat" })],
+        shows: [],
+        episodes: [],
+        files: storedFiles([
+          {
+            kind: "movie",
+            id: "m1",
+            parentId: "m1",
+            title: "Heat",
+            year: 1995,
+            tmdbId: "949",
+            files: [{ Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv", Size: 8, Codec: "h264", Width: 1920 }],
+          },
+        ]),
+      },
+      "2026-10-01T00:00:00.000Z"
+    );
+    addGroup("g1", "VECTOR");
+    insertReleases("g1", [
+      {
+        id: "r1",
+        name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR",
+        link: "https://www.xrel.to/p2p/r1",
+        type: "movie",
+        quality: "HD-1080p",
+        publishedAt: 1000,
+        sizeMb: 2,
+        titleKey: "t1",
+      },
+    ]);
+    saveTitleMatch("t1", "verified", { mediaType: "movie", tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null }, { title: "Heat", year: 1995 });
+
+    const body = await upgrades("library=movies");
+    expect(body).toMatchObject({
+      groups: [{ value: "w00t", files: 1, size: 8 }],
+      favorites: ["VECTOR"],
+      sizesPending: true,
+      syncedAt: null,
+    });
+    expect(body.units).toEqual([
+      expect.objectContaining({
+        key: "m1",
+        tier: "1080p",
+        alternatives: [expect.objectContaining({ group: "VECTOR", size: 2 * 1024 * 1024, audio: "DL" })],
+      }),
+    ]);
+    expect(await upgrades("library=shows")).toMatchObject({ units: [], groups: [] });
   });
 });
 

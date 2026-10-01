@@ -47,14 +47,14 @@ describe("ShareChart", () => {
       "GRP25 %1",
       "FuN25 %1,00 GB",
       "GRP75 %3,00 GB",
+      // Languages out of every file, so they can add up to more.
+      "German100 %4",
+      "English25 %1",
       // Resolutions and codecs with the most files first.
       "1080p75 %3",
       "4K25 %1",
       "x26575 %3",
       "x26425 %1",
-      // Languages out of every file, so they can add up to more.
-      "German100 %4",
-      "English25 %1",
     ]);
   });
 

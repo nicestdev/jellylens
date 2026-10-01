@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Poster } from "@/components/poster";
 import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
-import type { MatchInfo, ReleaseDetail as Detail } from "@/lib/api-types";
+import type { MatchInfo, ReleaseDetail as Detail, TitleRelease } from "@/lib/api-types";
 import { formatDate, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { matchActions, matchNote, qualityLabel, titleMeta } from "@/lib/release-labels";
@@ -114,15 +114,19 @@ export type PanelTitle = {
 // movie's releases split by year, see toRelease in lib/xrel.ts) lists them
 // one after the other, each with its own ⋯ menu, since usually only one of
 // them is matched wrong. onChanged: what opened it should reload, since the
-// tile changed. Admins only, like /api/releases.
+// tile changed. only: list just the releases it keeps (Upgrades: one
+// group's, of one season), saying which (note). Admins only, like
+// /api/releases.
 export function ReleasePanel({
   title,
   onClose,
   onChanged,
+  only,
 }: {
   title: PanelTitle | null;
   onClose: () => void;
   onChanged: () => void;
+  only?: { keep: (r: TitleRelease) => boolean; note: string };
 }) {
   // Tagged with the tile they belong to, so reopening another one never
   // shows the last one's list (or error) for a moment. The value can be
@@ -145,7 +149,9 @@ export function ReleasePanel({
 
   const current = key && detail?.key === key ? detail.value : null;
   const error = key && failed?.key === key ? failed.message : "";
-  const titles = current?.titles ?? [];
+  const titles = (current?.titles ?? [])
+    .map((t) => (only ? { ...t, Items: t.Items.filter(only.keep) } : t))
+    .filter((t) => !only || t.Items.length);
 
   async function decide(titleKey: string, verdict: MatchInfo["verdict"]) {
     if (!key || !current) return;
@@ -198,6 +204,7 @@ export function ReleasePanel({
                 <SheetTitle className="text-base">{shown.title}</SheetTitle>
                 <SheetDescription>{titleMeta(shown)}</SheetDescription>
                 {note ? <p className="mt-1.5 text-xs text-muted-foreground">{note}</p> : null}
+                {only ? <p className="mt-1.5 text-xs text-muted-foreground">{only.note}</p> : null}
                 {tmdb ? (
                   <a
                     href={tmdb}

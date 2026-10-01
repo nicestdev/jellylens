@@ -25,6 +25,15 @@ describe("StatTile", () => {
     expect(screen.getByRole("button", { name: /Missing episodes/ })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("colors a number that's good or bad news, unless it's a muted zero", () => {
+    const { rerender } = render(<StatTile label="Storage" value="−2,00 GB" hint="" tone="good" />);
+    expect(screen.getByText("−2,00 GB")).toHaveClass("text-emerald-400");
+    rerender(<StatTile label="Storage" value="+2,00 GB" hint="" tone="bad" />);
+    expect(screen.getByText("+2,00 GB")).toHaveClass("text-red-400");
+    rerender(<StatTile label="Storage" value="–" hint="" tone="bad" muted />);
+    expect(screen.getByText("–")).not.toHaveClass("text-red-400");
+  });
+
   it("holds its place while loading", () => {
     render(<StatTile label="Movies" value="649" hint="in the library" loading />);
     expect(screen.getByText("Movies")).toBeInTheDocument();
