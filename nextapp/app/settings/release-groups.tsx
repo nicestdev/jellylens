@@ -65,9 +65,9 @@ export function ReleaseGroups({
   }
 
   return (
-    <>
+    <div className="divide-y">
       {data?.matching ? (
-        <p className="flex items-center gap-1.5 border-b px-4 py-2.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 px-4 py-2.5 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           Checking titles on TMDB…
         </p>
@@ -82,7 +82,7 @@ export function ReleaseGroups({
           onError={onError}
         />
       ))}
-    </>
+    </div>
   );
 }
 
@@ -120,7 +120,7 @@ function GroupList({
   }
 
   return (
-    <section aria-label={title} className="border-t first:border-t-0">
+    <section aria-label={title}>
       <div className="px-4 pt-3">
         <h4 className="text-sm font-medium">{title}</h4>
         <p className="text-xs text-muted-foreground">{hint}</p>

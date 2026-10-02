@@ -102,21 +102,23 @@ function SettingsCard({
         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
           <Icon className="size-4" />
         </span>
-        <h3 className="flex-1 text-sm font-medium">{title}</h3>
+        {/* On a phone the last sync goes under the title, beside the button
+            it wouldn't fit without wrapping. */}
+        <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <h3 className="text-sm font-medium">{title}</h3>
+          {!sync ? null : sync.loading ? (
+            <Skeleton className="mt-1 h-3 w-24 sm:mt-0" />
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {sync.syncedAt ? `synced ${relativeTime(sync.syncedAt)}` : "never synced"}
+            </span>
+          )}
+        </div>
         {sync ? (
-          <>
-            {sync.loading ? (
-              <Skeleton className="h-3 w-24" />
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {sync.syncedAt ? `synced ${relativeTime(sync.syncedAt)}` : "never synced"}
-              </span>
-            )}
-            <Button variant="outline" onClick={sync.onSync} disabled={sync.running}>
-              <RefreshCw className={cn(sync.running && "animate-spin")} />
-              {sync.running ? "Syncing…" : "Sync now"}
-            </Button>
-          </>
+          <Button variant="outline" onClick={sync.onSync} disabled={sync.running}>
+            <RefreshCw className={cn(sync.running && "animate-spin")} />
+            {sync.running ? "Syncing…" : "Sync now"}
+          </Button>
         ) : null}
       </div>
       {children}
