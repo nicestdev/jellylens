@@ -18,13 +18,16 @@ const show = (visible: boolean) => {
 };
 
 describe("usePoll", () => {
-  it("calls back every delay, at the delay it has now", async () => {
+  it("calls back every delay, a new one counting from when it's set", async () => {
     const refresh = vi.fn();
     const { rerender } = renderHook(({ ms }) => usePoll(refresh, ms), { initialProps: { ms: 15000 as number | null } });
     await vi.advanceTimersByTimeAsync(15000);
     expect(refresh).toHaveBeenCalledTimes(1);
+    // A sync starts 5 s into the slow wait: the next call comes 2 s later.
+    await vi.advanceTimersByTimeAsync(5000);
     rerender({ ms: 2000 });
-    await vi.advanceTimersByTimeAsync(15000); // the one already waiting
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(refresh).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(4000);
     expect(refresh).toHaveBeenCalledTimes(4);
     rerender({ ms: null });

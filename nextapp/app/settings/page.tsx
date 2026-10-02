@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ReleaseGroups } from "./release-groups";
+import { pollDelay } from "./logic";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, runSync } from "@/lib/api-client";
@@ -55,17 +56,6 @@ function BreakableName({ name }: { name: string }) {
   ));
 }
 
-function ConfigRow({ label, value }: { label: string; value: string | undefined }) {
-  return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate font-mono text-sm">
-        {value !== undefined ? value || "—" : <Skeleton className="h-4 w-40" />}
-      </dd>
-    </div>
-  );
-}
-
 function EnvRow({ env, value }: { env: string; value: string | undefined }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
@@ -94,11 +84,11 @@ function SettingsCard({
   title: string;
   sync?: CardSync;
   footer?: React.ReactNode;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
-    <section className="mt-6 rounded-xl border bg-card">
-      <div className="flex items-center gap-3 border-b px-4 py-3">
+    <section className="mt-6 divide-y rounded-xl border bg-card">
+      <div className="flex items-center gap-3 px-4 py-3">
         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
           <Icon className="size-4" />
         </span>
@@ -122,7 +112,7 @@ function SettingsCard({
         ) : null}
       </div>
       {children}
-      {footer ? <div className="border-t px-4 py-2.5">{footer}</div> : null}
+      {footer ? <div className="px-4 py-2.5">{footer}</div> : null}
     </section>
   );
 }
@@ -151,15 +141,8 @@ export default function SettingsPage() {
   const setPrefs = (next: Preferences) => page.setData((data) => data && { ...data, prefs: next });
   const reload = page.reload;
 
-  // Live: every 2 s while any sync runs (this page's, a scheduled one, one
-  // that adding a group started) or a group still has releases to load, so
-  // counts, groups and "synced …" move along with it; every 15 s otherwise,
-  // to notice one starting.
-  const running =
-    Boolean(busy) ||
-    Boolean(status && Object.values(status).some((s) => s.running)) ||
-    Boolean(groups && (groups.matching || groups.Items.some((g) => g.syncing || !g.complete)));
-  usePoll(reload, running ? 2000 : 15000);
+  // Live: counts, groups and "synced …" move along with a running sync.
+  usePoll(reload, pollDelay({ busy: Boolean(busy), status, groups }));
 
   // Flips the switch right away and rolls back if saving fails.
   async function setPref(changes: Partial<Preferences>) {
@@ -224,23 +207,14 @@ export default function SettingsPage() {
         title="Jellyfin"
         sync={sync("jellyfin")}
         footer={counts((s) => `${s.jellyfin.movies} movies · ${s.jellyfin.shows} shows`)}
-      >
-        <dl className="divide-y">
-          <ConfigRow label="URL" value={config?.jellyfinUrl} />
-          <ConfigRow label="API key" value={config?.jellyfinApiKey} />
-        </dl>
-      </SettingsCard>
+      />
 
       <SettingsCard
         icon={Globe}
         title="TMDB"
         sync={sync("tmdb")}
         footer={counts((s) => `${plural(s.tmdb.shows, "show")} matched · ${plural(s.tmdb.collections, "collection")}`)}
-      >
-        <dl className="divide-y">
-          <ConfigRow label="API key" value={config?.tmdbApiKey} />
-        </dl>
-      </SettingsCard>
+      />
 
       {/* Unlike the rest, the groups are changed right here. */}
       <SettingsCard

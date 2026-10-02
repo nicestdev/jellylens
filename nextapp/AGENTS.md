@@ -172,7 +172,8 @@ loads through `useLoad` (`hooks/use-load.ts`: load on mount, `reload()`,
 `setData()` after a change the server answered); `usePoll`
 (`hooks/use-poll.ts`) reloads on an interval, skipping hidden tabs.
 Settings loads its status, config, preferences and groups together and
-polls them every 2 s while a sync runs, every 15 s otherwise. What a page
+polls them every 2 s while a sync runs, every 15 s otherwise (`pollDelay`
+in `app/settings/logic.ts`). What a page
 works out from that data (filtering, sorting, counts, tile texts) is plain functions in its
 `logic.ts` next to it, tested without React; shared helpers are in
 `lib/facets.ts` (filter and sort) and `lib/format.ts` (plurals, numbers and
