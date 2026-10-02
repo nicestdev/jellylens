@@ -201,6 +201,16 @@ export function openDatabase(file: string): Database.Database {
 
 function migrate(conn: Database.Database) {
   const version = conn.pragma("user_version", { simple: true }) as number;
+  // Newer than this code knows: a newer Jellylens wrote it, or it predates
+  // the baseline (0.12.0 and before were at 2 to 6). Rather than run on a
+  // schema it doesn't match, stop here.
+  if (version > MIGRATIONS.length) {
+    throw new Error(
+      `jellylens.db is at schema version ${version}, which this Jellylens doesn't know (it knows up to ` +
+        `${MIGRATIONS.length}). A database from before 0.13.0 can't be upgraded: move it away and let the syncs ` +
+        `fill a new one (requests and release groups are lost), or run the newer Jellylens that wrote it.`
+    );
+  }
   for (let v = version; v < MIGRATIONS.length; v++) {
     conn.transaction(() => {
       conn.exec(MIGRATIONS[v]);
