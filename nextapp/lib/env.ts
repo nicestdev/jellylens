@@ -22,3 +22,17 @@ export const WCX_URL = (process.env.WCX_URL || "").replace(/\/+$/, "");
 export const WCX_API_URL = (process.env.WCX_API_URL || "").replace(/\/+$/, "");
 
 export const DATA_DIR = process.env.DATA_DIR || "/app/data";
+
+// Downloads (the Downloads page): the ddownload.com premium account it
+// signs in with (lib/hosters.ts), a Real-Debrid token, the passwords tried on archives in turn
+// (comma-separated), and where packages are downloaded and extracted.
+export const DDOWNLOAD_LOGIN = process.env.DDOWNLOAD_LOGIN?.trim() || "";
+export const DDOWNLOAD_PASSWORD = process.env.DDOWNLOAD_PASSWORD || "";
+// Real-Debrid's private API token (real-debrid.com/apitoken): for links on
+// hosters without an account of their own.
+export const REALDEBRID_TOKEN = process.env.REALDEBRID_TOKEN?.trim() || "";
+export const ARCHIVE_PASSWORDS = (process.env.ARCHIVE_PASSWORDS || "")
+  .split(",")
+  .map((p) => p.trim())
+  .filter(Boolean);
+export const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || `${DATA_DIR}/downloads`;

@@ -86,7 +86,8 @@ describe("TMDB image cache", () => {
     mockFetch(() => image("x"));
     for (const f of ["referenced.jpg", "old.jpg", "recent.jpg"]) await getTmdbImage("w342", f);
     const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
-    for (const f of ["referenced.jpg", "old.jpg"]) fs.utimesSync(path.join(tmdbDir, "w342", f), fortyDaysAgo, fortyDaysAgo);
+    for (const f of ["referenced.jpg", "old.jpg"])
+      fs.utimesSync(path.join(tmdbDir, "w342", f), fortyDaysAgo, fortyDaysAgo);
 
     expect(await pruneTmdbImages(new Set(["/referenced.jpg"]))).toBe(1);
     expect(fs.readdirSync(path.join(tmdbDir, "w342")).sort()).toEqual(["recent.jpg", "referenced.jpg"]);

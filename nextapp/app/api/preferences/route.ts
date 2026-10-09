@@ -15,8 +15,8 @@ export async function PATCH(req: Request) {
   }
   const changes: Partial<Preferences> = {};
   for (const [key, value] of Object.entries(body)) {
-    if ((key === "showFileNames" || key === "showSdReleases") && typeof value === "boolean") changes[key] = value;
-    else return Response.json({ error: "Expected { showFileNames?: boolean, showSdReleases?: boolean }." }, { status: 400 });
+    if (key === "showSdReleases" && typeof value === "boolean") changes[key] = value;
+    else return Response.json({ error: "Expected { showSdReleases?: boolean }." }, { status: 400 });
   }
   setPreferences(changes);
   return Response.json(getPreferences());

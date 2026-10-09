@@ -1,19 +1,16 @@
 "use client";
 
-import { Check, ChevronDown, ListFilter, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-// One multi-select facet (Status, Genre, Language, …) of the toolbar filter.
+// One multi-select facet (Status, Genre, Language, …) of a toolbar.
 // single: one value always picked, like a radio group (Upgrades: the
 // group, the quality); onToggle picks it. It counts as one filter while
 // it's off its default (changed).
@@ -33,7 +30,9 @@ const activeIn = (f: Facet) => (f.single ? Number(Boolean(f.changed)) : f.select
 
 function CountPill({ n }: { n: number }) {
   return (
-    <span className="rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">{n}</span>
+    <span className="rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
+      {n}
+    </span>
   );
 }
 
@@ -54,7 +53,7 @@ function FacetOptions({ facet }: { facet: Facet }) {
           <span
             className={cn(
               "grid size-4 shrink-0 place-items-center rounded-full border transition-colors",
-              checked ? "border-primary" : "border-input"
+              checked ? "border-primary" : "border-input",
             )}
           >
             {checked ? <span className="size-2 rounded-full bg-primary" /> : null}
@@ -63,7 +62,7 @@ function FacetOptions({ facet }: { facet: Facet }) {
           <span
             className={cn(
               "grid size-4 shrink-0 place-items-center rounded-[4px] border transition-colors",
-              checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
+              checked ? "border-primary bg-primary text-primary-foreground" : "border-input",
             )}
           >
             {checked ? <Check className="size-3" /> : null}
@@ -78,50 +77,46 @@ function FacetOptions({ facet }: { facet: Facet }) {
   });
 }
 
-// All toolbar filters behind one "Filter" button: one scrolling checklist
-// grouped by facet (no nested menus — on phones they covered each other).
-// The button shows how many values are selected in total, and the menu stays
-// open while toggling.
-export function FilterMenu({ facets }: { facets: Facet[] }) {
-  const shown = facets.filter((f) => f.values.length > 0);
-  if (shown.length === 0) return null;
-  const active = shown.reduce((sum, f) => sum + activeIn(f), 0);
+// A toolbar filter: one button per facet ("Genre", "Language"), its menu a
+// scrolling checklist of the facet's values that stays open while toggling.
+// The button shows how many are picked (a single-pick one, which).
+export function FacetMenu({ facet }: { facet: Facet }) {
+  if (facet.values.length === 0) return null;
+  // A single-pick facet names its pick ("Group: FuN"; just "FuN" without a
+  // label, when the row beside it already says what it is) and needs no count.
+  const active = facet.single ? 0 : activeIn(facet);
+  const picked = facet.single ? [...facet.selected][0] : undefined;
+  const format = facet.format ?? ((v: string) => v);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        // cn() dedupes the base border-transparent against the variant's
-        // border color; buttonVariants() alone doesn't, and the border vanishes.
         className={cn(
-          buttonVariants({ variant: "outline" }), // h-8, same as the search input
+          buttonVariants({ variant: "outline" }),
           "shrink-0",
-          active > 0 && "border-primary/50 bg-primary/10 text-foreground"
+          (active > 0 || (facet.single && facet.changed)) && "border-primary/50 bg-primary/10 text-foreground",
         )}
       >
-        <ListFilter />
-        Filter
+        {picked !== undefined ? (
+          <span>
+            {facet.label ? <span className="text-muted-foreground">{facet.label}: </span> : null}
+            {format(picked)}
+          </span>
+        ) : (
+          facet.label
+        )}
         {active > 0 ? <CountPill n={active} /> : null}
         <ChevronDown className="text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-[min(28rem,var(--available-height))] w-auto min-w-56 pt-0">
-        {shown.map((facet, i) => (
-          <DropdownMenuGroup key={facet.key}>
-            {i > 0 ? <DropdownMenuSeparator /> : null}
-            {/* Sticky, so the section you're scrolling through stays named. */}
-            <DropdownMenuLabel className="sticky top-0 z-10 flex items-center gap-2 bg-popover pt-2">
-              <span className="flex-1">{facet.label}</span>
-              {activeIn(facet) > 0 ? <CountPill n={activeIn(facet)} /> : null}
-            </DropdownMenuLabel>
-            <FacetOptions facet={facet} />
-          </DropdownMenuGroup>
-        ))}
+      <DropdownMenuContent align="start" className="max-h-[min(28rem,var(--available-height))] w-auto min-w-56">
+        <FacetOptions facet={facet} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-export type FilterChip = { id: string; label: string; onRemove: () => void };
+type FilterChip = { id: string; label: string; onRemove: () => void };
 
-// The active selections of the toolbar's FilterMenus as removable chips, plus
+// The active selections of the toolbar's FacetMenus as removable chips, plus
 // "Clear all". Renders nothing while nothing is selected.
 export function FilterChips({ chips, onClear }: { chips: FilterChip[]; onClear: () => void }) {
   if (chips.length === 0) return null;

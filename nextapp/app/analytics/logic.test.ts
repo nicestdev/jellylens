@@ -3,18 +3,14 @@ import type { AnalyticsResponse, FilePart } from "@/lib/api-types";
 import {
   SERIES_COLORS,
   codecSegments,
-  fileFacets,
   filesUrl,
   groupSegments,
   languageSegments,
-  noListFilters,
   overviewTiles,
   pageText,
   percent,
   resolutionSegments,
-  selectedSegments,
   subtitle,
-  type ListFilters,
 } from "./logic";
 
 const GB = 1024 ** 3;
@@ -62,14 +58,14 @@ describe("share chart segments", () => {
   it("colors the groups with the most files and folds the rest", () => {
     const groups = ["B", "C", "D", "F", "E", "A", "G"].map((g, i) => part<string | null>(g, 9 - i));
     const segments = groupSegments(movies({ groups: [...groups, part<string | null>(null, 3)] }));
-    expect(segments.map((s) => [s.label, s.files, s.muted, s.values])).toEqual([
-      ["B", 9, false, ["B"]],
-      ["C", 8, false, ["C"]],
-      ["D", 7, false, ["D"]],
-      ["F", 6, false, ["F"]],
-      ["E", 5, false, ["E"]],
-      ["2 other groups", 7, true, ["A", "G"]],
-      ["n/a", 3, true, [""]],
+    expect(segments.map((s) => [s.key, s.label, s.files, s.muted])).toEqual([
+      ["groups:B", "B", 9, false],
+      ["groups:C", "C", 8, false],
+      ["groups:D", "D", 7, false],
+      ["groups:F", "F", 6, false],
+      ["groups:E", "E", 5, false],
+      ["groups-other", "2 others", 7, true],
+      ["groups-none", "n/a", 3, true],
     ]);
     expect(segments.slice(0, 5).map((s) => s.color)).toEqual(SERIES_COLORS);
     expect(new Set(segments.map((s) => s.color)).size).toBe(segments.length);
@@ -80,21 +76,21 @@ describe("share chart segments", () => {
       resolutions: [part("", 5), part("1080p", 3), part("4K", 1)],
       codecs: ["x265", "x264", "AV1", "VC-1", "MPEG-2", "VP9", "PRORES"].map((c, i) => part(c, 9 - i)),
     });
-    expect(resolutionSegments(m).map((s) => [s.label, s.values])).toEqual([
-      ["1080p", ["1080p"]],
-      ["4K", ["4K"]],
-      ["Unknown", [""]],
+    expect(resolutionSegments(m).map((s) => [s.key, s.label])).toEqual([
+      ["resolutions:1080p", "1080p"],
+      ["resolutions:4K", "4K"],
+      ["resolutions-none", "Unknown"],
     ]);
-    expect(codecSegments(m).map((s) => s.label)).toEqual(["x265", "x264", "AV1", "VC-1", "MPEG-2", "2 other codecs"]);
+    expect(codecSegments(m).map((s) => s.label)).toEqual(["x265", "x264", "AV1", "VC-1", "MPEG-2", "2 others"]);
   });
 
   it("gives German, English and Spanish a ring each, in fixed colors", () => {
     const languages = ["EN", "DE", "JA", "FR", "ES", "IT"].map((c, i) => part(c, 9 - i));
     const segments = languageSegments(movies({ languages: [...languages, part("", 2)] }));
-    expect(segments.map((s) => [s.label, s.files, s.values, s.color])).toEqual([
-      ["German", 8, ["DE"], SERIES_COLORS[0]],
-      ["English", 9, ["EN"], SERIES_COLORS[1]],
-      ["Spanish", 5, ["ES"], SERIES_COLORS[2]],
+    expect(segments.map((s) => [s.key, s.label, s.files, s.color])).toEqual([
+      ["languages:DE", "German", 8, SERIES_COLORS[0]],
+      ["languages:EN", "English", 9, SERIES_COLORS[1]],
+      ["languages:ES", "Spanish", 5, SERIES_COLORS[2]],
     ]);
     // Spanish missing: no ring, the others keep their colors.
     expect(languageSegments(movies()).map((s) => [s.label, s.color])).toEqual([
@@ -106,43 +102,25 @@ describe("share chart segments", () => {
   it("leaves out empty parts", () => {
     expect(groupSegments(movies({ groups: [part<string | null>("A", 1)] })).map((s) => s.key)).toEqual(["groups:A"]);
   });
-
-  it("knows which pieces the filters list exactly", () => {
-    const m = movies({ codecs: ["x265", "x264", "AV1", "VP9", "PRORES", "VC-1", "MPEG-2"].map((c, i) => part(c, 9 - i)) });
-    const segments = [...codecSegments(m), ...resolutionSegments(m)];
-    const pick = (over: Partial<ListFilters>) => [...selectedSegments(segments, { ...noListFilters(), ...over })];
-    expect(pick({ codecs: new Set(["VC-1", "MPEG-2"]) })).toEqual(["codecs-other"]);
-    expect(pick({ codecs: new Set(["x265"]), resolutions: new Set(["4K"]) })).toEqual(["codecs:x265", "resolutions:4K"]);
-    expect(pick({ codecs: new Set(["x265", "x264"]) })).toEqual([]);
-    expect(pick({})).toEqual([]);
-  });
 });
 
 describe("percent", () => {
-  it("rounds, and shows a sliver as <1 %", () => {
-    expect(percent(58, 100)).toBe("58 %");
-    expect(percent(1, 1000)).toBe("<1 %");
-    // Not all of it: 648 of 649.
-    expect(percent(648, 649)).toBe(">99 %");
-    expect(percent(649, 649)).toBe("100 %");
-    expect(percent(0, 100)).toBe("0 %");
-    expect(percent(0, 0)).toBe("0 %");
+  it("always gives one decimal, a sliver at least 0,1 %, all but a sliver at most 99,9 %", () => {
+    expect(percent(58, 100)).toBe("58,0 %");
+    expect(percent(583, 1000)).toBe("58,3 %");
+    expect(percent(1, 100000)).toBe("0,1 %");
+    // Not all of it: 9999 of 10000.
+    expect(percent(9999, 10000)).toBe("99,9 %");
+    expect(percent(649, 649)).toBe("100,0 %");
+    expect(percent(0, 100)).toBe("0,0 %");
+    expect(percent(0, 0)).toBe("0,0 %");
   });
 });
 
 describe("the file list", () => {
-  it("lists the menus' values over every file: unknown last, resolutions best first", () => {
-    const facets = fileFacets(movies({ resolutions: [part("1080p", 3), part("", 2), part("4K", 1)] }));
-    expect(facets.groups.values).toEqual(["FuN", "GRP", ""]);
-    expect(facets.groups.counts.get("")).toBe(1);
-    expect(facets.resolutions.values).toEqual(["4K", "1080p", ""]);
-    expect(facets.codecs.values).toEqual(["x265", ""]);
-  });
-
-  it("asks the server for a page, filters repeated", () => {
-    const filters = { ...noListFilters(), groups: new Set(["FuN", ""]), codecs: new Set(["x265"]), languages: new Set(["EN"]) };
-    expect(filesUrl("shows", " heat ", filters, "size", "desc", 50)).toBe(
-      "/api/analytics/files?library=shows&q=heat&sort=size&dir=desc&offset=50&group=FuN&group=&codec=x265&language=EN"
+  it("asks the server for a page, the search trimmed", () => {
+    expect(filesUrl("shows", " heat ", "size", "desc", 50)).toBe(
+      "/api/analytics/files?library=shows&q=heat&sort=size&dir=desc&offset=50",
     );
   });
 

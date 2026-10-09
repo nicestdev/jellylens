@@ -9,6 +9,17 @@ const GLOBALS = [
   "__releaseSync",
   "__jellylensSyncState",
   "__jellylensTriggers",
+  "__jellylensDownloader",
+  "__ddownloadCookies",
+  "__ddownloadSignIn",
+  "__realDebridDomains",
+  "__downloadMatching",
+  "__downloadChecking",
+  "__downloadChecked",
+  "__wcxLinkState",
+  "__wcxReleases",
+  "__hideCx",
+  "__tmdbPosterTries",
 ];
 
 export function resetServerState() {

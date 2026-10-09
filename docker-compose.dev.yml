@@ -2,7 +2,13 @@ services:
   media-overview:
     image: node:24-alpine
     working_dir: /app
-    command: sh -c "npm install && npm run dev"
+    # 7-Zip for the Downloads page: the official static build, which (unlike
+    # Alpine's package) extracts RAR. Fetched once per container.
+    command: >-
+      sh -c "command -v 7zz >/dev/null || (apk add --no-cache xz >/dev/null
+      && wget -qO- https://github.com/ip7z/7zip/releases/download/26.04/7z2604-linux-x64.tar.xz | xz -dc | tar -x -C /usr/local/bin 7zzs
+      && mv /usr/local/bin/7zzs /usr/local/bin/7zz);
+      npm install && npm run dev"
     environment:
       JELLYFIN_URL: ${JELLYFIN_URL}
       JELLYFIN_API_KEY: ${JELLYFIN_API_KEY}
@@ -11,17 +17,28 @@ services:
       TMDB_SYNC_INTERVAL_HOURS: ${TMDB_SYNC_INTERVAL_HOURS:-24}
       MISSING_RECHECK_INTERVAL_HOURS: ${MISSING_RECHECK_INTERVAL_HOURS:-24}
       XREL_SYNC_INTERVAL_HOURS: ${XREL_SYNC_INTERVAL_HOURS:-6}
-      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      # Sign-in for the dev server only (prod reads AUTH_ENABLED): a local
+      # .env can turn it off with DEV_AUTH_ENABLED=false.
+      AUTH_ENABLED: ${DEV_AUTH_ENABLED:-true}
       WCX_URL: ${WCX_URL}
       WCX_API_URL: ${WCX_API_URL}
       DEV_ALLOWED_ORIGINS: ${DEV_ALLOWED_ORIGINS:-}
+      DDOWNLOAD_LOGIN: ${DDOWNLOAD_LOGIN:-}
+      DDOWNLOAD_PASSWORD: ${DDOWNLOAD_PASSWORD:-}
+      REALDEBRID_TOKEN: ${REALDEBRID_TOKEN:-}
+      ARCHIVE_PASSWORDS: ${ARCHIVE_PASSWORDS:-}
+      # Downloads go to /downloads: a volume of their own, or the host folder
+      # DOWNLOADS_PATH names (e.g. next to the media library).
+      DOWNLOAD_DIR: /downloads
       DATA_DIR: /app/data
     volumes:
       - ./nextapp:/app
       - cache_data:/app/data
+      - ${DOWNLOADS_PATH:-downloads}:/downloads
     ports:
       - "8081:3000"
     restart: unless-stopped
 
 volumes:
   cache_data:
+  downloads:

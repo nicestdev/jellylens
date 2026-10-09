@@ -11,21 +11,27 @@ const releases = (theatrical: string | null, digital: string | null, physical: s
 
 describe("movieAvailability", () => {
   it("is fully out once on disc", () => {
-    expect(movieAvailability(releases("2026-01-01", "2026-03-01", "2026-05-01"), "2026-01-01", today, yearAgo)).toBeNull();
+    expect(
+      movieAvailability(releases("2026-01-01", "2026-03-01", "2026-05-01"), "2026-01-01", today, yearAgo),
+    ).toBeNull();
   });
 
   it("is digital only until the disc, with its date as next", () => {
-    expect(movieAvailability(releases("2026-01-01", "2026-03-01", "2026-08-01"), "2026-01-01", today, yearAgo)).toEqual({
-      status: "digital",
-      next: { kind: "Blu-ray", date: "2026-08-01" },
-    });
+    expect(movieAvailability(releases("2026-01-01", "2026-03-01", "2026-08-01"), "2026-01-01", today, yearAgo)).toEqual(
+      {
+        status: "digital",
+        next: { kind: "Blu-ray", date: "2026-08-01" },
+      },
+    );
   });
 
   it("is in cinemas until it's out at home, with the earliest next date", () => {
-    expect(movieAvailability(releases("2026-06-01", "2026-07-20", "2026-09-01"), "2026-06-01", today, yearAgo)).toEqual({
-      status: "cinema",
-      next: { kind: "Digital", date: "2026-07-20" },
-    });
+    expect(movieAvailability(releases("2026-06-01", "2026-07-20", "2026-09-01"), "2026-06-01", today, yearAgo)).toEqual(
+      {
+        status: "cinema",
+        next: { kind: "Digital", date: "2026-07-20" },
+      },
+    );
   });
 
   it("takes releases over a year old as fully out", () => {
@@ -47,7 +53,10 @@ describe("movieAvailability", () => {
       status: "upcoming",
       next: { kind: "Out", date: "2026-09-01" },
     });
-    expect(movieAvailability(releases(null, null, null), null, today, yearAgo)).toEqual({ status: "upcoming", next: null });
+    expect(movieAvailability(releases(null, null, null), null, today, yearAgo)).toEqual({
+      status: "upcoming",
+      next: null,
+    });
   });
 });
 
@@ -57,7 +66,10 @@ describe("showAvailability", () => {
   });
 
   it("is upcoming before, with the premiere as next", () => {
-    expect(showAvailability("2026-09-01", today)).toEqual({ status: "upcoming", next: { kind: "Starts", date: "2026-09-01" } });
+    expect(showAvailability("2026-09-01", today)).toEqual({
+      status: "upcoming",
+      next: { kind: "Starts", date: "2026-09-01" },
+    });
     expect(showAvailability(null, today)).toEqual({ status: "upcoming", next: null });
   });
 });

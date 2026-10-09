@@ -10,7 +10,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-10">
-      <div className="rounded-xl border bg-card p-6">
+      <div className="rounded-lg border bg-card p-6">
         <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
         <p className="mt-1 text-sm text-muted-foreground">With your Jellyfin account.</p>
         <LoginForm next={next} />

@@ -31,12 +31,29 @@ import { movie, show } from "@/test/fixtures";
 describe("Jellyfin library", () => {
   const library = {
     movies: [
-      movie({ Id: "m2", Name: "Zulu", ProviderIds: { Tmdb: "2" }, ServerId: "srv", FileName: "Zulu-GRP.mkv", ImageTags: { Primary: "t2" } }),
+      movie({
+        Id: "m2",
+        Name: "Zulu",
+        ProviderIds: { Tmdb: "2" },
+        ServerId: "srv",
+        FileName: "Zulu-GRP.mkv",
+        ImageTags: { Primary: "t2" },
+      }),
       movie({ Id: "m1", Name: "Alien", ProviderIds: { Tmdb: "1", TmdbCollection: "c1" } }),
       movie({ Id: "m3", Name: "Unmatched" }),
     ],
     shows: [show({ Id: "s1", Name: "Silo", ProviderIds: { Tmdb: "10" } })],
-    episodes: [{ Id: "e1", SeriesId: "s1", ParentIndexNumber: 1, IndexNumber: 1, IndexNumberEnd: null, Size: 5, AudioLanguages: ["DE"] }],
+    episodes: [
+      {
+        Id: "e1",
+        SeriesId: "s1",
+        ParentIndexNumber: 1,
+        IndexNumber: 1,
+        IndexNumberEnd: null,
+        Size: 5,
+        AudioLanguages: ["DE"],
+      },
+    ],
   };
 
   it("keeps Jellyfin's order and every field", () => {
@@ -61,7 +78,7 @@ describe("Jellyfin library", () => {
         { mediaType: "movie", id: "m2", tmdbId: "2", serverId: "srv", imageTag: "t2", fileName: "Zulu-GRP.mkv" },
         { mediaType: "movie", id: "m1", tmdbId: "1", serverId: "", imageTag: undefined, fileName: undefined },
         { mediaType: "tv", id: "s1", tmdbId: "10", serverId: "", imageTag: undefined, fileName: undefined },
-      ])
+      ]),
     );
     expect(libraryEntries()).toHaveLength(3); // m3 isn't matched to TMDB
     expect(collectionIds()).toEqual(["c1"]);
@@ -94,7 +111,15 @@ describe("ignored rows", () => {
 });
 
 describe("requests", () => {
-  const heat = { mediaType: "movie" as const, tmdbId: 949, title: "Heat", year: 1995, releaseDate: "1995-12-15", posterPath: "/h.jpg", requestedAt: "2026-06-01T00:00:00Z" };
+  const heat = {
+    mediaType: "movie" as const,
+    tmdbId: 949,
+    title: "Heat",
+    year: 1995,
+    releaseDate: "1995-12-15",
+    posterPath: "/h.jpg",
+    requestedAt: "2026-06-01T00:00:00Z",
+  };
   const bob = { id: "u1", name: "Bob", requestedAt: "2026-06-01T00:00:00Z" };
   const ana = { id: "u2", name: "Ana", requestedAt: "2026-06-02T00:00:00Z" };
 
@@ -137,16 +162,43 @@ describe("requests", () => {
 
 describe("preferences", () => {
   it("defaults, and keeps what's set", () => {
-    expect(getPreferences()).toEqual({ showFileNames: false, showSdReleases: false });
-    setPreferences({ showFileNames: true });
-    expect(getPreferences()).toEqual({ showFileNames: true, showSdReleases: false });
+    expect(getPreferences()).toEqual({ showSdReleases: false });
+    setPreferences({ showSdReleases: true });
+    expect(getPreferences()).toEqual({ showSdReleases: true });
+  });
+
+  it("leaves out an option that's gone but still stored", () => {
+    // showFileNames was one, until the Missing page stopped listing files.
+    setPreferences({ showFileNames: true } as never);
+    expect(getPreferences()).toEqual({ showSdReleases: false });
   });
 });
 
 describe("tmdbPosterPaths", () => {
   it("collects every poster something stored shows", () => {
-    createRequest({ mediaType: "movie", tmdbId: 1, title: "A", year: null, releaseDate: null, posterPath: "/request.jpg", requestedAt: "x" }, []);
-    replaceTmdb({}, { c: { name: "C", posterPath: "/collection.jpg", parts: [{ tmdbId: 2, title: "P", releaseDate: null, posterPath: "/part.jpg" }] } }, null);
+    createRequest(
+      {
+        mediaType: "movie",
+        tmdbId: 1,
+        title: "A",
+        year: null,
+        releaseDate: null,
+        posterPath: "/request.jpg",
+        requestedAt: "x",
+      },
+      [],
+    );
+    replaceTmdb(
+      {},
+      {
+        c: {
+          name: "C",
+          posterPath: "/collection.jpg",
+          parts: [{ tmdbId: 2, title: "P", releaseDate: null, posterPath: "/part.jpg" }],
+        },
+      },
+      null,
+    );
     expect(tmdbPosterPaths()).toEqual(new Set(["/request.jpg", "/collection.jpg", "/part.jpg"]));
   });
 });

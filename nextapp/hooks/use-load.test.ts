@@ -6,7 +6,11 @@ import { useLoad } from "./use-load";
 
 describe("useLoad", () => {
   it("loads on mount and again on reload, keeping the data through a failure", async () => {
-    const load = vi.fn().mockResolvedValueOnce(["a"]).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(["b"]);
+    const load = vi
+      .fn()
+      .mockResolvedValueOnce(["a"])
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(["b"]);
     const { result } = renderHook(() => useLoad(load));
     expect(result.current.loading).toBe(true);
     await waitFor(() => expect(result.current.data).toEqual(["a"]));

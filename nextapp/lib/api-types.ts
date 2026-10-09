@@ -17,6 +17,7 @@ import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
 import type { FileListRow, FilePart, FileTotals } from "./store";
 import type { Unit } from "./upgrades";
+import type { DownloadFile, DownloadPackage, LibraryCopy } from "./store";
 
 export type { IgnoreEntry, MatchInfo, Preferences, TitleRelease };
 
@@ -25,7 +26,8 @@ export type LibraryRef = { id: string; serverId: string };
 
 // GET /api/movies — the stored movies without their file names (admins
 // only, see /api/collections and /api/analytics).
-export type MovieItem = Omit<JellyfinMovie, "FileName">;
+// Codec: the file's video codec label ("x265"; "" if unknown).
+export type MovieItem = Omit<JellyfinMovie, "FileName"> & { Codec: string };
 export type MoviesResponse = { Items: MovieItem[] };
 
 // How many owned episodes carry each audio language, overall and per season.
@@ -75,7 +77,18 @@ export type ConfigResponse = {
   jellyfinApiKey: string;
   tmdbApiKey: string;
   authEnabled: boolean;
+  ddownloadLogin: string;
+  ddownloadPassword: string;
+  realDebridToken: string;
+  archivePasswords: number;
+  downloadDir: string;
   intervals: Record<SyncStageName, number>;
+  // How many files come in at once (PATCH /api/downloads), up to maxDownloadSlots.
+  downloadSlots: number;
+  maxDownloadSlots: number;
+  // Archive passwords set in Settings, tried in turn before
+  // ARCHIVE_PASSWORDS (PATCH /api/downloads).
+  passwords: string[];
 };
 
 // GET /api/discover — TMDB search or trending, with what's owned.
@@ -111,8 +124,21 @@ export type ReleasesResponse = {
 // GET, POST /api/releases/<key> — a tile's xREL titles, each with its match
 // and releases. key: the tile shown now (a decision can move a title to
 // another one). label: title and year from its newest release's name.
+// head: what the title page shows on top (from the match, else TMDB, else
+// a release name); library: owned in Jellyfin, with its poster's tag;
+// copies: the library's files of it (a show's, one per episode file).
 export type ReleaseDetailTitle = { titleKey: string; label: string; match: MatchInfo; Items: TitleRelease[] };
-export type ReleaseDetail = { key: string; titles: ReleaseDetailTitle[] };
+export type ReleaseHead = {
+  title: string;
+  year: number | null;
+  posterPath: string | null;
+  mediaType: "movie" | "tv" | null;
+  tmdbId: number | null;
+  library: (LibraryRef & { imageTag: string | null }) | null;
+  copies: LibraryCopy[];
+};
+export type { LibraryCopy };
+export type ReleaseDetail = { key: string; head: ReleaseHead | null; titles: ReleaseDetailTitle[] };
 
 // GET, POST, DELETE /api/release-groups. syncing: its releases are being
 // fetched right now; matching: the sync is checking titles on TMDB.
@@ -165,3 +191,77 @@ export type { Alternative, Tier, Unit } from "./upgrades";
 
 // GET /api/wcx-search?q=&tmdbId= — WCX detail URL for a release, or null.
 export type WcxSearchResponse = { url: string | null };
+
+// GET /api/wcx-releases?tmdbId= — the releases on the entry's WCX page
+// (none if it has no page), newest first. group, quality ("1080p") and a
+// show's seasons ([1, 1] for S01, [1, 3] for S01-S03, null: none named)
+// from its name; size: bytes, null if WCX doesn't say. mirrors: per hoster
+// and source, the ones we can fetch first (route: how, as the Downloads
+// page says it; null: no account for it). source: where its links come
+// from, WCX's plain ones or a hide.cx container's (read through its API),
+// or a filecrypt container (a captcha: only opened, for its DLC; links 0,
+// not known). offline: WCX's first link is gone at the hoster (WCX keeps a
+// re-upload's old links), or a hide.cx container's links aren't all
+// online. container: the hide.cx or filecrypt page.
+// POST { tmdbId, release, hoster, source } adds the release as a Downloads
+// package, from that mirror.
+export type WcxSource = "wcx" | "hide.cx" | "filecrypt";
+export type WcxMirror = {
+  hoster: string;
+  source: WcxSource;
+  links: number;
+  route: string | null;
+  offline: boolean;
+  container: string | null;
+};
+export type WcxRelease = {
+  uid: string;
+  name: string;
+  group: string | null;
+  quality: string | null;
+  seasons: [number, number] | null;
+  size: number | null;
+  createdAt: string | null;
+  mirrors: WcxMirror[];
+};
+export type WcxReleasesResponse = { releases: WcxRelease[] };
+export type WcxAddResponse = { packageId: number; name: string; hoster: string };
+
+// GET /api/downloads — every package, newest first, with its files.
+// speed: bytes a second while a file comes in; extractPercent: while its
+// archives are extracted. ready: a hoster sign-in is set, so links can be fetched.
+// inLibrary: an episode the library already has.
+export type DownloadFileItem = Omit<DownloadFile, "url" | "packageId"> & {
+  url: string;
+  speed: number | null;
+  inLibrary: boolean;
+};
+// What the library already has of a package: your copies (quality · codec
+// · group), and for a show how many of its episode parts you have, or for
+// a season pack how many of that season's episodes.
+export type DownloadLibrary = {
+  have: string[];
+  parts: number;
+  partsOwned: number;
+  season: { number: number; episodes: number } | null;
+};
+// sources: where an unfinished one's files come from ("ddownload",
+// "rapidgator.net via Real-Debrid", "no account"). outputs: a finished
+// one's files on disk (GET /api/downloads/<id>/file?path=).
+export type DownloadPackageItem = DownloadPackage & {
+  library: DownloadLibrary | null;
+  sources: string[];
+  outputs: { path: string; size: number }[];
+  extractPercent: number | null;
+  files: DownloadFileItem[];
+};
+// slots: how many files come in at once (lib/store/downloads.ts), up to
+// maxSlots.
+export type DownloadsResponse = {
+  ready: boolean;
+  downloadDir: string;
+  freeBytes: number | null;
+  slots: number;
+  maxSlots: number;
+  packages: DownloadPackageItem[];
+};

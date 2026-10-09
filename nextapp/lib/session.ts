@@ -38,7 +38,12 @@ const sign = (data: string) => crypto.createHmac("sha256", sessionSecret()).upda
 
 // "<payload>.<signature>", both base64url.
 export function createSession(user: SessionUser): string {
-  const payload: Payload = { id: user.id, name: user.name, admin: user.admin, exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE };
+  const payload: Payload = {
+    id: user.id,
+    name: user.name,
+    admin: user.admin,
+    exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE,
+  };
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return data + "." + sign(data);
 }
@@ -78,7 +83,7 @@ async function jellyfinAccounts(): Promise<Map<string, Account> | null> {
           users.map((u) => [
             u.Id,
             { name: u.Name, admin: u.Policy?.IsAdministrator === true, disabled: u.Policy?.IsDisabled === true },
-          ])
+          ]),
         );
       })
       .catch((e) => console.error("[auth] couldn't refresh Jellyfin users:", (e as Error).message))

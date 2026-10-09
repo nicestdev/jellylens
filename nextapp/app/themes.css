@@ -1,0 +1,33 @@
+/* The color palette, "Lillac": dark plum grey with a saturated lilac
+   accent. globals.css maps it onto the UI's tokens once, so another look
+   is just other values here.
+
+   base     page background        mantle   sidebar
+   surface0 raised parts, borders  surface1 inputs
+   surface2 analytics' "other"     text, subtext
+   accent   the one accent         red      worse, missing
+   peach    open, waiting          green    better
+   blue, yellow  two more chart colors (blue also the DD hoster's)
+   sky      info
+   Optional: card (else between base and surface0), border (else
+   surface0) and table (behind a table's rows, else the page). */
+
+:root {
+  --p-base: #1a1626;
+  --p-mantle: #13101c;
+  /* Cards (stat tiles, charts, Missing's sections, table heads) as dark as
+     the sidebar, a step below the page. */
+  --p-card: #13101c;
+  --p-surface0: #272138;
+  --p-surface1: #372f4d;
+  --p-surface2: #4f4569;
+  --p-text: #f3eefe;
+  --p-subtext: #b0a6cc;
+  --p-accent: #b385ff;
+  --p-red: #ff6b9a;
+  --p-peach: #ffa66b;
+  --p-green: #6ef0a8;
+  --p-blue: #8aa8ff;
+  --p-yellow: #ffe07a;
+  --p-sky: #7ad7ff;
+}

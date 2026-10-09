@@ -1,27 +1,22 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import {
-  AlertCircle,
-  Globe,
-  ListChecks,
-  MonitorPlay,
-  PackageSearch,
-  RefreshCw,
-  Server,
-  Terminal,
-  type LucideIcon,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { CELL, DataTable, MUTED_CELL, NOT_ON_PHONE, ROW } from "@/components/library-table";
 import { Switch } from "@/components/ui/switch";
 import { ReleaseGroups } from "./release-groups";
-import { pollDelay } from "./logic";
+import { SlotsMenu } from "./download-slots";
+import { ArchivePasswords } from "./archive-passwords";
+import { SectionTitle } from "@/components/section-title";
+import { Breakable } from "@/components/breakable";
+import { LIST, pollDelay, SECTION } from "./logic";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiFetch, runSync } from "@/lib/api-client";
+import { apiFetch, runSync, jsonRequest } from "@/lib/api-client";
 import { plural, relativeTime } from "@/lib/format";
 import type {
   ConfigResponse,
+  DownloadsResponse,
   Preferences,
   ReleaseGroupsResponse,
   StatusResponse,
@@ -41,81 +36,72 @@ function intervalLabel(hours: number): string {
   return `Every ${hours} hours`;
 }
 
-// Long env names like MISSING_RECHECK_INTERVAL_HOURS don't fit beside the
-// value on a phone; let them wrap after an underscore instead of overflowing.
-function BreakableName({ name }: { name: string }) {
-  return name.split("_").map((part, i, parts) => (
-    <Fragment key={i}>
-      {part}
-      {i < parts.length - 1 ? (
-        <>
-          _<wbr />
-        </>
-      ) : null}
-    </Fragment>
-  ));
-}
-
 function EnvRow({ env, value }: { env: string; value: string | undefined }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <dt className="min-w-0 font-mono text-sm text-muted-foreground">
-        <BreakableName name={env} />
+    <div className="flex items-center justify-between gap-4 px-3 py-2 text-[13px]">
+      <dt className="min-w-0 font-mono text-xs text-muted-foreground">
+        <Breakable text={env} separator="_" />
       </dt>
-      <dd className="shrink-0 text-sm">
-        {value !== undefined ? value || "—" : <Skeleton className="h-4 w-24" />}
-      </dd>
+      <dd className="shrink-0">{value !== undefined ? value || "—" : <Skeleton className="h-4 w-24" />}</dd>
     </div>
   );
 }
 
-type CardSync = { syncedAt: string | null; running: boolean; loading: boolean; onSync: () => void };
-
-// A card per sync stage, its last sync and "Sync now" in the header, and
-// what it holds in the footer; the display options' cards have neither.
-function SettingsCard({
-  icon: Icon,
+function PrefRow({
   title,
-  sync,
-  footer,
-  children,
+  text,
+  checked,
+  onChange,
 }: {
-  icon: LucideIcon;
   title: string;
-  sync?: CardSync;
-  footer?: React.ReactNode;
-  children?: React.ReactNode;
+  text: string;
+  checked: boolean | undefined;
+  onChange: (checked: boolean) => void;
 }) {
   return (
-    <section className="mt-6 divide-y rounded-xl border bg-card">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-          <Icon className="size-4" />
-        </span>
-        {/* On a phone the last sync goes under the title, beside the button
-            it wouldn't fit without wrapping. */}
-        <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-          <h3 className="text-sm font-medium">{title}</h3>
-          {!sync ? null : sync.loading ? (
-            <Skeleton className="mt-1 h-3 w-24 sm:mt-0" />
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              {sync.syncedAt ? `synced ${relativeTime(sync.syncedAt)}` : "never synced"}
-            </span>
-          )}
-        </div>
-        {sync ? (
-          <Button variant="outline" onClick={sync.onSync} disabled={sync.running}>
-            <RefreshCw className={cn(sync.running && "animate-spin")} />
-            {sync.running ? "Syncing…" : "Sync now"}
-          </Button>
-        ) : null}
-      </div>
-      {children}
-      {footer ? <div className="px-4 py-2.5">{footer}</div> : null}
-    </section>
+    <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40">
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium">{title}</span>
+        <span className="block text-xs text-muted-foreground">{text}</span>
+      </span>
+      {checked !== undefined ? (
+        <Switch checked={checked} onCheckedChange={onChange} aria-label={title} />
+      ) : (
+        <Skeleton className="h-[18px] w-8 rounded-full" />
+      )}
+    </label>
   );
 }
+
+// The sync stages, a row each: what it holds, its schedule (the env
+// variable behind it on hover), when it last ran, and Sync now.
+const STAGES: { stage: SyncStageName; title: string; env: string; counts: (s: StatusResponse) => string }[] = [
+  {
+    stage: "jellyfin",
+    title: "Jellyfin",
+    env: "JELLYFIN_SYNC_INTERVAL_HOURS",
+    counts: (s) => `${plural(s.jellyfin.movies, "movie")} · ${plural(s.jellyfin.shows, "show")}`,
+  },
+  {
+    stage: "tmdb",
+    title: "TMDB",
+    env: "TMDB_SYNC_INTERVAL_HOURS",
+    counts: (s) => `${plural(s.tmdb.shows, "show")} · ${plural(s.tmdb.collections, "collection")}`,
+  },
+  {
+    stage: "releases",
+    title: "xREL",
+    env: "XREL_SYNC_INTERVAL_HOURS",
+    counts: (s) => `${plural(s.releases.groups, "group")} · ${plural(s.releases.releases, "release")}`,
+  },
+  {
+    stage: "missing",
+    title: "Missing",
+    env: "MISSING_RECHECK_INTERVAL_HOURS",
+    counts: (s) =>
+      `${plural(s.missing.incompleteCount, "show")} · ${plural(s.missing.incompleteCollectionCount, "collection")}`,
+  },
+];
 
 async function loadSettings() {
   const [status, config, prefs, groups] = await Promise.all([
@@ -150,17 +136,31 @@ export default function SettingsPage() {
     const before = prefs;
     setPrefs({ ...prefs, ...changes });
     try {
-      setPrefs(
-        await apiFetch<Preferences>("/api/preferences", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(changes),
-        })
-      );
+      setPrefs(await apiFetch<Preferences>("/api/preferences", jsonRequest("PATCH", changes)));
     } catch (e) {
       setPrefs(before);
       setError(`Couldn't save setting: ${(e as Error).message}`);
     }
+  }
+
+  // Saved right away; the queue fills the new slots (or lets running files
+  // finish when there are fewer).
+  async function setSlots(slots: number) {
+    setError("");
+    try {
+      const next = await apiFetch<DownloadsResponse>("/api/downloads", jsonRequest("PATCH", { slots }));
+      page.setData((data) => data && { ...data, config: { ...data.config, downloadSlots: next.slots } });
+    } catch (e) {
+      setError(`Couldn't save setting: ${(e as Error).message}`);
+    }
+  }
+
+  // The whole list, saved as it's changed; the page keeps what the server
+  // stored (blank and repeated ones dropped).
+  async function savePasswords(passwords: string[]) {
+    await apiFetch<DownloadsResponse>("/api/downloads", jsonRequest("PATCH", { passwords }));
+    const stored = await apiFetch<ConfigResponse>("/api/config");
+    page.setData((data) => data && { ...data, config: { ...data.config, passwords: stored.passwords } });
   }
 
   async function trigger(stage: SyncStageName) {
@@ -178,21 +178,11 @@ export default function SettingsPage() {
 
   const loading = !status || !config;
 
-  // The header's last sync and "Sync now", and the footer's counts.
-  const sync = (stage: SyncStageName) => ({
-    syncedAt: status?.[stage].syncedAt ?? null,
-    running: busy === stage || Boolean(status?.[stage].running),
-    loading,
-    onSync: () => trigger(stage),
-  });
-  const counts = (text: (s: StatusResponse) => string) =>
-    loading ? <Skeleton className="h-3 w-48" /> : <p className="text-xs text-muted-foreground">{text(status!)}</p>;
-
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Sync sources, display options and release groups.</p>
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Sync, release groups, downloads and display options.</p>
       </div>
 
       {error ? (
@@ -202,92 +192,133 @@ export default function SettingsPage() {
         </Alert>
       ) : null}
 
-      <SettingsCard
-        icon={Server}
-        title="Jellyfin"
-        sync={sync("jellyfin")}
-        footer={counts((s) => `${s.jellyfin.movies} movies · ${s.jellyfin.shows} shows`)}
+      <section className={cn("mt-6", SECTION)}>
+        <SectionTitle hint="Each runs on its schedule; Sync now runs one right away.">Sync</SectionTitle>
+        <DataTable
+          flat
+          columns={[
+            { label: "Source" },
+            { label: "Contents", stretch: true, phone: false },
+            { label: "Schedule", phone: false },
+            { label: "Last sync", phone: false },
+            { label: "Sync now", hidden: true },
+          ]}
+        >
+          {STAGES.map((st) => {
+            const running = busy === st.stage || Boolean(status?.[st.stage].running);
+            const syncedAt = status?.[st.stage].syncedAt ?? null;
+            const contents = status ? st.counts(status) : <Skeleton className="inline-block h-4 w-40" />;
+            const schedule = config ? (
+              intervalLabel(config.intervals[st.stage])
+            ) : (
+              <Skeleton className="inline-block h-4 w-20" />
+            );
+            const lastSync = loading ? (
+              <Skeleton className="inline-block h-4 w-20" />
+            ) : running ? (
+              "syncing…"
+            ) : (
+              relativeTime(syncedAt)
+            );
+            return (
+              <tr key={st.stage} className={ROW}>
+                {/* On a phone contents, schedule and last sync are lines
+                    under the source. */}
+                <td className={cn(CELL, "max-sm:w-full max-sm:max-w-0")}>
+                  <div className="font-medium">{st.title}</div>
+                  <div className="truncate text-xs text-muted-foreground sm:hidden">{contents}</div>
+                  <div className="truncate text-xs text-muted-foreground sm:hidden">
+                    {schedule} · {lastSync}
+                  </div>
+                </td>
+                <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{contents}</td>
+                <td className={cn(MUTED_CELL, NOT_ON_PHONE)} title={st.env}>
+                  {schedule}
+                </td>
+                <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{lastSync}</td>
+                <td className={cn(CELL, "text-right")}>
+                  <button
+                    type="button"
+                    onClick={() => trigger(st.stage)}
+                    disabled={running}
+                    aria-label={`Sync ${st.title} now`}
+                    className="inline-flex items-center gap-1 align-top text-primary transition-colors hover:text-foreground disabled:text-muted-foreground"
+                  >
+                    <RefreshCw className={cn("size-3.5", running && "animate-spin")} />
+                    Sync now
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      </section>
+
+      <ReleaseGroups
+        data={groups}
+        onData={(next) => {
+          page.setData((d) => d && { ...d, groups: next });
+          reload(); // the xREL tile's counts
+        }}
+        onError={setError}
       />
 
-      <SettingsCard
-        icon={Globe}
-        title="TMDB"
-        sync={sync("tmdb")}
-        footer={counts((s) => `${plural(s.tmdb.shows, "show")} matched · ${plural(s.tmdb.collections, "collection")}`)}
-      />
-
-      {/* Unlike the rest, the groups are changed right here. */}
-      <SettingsCard
-        icon={PackageSearch}
-        title="xREL"
-        sync={sync("releases")}
-        footer={counts((s) => `${plural(s.releases.groups, "group")} · ${plural(s.releases.releases, "release")}`)}
-      >
-        <ReleaseGroups
-          data={groups}
-          onData={(next) => {
-            page.setData((d) => d && { ...d, groups: next });
-            reload(); // the card's counts
-          }}
-          onError={setError}
-        />
-      </SettingsCard>
-
-      <SettingsCard icon={ListChecks} title="Missing" sync={sync("missing")}>
-        <label className="flex cursor-pointer items-center gap-3 px-4 py-3">
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">File names on missing movies</span>
-            <span className="block text-sm text-muted-foreground">
-              Shows the files you own on each collection card, so you can get the missing parts from the same release
-              group.
-            </span>
-          </span>
-          {prefs ? (
-            <Switch
-              checked={prefs.showFileNames}
-              onCheckedChange={(checked) => setPref({ showFileNames: checked })}
-              aria-label="File names on missing movies"
+      <div className="mt-3 flex flex-col gap-3">
+        <section className={SECTION}>
+          <SectionTitle>Display</SectionTitle>
+          <div className={LIST}>
+            <PrefRow
+              title="Releases below 720p"
+              text="Shows XviD, SD and DVD releases on the Releases page. When off, titles with nothing else are not checked on TMDB either."
+              checked={prefs?.showSdReleases}
+              onChange={(checked) => setPref({ showSdReleases: checked })}
             />
-          ) : (
-            <Skeleton className="h-[18px] w-8 rounded-full" />
-          )}
-        </label>
-      </SettingsCard>
+          </div>
+        </section>
 
-      <SettingsCard icon={MonitorPlay} title="Releases">
-        <label className="flex cursor-pointer items-center gap-3 px-4 py-3">
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium">Releases below 720p</span>
-            <span className="block text-sm text-muted-foreground">
-              Shows XviD, SD and DVD releases on the Releases page. When off, titles with nothing else are not checked
-              on TMDB either.
-            </span>
-          </span>
-          {prefs ? (
-            <Switch
-              checked={prefs.showSdReleases}
-              onCheckedChange={(checked) => setPref({ showSdReleases: checked })}
-              aria-label="Releases below 720p"
+        <section className={SECTION}>
+          <SectionTitle>Downloads</SectionTitle>
+          <div className={LIST}>
+            <div className="flex items-center gap-3 px-3 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-medium">Parallel downloads</span>
+                <span className="block text-xs text-muted-foreground">
+                  How many files come in at once. Fewer takes effect as running ones finish.
+                </span>
+              </span>
+              {config ? (
+                <SlotsMenu slots={config.downloadSlots} maxSlots={config.maxDownloadSlots} onChange={setSlots} />
+              ) : (
+                <Skeleton className="h-8 w-32" />
+              )}
+            </div>
+          </div>
+        </section>
+
+        <ArchivePasswords passwords={config?.passwords ?? null} save={savePasswords} onError={setError} />
+
+        {/* Read-only: all of this is set through environment variables. */}
+        <section className={SECTION}>
+          <SectionTitle hint="Set in the container's environment; read-only here.">Environment</SectionTitle>
+          <dl className={LIST}>
+            <EnvRow env="JELLYFIN_URL" value={config?.jellyfinUrl} />
+            <EnvRow env="JELLYFIN_API_KEY" value={config?.jellyfinApiKey} />
+            <EnvRow
+              env="AUTH_ENABLED"
+              value={config ? (config.authEnabled ? "Jellyfin accounts" : "Off") : undefined}
             />
-          ) : (
-            <Skeleton className="h-[18px] w-8 rounded-full" />
-          )}
-        </label>
-      </SettingsCard>
-
-      {/* Read-only: all of this is set through environment variables. */}
-      <SettingsCard icon={Terminal} title="Environment">
-        <dl className="divide-y">
-          <EnvRow env="JELLYFIN_URL" value={config?.jellyfinUrl} />
-          <EnvRow env="JELLYFIN_API_KEY" value={config?.jellyfinApiKey} />
-          <EnvRow env="AUTH_ENABLED" value={config ? (config.authEnabled ? "Jellyfin accounts" : "Off") : undefined} />
-          <EnvRow env="JELLYFIN_SYNC_INTERVAL_HOURS" value={config ? intervalLabel(config.intervals.jellyfin) : undefined} />
-          <EnvRow env="TMDB_API_KEY" value={config?.tmdbApiKey} />
-          <EnvRow env="TMDB_SYNC_INTERVAL_HOURS" value={config ? intervalLabel(config.intervals.tmdb) : undefined} />
-          <EnvRow env="XREL_SYNC_INTERVAL_HOURS" value={config ? intervalLabel(config.intervals.releases) : undefined} />
-          <EnvRow env="MISSING_RECHECK_INTERVAL_HOURS" value={config ? intervalLabel(config.intervals.missing) : undefined} />
-        </dl>
-      </SettingsCard>
+            <EnvRow env="TMDB_API_KEY" value={config?.tmdbApiKey} />
+            <EnvRow env="DDOWNLOAD_LOGIN" value={config?.ddownloadLogin} />
+            <EnvRow env="DDOWNLOAD_PASSWORD" value={config?.ddownloadPassword} />
+            <EnvRow env="REALDEBRID_TOKEN" value={config?.realDebridToken} />
+            <EnvRow
+              env="ARCHIVE_PASSWORDS"
+              value={config ? (config.archivePasswords ? plural(config.archivePasswords, "password") : "") : undefined}
+            />
+            <EnvRow env="DOWNLOAD_DIR" value={config?.downloadDir} />
+          </dl>
+        </section>
+      </div>
     </main>
   );
 }

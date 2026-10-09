@@ -26,7 +26,10 @@ function api(initial: ReleaseGroupItem[]) {
     const body = JSON.parse(String(init?.body ?? "{}"));
     if (init?.method === "POST") {
       if (body.name === "NOPE") return json({ error: "xREL doesn't list a scene group called NOPE." }, { status: 404 });
-      items = [...items, group({ id: "scene:" + body.name, kind: body.kind, name: body.name, count: 0, complete: false })];
+      items = [
+        ...items,
+        group({ id: "scene:" + body.name, kind: body.kind, name: body.name, count: 0, complete: false }),
+      ];
     }
     if (init?.method === "DELETE") items = items.filter((g) => g.id !== body.id);
     return json({ Items: items, matching: false });
@@ -40,7 +43,7 @@ function setup(items: ReleaseGroupItem[] | null, matching = false) {
   const data: ReleaseGroupsResponse | null = items && { Items: items, matching };
   const view = render(<ReleaseGroups data={data} onData={onData} onError={onError} />);
   onData.mockImplementation((next: ReleaseGroupsResponse) =>
-    view.rerender(<ReleaseGroups data={next} onData={onData} onError={onError} />)
+    view.rerender(<ReleaseGroups data={next} onData={onData} onError={onError} />),
   );
   return { onError, onData, view };
 }
@@ -48,25 +51,27 @@ function setup(items: ReleaseGroupItem[] | null, matching = false) {
 const region = (name: string) => screen.getByRole("region", { name });
 
 describe("ReleaseGroups", () => {
-  it("lists the P2P and the scene groups apart", () => {
+  it("lists the P2P and the scene groups apart, a table each", () => {
     setup([group({}), group({ id: "scene:WAYNE", kind: "scene", name: "WAYNE", count: 55 })]);
-    expect(within(region("P2P groups")).getByText("VECTOR")).toBeInTheDocument();
-    expect(within(region("P2P groups")).getByText(/1\.200 releases · synced/)).toBeInTheDocument();
+    const row = within(region("P2P groups")).getByText("VECTOR").closest("tr")!;
+    expect(within(row).getByText("1.200")).toBeInTheDocument();
+    expect(within(row).getByText("just now")).toBeInTheDocument();
     expect(within(region("Scene groups")).getByText("WAYNE")).toBeInTheDocument();
     expect(within(region("Scene groups")).queryByText("VECTOR")).toBeNull();
   });
 
   it("shows what a running sync is at", () => {
     const { view } = setup([group({ count: 100, syncing: true }), group({ id: "g2", name: "FuN", complete: false })]);
-    expect(screen.getByText(/100 releases · syncing…/)).toBeInTheDocument();
-    expect(screen.getByText("Waiting for the next sync")).toBeInTheDocument();
+    expect(within(screen.getByText("100").closest("tr")!).getByText("syncing…")).toBeInTheDocument();
+    expect(screen.getByText("waiting for the next sync")).toBeInTheDocument();
     view.rerender(<ReleaseGroups data={{ Items: [group({})], matching: true }} onData={vi.fn()} onError={vi.fn()} />);
-    expect(screen.getByText("Checking titles on TMDB…")).toBeInTheDocument();
+    expect(screen.getByText("Checking release titles on TMDB…")).toBeInTheDocument();
   });
 
-  it("waits for the first load", () => {
-    setup(null);
-    expect(screen.queryByRole("listitem")).toBeNull();
+  it("waits for the first load, then adds from the table's last row", () => {
+    const { view } = setup(null);
+    expect(screen.queryByRole("table")).toBeNull();
+    view.rerender(<ReleaseGroups data={{ Items: [], matching: false }} onData={vi.fn()} onError={vi.fn()} />);
     expect(within(region("Scene groups")).getByRole("button", { name: "Add" })).toBeDisabled();
   });
 
@@ -77,7 +82,7 @@ describe("ReleaseGroups", () => {
     await userEvent.type(within(scene).getByRole("textbox", { name: "Add to Scene groups" }), " WAYNE ");
     await userEvent.click(within(scene).getByRole("button", { name: "Add" }));
     expect(await within(scene).findByText("WAYNE")).toBeInTheDocument();
-    expect(within(scene).getByText("Waiting for the next sync")).toBeInTheDocument();
+    expect(within(scene).getByText("waiting for the next sync")).toBeInTheDocument();
     expect(within(scene).getByRole("textbox")).toHaveValue("");
     const post = fetch.mock.calls.find(([, init]) => init?.method === "POST");
     expect(JSON.parse(String(post![1]!.body))).toEqual({ name: "WAYNE", kind: "scene" });
@@ -91,7 +96,7 @@ describe("ReleaseGroups", () => {
     await userEvent.type(within(scene).getByRole("textbox"), "NOPE");
     await userEvent.click(within(scene).getByRole("button", { name: "Add" }));
     await vi.waitFor(() =>
-      expect(onError).toHaveBeenLastCalledWith("Couldn't add NOPE: xREL doesn't list a scene group called NOPE.")
+      expect(onError).toHaveBeenLastCalledWith("Couldn't add NOPE: xREL doesn't list a scene group called NOPE."),
     );
     expect(within(scene).getByRole("textbox")).toHaveValue("NOPE");
     expect(onData).not.toHaveBeenCalled();

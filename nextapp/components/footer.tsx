@@ -16,7 +16,7 @@ function GitHubMark({ className }: { className?: string }) {
 export function Footer() {
   return (
     <footer className="mt-auto shrink-0">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground sm:px-6">
+      <div className="flex w-full items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground sm:px-6">
         <span className="tabular-nums">Jellylens {pkg.version}</span>
         <span aria-hidden="true">·</span>
         <a

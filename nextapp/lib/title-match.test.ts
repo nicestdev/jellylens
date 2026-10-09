@@ -32,6 +32,7 @@ describe("parseReleaseName", () => {
     ["Silo.2023.S03E10.German.DL.Atmos.2160p.DV.HDR.ATVP.WEB.H265-ZeroTwo", "Silo", 2023],
     ["Weak.Hero.S02.German.Subbed.1080p.NF.WEB.H264-ZeroTwo", "Weak Hero", null],
     ["Faustrecht.German.AC3.HDRip.x264-FuN", "Faustrecht", null],
+    ["Faustrecht.AV1-WOTT", "Faustrecht", null],
   ])("%s", (name, title, year) => {
     expect(parseReleaseName(name)).toEqual({ title, year });
   });
@@ -74,8 +75,12 @@ describe("fitsRelease", () => {
   it("allows a year apart, three with the very same title", () => {
     expect(fitsRelease(release("Tanz.der.Teufel.1981.German-X"), entry("Tanz der Teufel", 1983))).toBe(true);
     expect(fitsRelease(release("Tanz.der.Teufel.1981.German-X"), entry("Tanz der Teufel", 1985))).toBe(false);
-    expect(fitsRelease(release("Nirvana.1997.German-X"), entry("Nirvana - Die Zukunft ist ein Spiel", 1998))).toBe(true);
-    expect(fitsRelease(release("Nirvana.1997.German-X"), entry("Nirvana - Die Zukunft ist ein Spiel", 1999))).toBe(false);
+    expect(fitsRelease(release("Nirvana.1997.German-X"), entry("Nirvana - Die Zukunft ist ein Spiel", 1998))).toBe(
+      true,
+    );
+    expect(fitsRelease(release("Nirvana.1997.German-X"), entry("Nirvana - Die Zukunft ist ein Spiel", 1999))).toBe(
+      false,
+    );
   });
 
   it("rejects a remake of the same name", () => {
@@ -100,13 +105,18 @@ describe("helpers", () => {
   });
 
   it("keeps a readable fallback title", () => {
-    expect(displayTitle(parseReleaseName("Monster.Haustiere.-.Ein.Hotel.2021.German-X"))).toBe("Monster Haustiere - Ein Hotel");
+    expect(displayTitle(parseReleaseName("Monster.Haustiere.-.Ein.Hotel.2021.German-X"))).toBe(
+      "Monster Haustiere - Ein Hotel",
+    );
   });
 });
 
 describe("decideMatch", () => {
   const outlaws = "The.OutLaws.2023.German.AC3.DL.1080p.Web.x265-FuN";
-  const amza = entry("Amza, der Schrecken der Bojaren", 1966, { tmdbId: 373995, originalTitle: "Haiducii lui Șaptecai" });
+  const amza = entry("Amza, der Schrecken der Bojaren", 1966, {
+    tmdbId: 373995,
+    originalTitle: "Haiducii lui Șaptecai",
+  });
   const theOutLaws = entry("The Out-Laws", 2023, { tmdbId: 921636 });
 
   const lookup = (search: MatchEntry[] = [], otherTitles: string[] = []): TitleLookup => ({
@@ -117,7 +127,10 @@ describe("decideMatch", () => {
   it("takes xREL's link when it fits", async () => {
     const hit = entry("Die Eiskönigin 2", 2019, { originalTitle: "Frozen II" });
     const l = lookup();
-    const d = await decideMatch({ type: "movie", names: ["Frozen.2.2019.German.DL-X"], candidate: hit, verdict: null }, l);
+    const d = await decideMatch(
+      { type: "movie", names: ["Frozen.2.2019.German.DL-X"], candidate: hit, verdict: null },
+      l,
+    );
     expect(d).toMatchObject({ status: "verified", entry: hit });
     expect(l.search).not.toHaveBeenCalled();
   });
@@ -125,7 +138,10 @@ describe("decideMatch", () => {
   it("verifies by TMDB's other titles before searching", async () => {
     const weeks = entry("9½ Wochen", 1986);
     const l = lookup([], ["Neuneinhalb Wochen"]);
-    const d = await decideMatch({ type: "movie", names: ["Neuneinhalb.Wochen.1986.German-X"], candidate: weeks, verdict: null }, l);
+    const d = await decideMatch(
+      { type: "movie", names: ["Neuneinhalb.Wochen.1986.German-X"], candidate: weeks, verdict: null },
+      l,
+    );
     expect(d.status).toBe("verified");
     expect(l.search).not.toHaveBeenCalled();
   });
@@ -148,7 +164,10 @@ describe("decideMatch", () => {
       otherTitles: async () => [],
       search: vi.fn(async (_kind, query) => (query === "Die Brücke" ? [bruecke] : [])),
     };
-    const d = await decideMatch({ type: "movie", names: ["Die.Bruecke.1959.German-X"], candidate: null, verdict: null }, l);
+    const d = await decideMatch(
+      { type: "movie", names: ["Die.Bruecke.1959.German-X"], candidate: null, verdict: null },
+      l,
+    );
     expect(d).toMatchObject({ status: "searched", entry: bruecke });
   });
 
@@ -156,7 +175,7 @@ describe("decideMatch", () => {
     const title = { type: "movie", names: ["Faustrecht.German-X"], candidate: null, verdict: null };
     expect((await decideMatch(title, lookup([entry("Faustrecht", 2003)]))).status).toBe("searched");
     expect((await decideMatch(title, lookup([entry("Faustrecht", 2003), entry("Faustrecht", 1971)]))).status).toBe(
-      "unverified"
+      "unverified",
     );
   });
 

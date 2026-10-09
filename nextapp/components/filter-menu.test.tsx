@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@/test/dom";
-import { FilterChips, FilterMenu, type Facet } from "./filter-menu";
+import { FacetMenu, FilterChips, type Facet } from "./filter-menu";
 
 const facet = (over: Partial<Facet>): Facet => ({
   key: "genre",
@@ -14,32 +14,40 @@ const facet = (over: Partial<Facet>): Facet => ({
   ...over,
 });
 
-describe("FilterMenu", () => {
-  it("counts the values checked, and toggles one", async () => {
+describe("FacetMenu", () => {
+  it("is named after its facet, counts the values checked, and toggles one", async () => {
     const onToggle = vi.fn();
-    render(<FilterMenu facets={[facet({ selected: new Set(["Drama"]), onToggle, counts: new Map([["Crime", 4]]) })]} />);
-    expect(screen.getByRole("button", { name: /Filter/ })).toHaveTextContent("1");
-    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    render(<FacetMenu facet={facet({ selected: new Set(["Drama"]), onToggle, counts: new Map([["Crime", 4]]) })} />);
+    const button = screen.getByRole("button", { name: /Genre/ });
+    expect(button).toHaveTextContent("Genre1");
+    await userEvent.click(button);
     expect(screen.getByRole("menuitemcheckbox", { name: /Drama/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("menuitemcheckbox", { name: /Crime/ })).toHaveTextContent("4");
     await userEvent.click(screen.getByRole("menuitemcheckbox", { name: /Crime/ }));
     expect(onToggle).toHaveBeenCalledWith("Crime");
   });
 
-  it("counts a single-choice section only while it's off its default", async () => {
+  it("names a single-choice facet's pick instead of counting it", async () => {
     const onToggle = vi.fn();
-    const target = (changed: boolean) =>
-      facet({ key: "target", label: "Target", values: ["FuN", "VECTOR"], selected: new Set(["FuN"]), onToggle, single: true, changed });
-    const { rerender } = render(<FilterMenu facets={[target(false)]} />);
-    expect(screen.getByRole("button", { name: /Filter/ })).toHaveTextContent(/^Filter$/);
-    rerender(<FilterMenu facets={[target(true)]} />);
-    expect(screen.getByRole("button", { name: /Filter/ })).toHaveTextContent("1");
-    await userEvent.click(screen.getByRole("button", { name: /Filter/ }));
+    render(
+      <FacetMenu
+        facet={facet({
+          key: "target",
+          label: "Target",
+          values: ["FuN", "VECTOR"],
+          selected: new Set(["FuN"]),
+          onToggle,
+          single: true,
+        })}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Target: FuN" }));
     await userEvent.click(screen.getByRole("menuitemcheckbox", { name: /VECTOR/ }));
     expect(onToggle).toHaveBeenCalledWith("VECTOR");
   });
 
   it("shows nothing without values", () => {
-    const { container } = render(<FilterMenu facets={[facet({ values: [] })]} />);
+    const { container } = render(<FacetMenu facet={facet({ values: [] })} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

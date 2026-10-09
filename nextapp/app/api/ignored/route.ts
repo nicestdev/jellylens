@@ -27,14 +27,22 @@ async function parseEntry(req: Request): Promise<IgnoreEntry | null> {
 
 export async function POST(req: Request) {
   const entry = await parseEntry(req);
-  if (!entry) return Response.json({ error: "Expected { kind, seriesId, season } or { kind: \"collection\", collectionId, movieId }." }, { status: 400 });
+  if (!entry)
+    return Response.json(
+      { error: 'Expected { kind, seriesId, season } or { kind: "collection", collectionId, movieId }.' },
+      { status: 400 },
+    );
   addIgnored(entry);
   return Response.json({ Items: listIgnored() } satisfies IgnoredResponse);
 }
 
 export async function DELETE(req: Request) {
   const entry = await parseEntry(req);
-  if (!entry) return Response.json({ error: "Expected { kind, seriesId, season } or { kind: \"collection\", collectionId, movieId }." }, { status: 400 });
+  if (!entry)
+    return Response.json(
+      { error: 'Expected { kind, seriesId, season } or { kind: "collection", collectionId, movieId }.' },
+      { status: 400 },
+    );
   removeIgnored(entry);
   return Response.json({ Items: listIgnored() } satisfies IgnoredResponse);
 }

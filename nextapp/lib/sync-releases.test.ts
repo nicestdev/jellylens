@@ -35,7 +35,7 @@ function apis(
   pages: Record<string, XrelP2pRelease[][]>,
   tmdb: Record<string, unknown> = {},
   headers: Record<string, string> = {},
-  searches: Record<string, XrelSceneRelease[] | (() => XrelSceneRelease[])> = {}
+  searches: Record<string, XrelSceneRelease[] | (() => XrelSceneRelease[])> = {},
 ) {
   return mockFetch((url) => {
     if (url.hostname === "api.xrel.to" && url.pathname === "/v2/search/releases.json") {
@@ -48,8 +48,12 @@ function apis(
       if (!group) return new Response("", { status: 500 });
       const page = Number(url.searchParams.get("page"));
       return json(
-        { total_count: 0, pagination: { current_page: page, per_page: 100, total_pages: group.length }, list: group[page - 1] ?? [] },
-        { headers }
+        {
+          total_count: 0,
+          pagination: { current_page: page, per_page: 100, total_pages: group.length },
+          list: group[page - 1] ?? [],
+        },
+        { headers },
       );
     }
     if (url.hostname === "api.themoviedb.org") {
@@ -60,20 +64,41 @@ function apis(
 }
 
 const run = (tmdbApiKey = "key") => syncReleases({ tmdbApiKey, language: "de-DE" });
-const titles = () => queryTitles({ words: [], group: [], quality: [], type: [] }, "date", false, 0, 60).items;
+const titles = () => queryTitles({ words: [], group: [], quality: [] }, "date", false, 0, 60).items;
 
 describe("syncReleases", () => {
   it("walks a new group's whole list, then checks its titles on TMDB", async () => {
     addGroup("g1", "VECTOR");
     apis(
-      { g1: [[p2p(3, "Heat.1995.German.DL.1080p-VECTOR", "tt1")], [p2p(2, "The.OutLaws.2023.German.DL.1080p-VECTOR", "tt2")]] },
       {
-        "/3/find/tt1": { movie_results: [{ id: 949, title: "Heat", original_title: "Heat", release_date: "1995-12-15", poster_path: "/h.jpg" }] },
+        g1: [
+          [p2p(3, "Heat.1995.German.DL.1080p-VECTOR", "tt1")],
+          [p2p(2, "The.OutLaws.2023.German.DL.1080p-VECTOR", "tt2")],
+        ],
+      },
+      {
+        "/3/find/tt1": {
+          movie_results: [
+            { id: 949, title: "Heat", original_title: "Heat", release_date: "1995-12-15", poster_path: "/h.jpg" },
+          ],
+        },
         // xREL's wrong link: a Romanian film from 1966.
-        "/3/find/tt2": { movie_results: [{ id: 373995, title: "Amza", original_title: "Haiducii", release_date: "1966-01-01" }] },
+        "/3/find/tt2": {
+          movie_results: [{ id: 373995, title: "Amza", original_title: "Haiducii", release_date: "1966-01-01" }],
+        },
         "/3/movie/373995": { alternative_titles: { titles: [] }, translations: { translations: [] } },
-        "/3/search/movie": { results: [{ id: 921636, title: "The Out-Laws", original_title: "The Out-Laws", release_date: "2023-07-07", poster_path: "/o.jpg" }] },
-      }
+        "/3/search/movie": {
+          results: [
+            {
+              id: 921636,
+              title: "The Out-Laws",
+              original_title: "The Out-Laws",
+              release_date: "2023-07-07",
+              poster_path: "/o.jpg",
+            },
+          ],
+        },
+      },
     );
 
     expect(await run()).toEqual({ groups: 1, added: 2 });
@@ -92,7 +117,9 @@ describe("syncReleases", () => {
     apis({ g1: first });
     await run("");
 
-    const fetch = apis({ g1: [[p2p(3, "C.2020.German-VECTOR"), p2p(2, "B.2020.German-VECTOR")], [p2p(1, "A.2020.German-VECTOR")]] });
+    const fetch = apis({
+      g1: [[p2p(3, "C.2020.German-VECTOR"), p2p(2, "B.2020.German-VECTOR")], [p2p(1, "A.2020.German-VECTOR")]],
+    });
     expect(await run("")).toEqual({ groups: 1, added: 1 });
     expect(fetch.mock.calls.filter(([u]) => String(u).includes("api.xrel.to"))).toHaveLength(1);
     expect(releaseCounts().releases).toBe(3);
@@ -101,10 +128,14 @@ describe("syncReleases", () => {
   it("stops when xREL's calls run out, keeping what it got", async () => {
     addGroup("g1", "VECTOR");
     const reset = String(Math.floor(Date.now() / 1000) + 600);
-    apis({ g1: [[p2p(2, "B.2020.German-VECTOR")], [p2p(1, "A.2020.German-VECTOR")]] }, {}, {
-      "x-ratelimit-remaining": "10",
-      "x-ratelimit-reset": reset,
-    });
+    apis(
+      { g1: [[p2p(2, "B.2020.German-VECTOR")], [p2p(1, "A.2020.German-VECTOR")]] },
+      {},
+      {
+        "x-ratelimit-remaining": "10",
+        "x-ratelimit-reset": reset,
+      },
+    );
 
     await expect(run("")).rejects.toThrow(/rate limit/);
     expect(releaseCounts().releases).toBe(1);
@@ -170,13 +201,18 @@ describe("syncReleases with scene groups", () => {
   it("adds a scene group's search hits next to the P2P lists, with quality and size", async () => {
     addGroup("g1", "VECTOR");
     addGroup("scene:WAYNE", "WAYNE", "scene");
-    apis({ g1: [[p2p(1, "Heat.1995.German.DL.1080p-VECTOR")]] }, {}, {}, {
-      WAYNE: [
-        scene(1, "Silo.S01E01.GERMAN.DL.1080P.WEB.H264-WAYNE", "WAYNE"),
-        // The search also finds other groups' releases with the name in them.
-        scene(2, "Bruce.Wayne.S01E01.GERMAN.720p.WEB.H264-OTHER", "OTHER"),
-      ],
-    });
+    apis(
+      { g1: [[p2p(1, "Heat.1995.German.DL.1080p-VECTOR")]] },
+      {},
+      {},
+      {
+        WAYNE: [
+          scene(1, "Silo.S01E01.GERMAN.DL.1080P.WEB.H264-WAYNE", "WAYNE"),
+          // The search also finds other groups' releases with the name in them.
+          scene(2, "Bruce.Wayne.S01E01.GERMAN.720p.WEB.H264-OTHER", "OTHER"),
+        ],
+      },
+    );
 
     expect(await runWithoutWaits()).toEqual({ groups: 2, added: 2 });
     expect(listGroups().map((g) => [g.name, g.count, g.complete])).toEqual([
@@ -201,12 +237,17 @@ describe("syncReleases with scene groups", () => {
 
   it("stores nothing for a scene group removed while its search ran", async () => {
     addGroup("scene:WAYNE", "WAYNE", "scene");
-    apis({}, {}, {}, {
-      WAYNE: () => {
-        removeGroup("scene:WAYNE");
-        return [scene(1, "A.S01E01.GERMAN.1080P.WEB.H264-WAYNE", "WAYNE")];
+    apis(
+      {},
+      {},
+      {},
+      {
+        WAYNE: () => {
+          removeGroup("scene:WAYNE");
+          return [scene(1, "A.S01E01.GERMAN.1080P.WEB.H264-WAYNE", "WAYNE")];
+        },
       },
-    });
+    );
     await runWithoutWaits();
     expect(releaseCounts()).toEqual({ groups: 0, releases: 0 });
   });

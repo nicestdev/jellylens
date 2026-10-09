@@ -32,16 +32,12 @@ export function Poster({
         : null;
 
   return (
-    <div className={cn("relative aspect-2/3 shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-border", className)}>
+    <div
+      className={cn("relative aspect-2/3 shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-border", className)}
+    >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element -- already resized and cached by /api/image or TMDB
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="size-full object-cover"
-        />
+        <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className="size-full object-cover" />
       ) : (
         <div className="grid size-full place-items-center text-muted-foreground">
           <Tv className="size-4" />

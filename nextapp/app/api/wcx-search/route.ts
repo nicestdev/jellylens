@@ -3,7 +3,8 @@ import { TMDB_API_KEY, WCX_API_URL, WCX_URL } from "@/lib/env";
 import { imdbIdOfTmdb, setWcxUid, wcxUid } from "@/lib/store";
 import { fetchImdbId } from "@/lib/tmdb";
 
-type ExternalResponse = { items?: { data?: { uid?: string }[] } };
+type Hit = { uid?: string; type?: string; options?: { imdb_id?: string; tmdb_id?: number | string } };
+type ExternalResponse = { items?: { data?: Hit[] } };
 
 function detailUrl(uid: string): string {
   return `${WCX_URL}/detail/${uid}`;
@@ -18,11 +19,20 @@ async function imdbIdOf(mediaType: "movie" | "tv", id: number): Promise<string |
   return fetchImdbId(TMDB_API_KEY, mediaType, id).catch(() => undefined);
 }
 
+// WCX searches loosely: asked for one IMDb id it may answer with a different
+// entry whose id is merely similar. A hit counts only if it carries the IMDb
+// id searched for, or the same TMDB id on an entry of the same kind.
+function isEntry(hit: Hit, imdbId: string, mediaType: "movie" | "tv", id: number): boolean {
+  const o = hit.options;
+  if (o?.imdb_id) return o.imdb_id === imdbId;
+  return o?.tmdb_id != null && Number(o.tmdb_id) === id && (hit.type === "movie") === (mediaType === "movie");
+}
+
 const answer = (uid: string | null) => Response.json({ url: uid ? detailUrl(uid) : null } satisfies WcxSearchResponse);
 
 // GET /api/wcx-search?tmdbId=movie:949 — the TMDB entry's page on WCX. A
 // hit is stored for good, a miss for an hour (lib/store/releases.ts), so a
-// panel opened again asks nobody; a failed request isn't stored.
+// title page opened again asks nobody; a failed request isn't stored.
 export async function GET(req: Request) {
   const tmdbId = new URL(req.url).searchParams.get("tmdbId") ?? "";
   const m = /^(movie|tv):(\d+)$/.exec(tmdbId);
@@ -32,7 +42,9 @@ export async function GET(req: Request) {
   if (known !== undefined) return answer(known);
   if (!WCX_API_URL) return answer(null);
 
-  const imdbId = await imdbIdOf(m[1] as "movie" | "tv", Number(m[2]));
+  const mediaType = m[1] as "movie" | "tv";
+  const id = Number(m[2]);
+  const imdbId = await imdbIdOf(mediaType, id);
   if (imdbId === undefined) return answer(null);
   if (imdbId === null) {
     setWcxUid(tmdbId, null);
@@ -43,7 +55,7 @@ export async function GET(req: Request) {
     const res = await fetch(`${WCX_API_URL}/start/search?q=${encodeURIComponent(imdbId)}`);
     if (!res.ok) return answer(null);
     const data: ExternalResponse = await res.json();
-    const uid = data.items?.data?.[0]?.uid ?? null;
+    const uid = data.items?.data?.find((hit) => isEntry(hit, imdbId, mediaType, id))?.uid ?? null;
     setWcxUid(tmdbId, uid);
     return answer(uid);
   } catch {

@@ -4,6 +4,8 @@
 // reads them); the page then picks a group and a quality and adds it up
 // (app/upgrades/logic.ts).
 
+import { MB } from "./format";
+
 // A file's or release's quality, by the same names: xREL's "HD-1080p" and
 // Jellyfin's "1080p" are both "1080p", "4K" and "HD-2160p" are "2160p".
 // Below 720p is all "SD"; "" is unknown.
@@ -43,7 +45,10 @@ export function episodesOf(name: string): { season: number; episodes: number[] |
   if (ep) {
     const first = Number(ep[2]);
     const last = ep[3] ? Number(ep[3]) : first;
-    return { season: Number(ep[1]), episodes: Array.from({ length: Math.max(1, last - first + 1) }, (_, i) => first + i) };
+    return {
+      season: Number(ep[1]),
+      episodes: Array.from({ length: Math.max(1, last - first + 1) }, (_, i) => first + i),
+    };
   }
   const pack = /\.S(\d{1,2})\./i.exec(name);
   return pack ? { season: Number(pack[1]), episodes: null } : null;
@@ -83,7 +88,7 @@ export type GroupRelease = {
 // release (a movie can have several per group and quality: a remux, a
 // REPACK). A season: its pack, or the episodes the library has, one
 // release each (episodes: how many). name: the release's (the first
-// episode's); the release panel links to xREL. size: bytes, null if xREL
+// episode's); the title page links to xREL. size: bytes, null if xREL
 // didn't say for one of them.
 export type Alternative = {
   group: string;
@@ -119,8 +124,6 @@ export type Unit = {
   languages: string[];
   alternatives: Alternative[];
 };
-
-const MB = 1024 * 1024;
 
 function mostCommon<T>(values: T[]): T {
   const counts = new Map<T, number>();
@@ -181,19 +184,17 @@ export function movieUnits(files: OwnedFile[], releases: GroupRelease[]): Unit[]
   const released = byTmdb(releases);
   return [...groupBy(files, (f) => f.parentId)].map(([key, own]) => {
     const tmdbId = Number(own[0].tmdbId);
-    const alternatives = (released.get(tmdbId) ?? []).map(
-      (r): Alternative => ({
-        group: r.group,
-        tier: tierOfRelease(r.quality),
-        codec: codecOf(r.name),
-        name: r.name,
-        size: bytes(r.sizeMb),
-        audio: audioOf(r.name),
-        pack: false,
-        episodes: 1,
-        publishedAt: r.publishedAt,
-      })
-    );
+    const alternatives = (released.get(tmdbId) ?? []).map((r): Alternative => ({
+      group: r.group,
+      tier: tierOfRelease(r.quality),
+      codec: codecOf(r.name),
+      name: r.name,
+      size: bytes(r.sizeMb),
+      audio: audioOf(r.name),
+      pack: false,
+      episodes: 1,
+      publishedAt: r.publishedAt,
+    }));
     return unitOf(key, own, null, alternatives);
   });
 }
@@ -211,7 +212,13 @@ function ownedEpisodes(files: OwnedFile[]): Set<number> | null {
 // What one group has of a season in one quality and codec: its newest pack, and the
 // owned episodes released one by one if it has all of them (the newest
 // release of each). A group with only some of them has nothing to offer.
-function seasonAlternatives(group: string, tier: Tier, codec: string, releases: GroupRelease[], owned: Set<number> | null): Alternative[] {
+function seasonAlternatives(
+  group: string,
+  tier: Tier,
+  codec: string,
+  releases: GroupRelease[],
+  owned: Set<number> | null,
+): Alternative[] {
   const newestFirst = [...releases].sort((a, b) => b.publishedAt - a.publishedAt);
   const out: Alternative[] = [];
   const pack = newestFirst.find((r) => episodesOf(r.name)?.episodes === null);
@@ -262,7 +269,9 @@ export function seasonUnits(files: OwnedFile[], releases: GroupRelease[]): Unit[
     const ofSeason = (released.get(Number(own[0].tmdbId)) ?? []).filter((r) => episodesOf(r.name)?.season === season);
     const alternatives = [
       ...groupBy(ofSeason, (r) => [r.group, tierOfRelease(r.quality), codecOf(r.name)].join("\n")),
-    ].flatMap(([, rs]) => seasonAlternatives(rs[0].group, tierOfRelease(rs[0].quality), codecOf(rs[0].name), rs, owned));
+    ].flatMap(([, rs]) =>
+      seasonAlternatives(rs[0].group, tierOfRelease(rs[0].quality), codecOf(rs[0].name), rs, owned),
+    );
     return unitOf(key, own, season, alternatives);
   });
 }

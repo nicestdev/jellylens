@@ -8,7 +8,7 @@ import { withAvailability } from "@/lib/availability";
 // Three full rows of the widest poster grid.
 const TRENDING_LIMIT = 18;
 
-// TMDB search for the Requests page (?q=…), or this week's trending movies
+// TMDB search for the Discover page (?q=…), or this week's trending movies
 // and shows when there's no query. Proxied so the API key stays server-side.
 // Search results say whether each one is already in the library ("do I have
 // this?"); trending leaves owned ones out, since there's nothing to request.

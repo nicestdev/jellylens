@@ -7,7 +7,7 @@ const API = "https://api.themoviedb.org/3";
 export class TmdbError extends Error {
   constructor(
     public status: number,
-    path: string
+    path: string,
   ) {
     super("TMDB returned HTTP " + status + " for " + path);
   }
@@ -42,8 +42,8 @@ async function getOrNull<T>(apiKey: string, path: string, params?: Record<string
 
 // ---- Shows and collections, for the TMDB sync
 
-export type TmdbShow = { seasons?: { season_number: number }[] };
-export type TmdbSeasonData = { episodes?: { air_date: string | null; episode_number: number }[] };
+type TmdbShow = { seasons?: { season_number: number }[] };
+type TmdbSeasonData = { episodes?: { air_date: string | null; episode_number: number }[] };
 export type TmdbCollectionData = {
   name?: string;
   poster_path?: string | null;
@@ -67,7 +67,12 @@ type RawReleaseDates = { results?: { iso_3166_1: string; release_dates: { type: 
 // ("de-DE"): its own plus the US, where digital releases land first.
 export const releaseCountries = (language: string) => [...new Set([language.split("-")[1] ?? "US", "US"])];
 
-const RELEASE_KIND: Record<number, keyof MovieReleases> = { 2: "theatrical", 3: "theatrical", 4: "digital", 5: "physical" };
+const RELEASE_KIND: Record<number, keyof MovieReleases> = {
+  2: "theatrical",
+  3: "theatrical",
+  4: "digital",
+  5: "physical",
+};
 
 // Only the given countries count, since pooling every country lets in junk
 // (e.g. a "digital" date weeks before the film hit cinemas). Films with no
@@ -90,9 +95,9 @@ export async function fetchMovieReleases(apiKey: string, tmdbId: number, countri
   return earliestReleases(await get<RawReleaseDates>(apiKey, "/movie/" + tmdbId + "/release_dates"), countries);
 }
 
-// ---- Search and trending, for the Requests page
+// ---- Search and trending, for the Discover page
 
-// One movie or show, trimmed to what the Requests page shows. People
+// One movie or show, trimmed to what the Discover page shows. People
 // (search/multi also returns actors) are dropped, and so is anything
 // without a poster: those are almost always obscure entries that only
 // crowd out the one you're looking for.
@@ -124,7 +129,14 @@ const yearOf = (date: string | null) => (date ? Number(date.slice(0, 4)) : null)
 export function toResult(r: RawResult): TmdbResult | null {
   if ((r.media_type !== "movie" && r.media_type !== "tv") || !r.poster_path) return null;
   const date = dateOf(r);
-  return { mediaType: r.media_type, tmdbId: r.id, title: r.title || r.name || "", year: yearOf(date), releaseDate: date, posterPath: r.poster_path };
+  return {
+    mediaType: r.media_type,
+    tmdbId: r.id,
+    title: r.title || r.name || "",
+    year: yearOf(date),
+    releaseDate: date,
+    posterPath: r.poster_path,
+  };
 }
 
 async function results(apiKey: string, path: string, params: Record<string, string>): Promise<TmdbResult[]> {
@@ -143,9 +155,9 @@ export const fetchTmdbTrending = (apiKey: string, language: string, page = 1) =>
 // ---- Matching releases (lib/title-match.ts)
 
 // A movie or show from TMDB's find or search, for the Releases page.
-export type TmdbFindResult = Omit<TmdbResult, "posterPath"> & { posterPath: string | null; originalTitle: string };
+type TmdbFindResult = Omit<TmdbResult, "posterPath"> & { posterPath: string | null; originalTitle: string };
 
-export function toFindResult(mediaType: "movie" | "tv", r: RawResult): TmdbFindResult {
+function toFindResult(mediaType: "movie" | "tv", r: RawResult): TmdbFindResult {
   const date = dateOf(r);
   return {
     mediaType,
@@ -164,12 +176,12 @@ export async function findTmdbByImdb(
   apiKey: string,
   imdbId: string,
   language: string,
-  prefer: "movie" | "tv"
+  prefer: "movie" | "tv",
 ): Promise<TmdbFindResult | null> {
   const body = await get<{ movie_results?: RawResult[]; tv_results?: RawResult[] }>(
     apiKey,
     "/find/" + encodeURIComponent(imdbId),
-    { external_source: "imdb_id", language }
+    { external_source: "imdb_id", language },
   );
   const found = { movie: body.movie_results?.[0], tv: body.tv_results?.[0] };
   const mediaType = found[prefer] ? prefer : prefer === "tv" ? "movie" : "tv";
@@ -184,6 +196,19 @@ export async function fetchImdbId(apiKey: string, mediaType: "movie" | "tv", tmd
   return body?.imdb_id || null;
 }
 
+// One movie or show by its TMDB id, as a search would list it; null if
+// TMDB doesn't have it. For a WCX release added to Downloads, whose entry
+// is known already.
+export async function fetchTmdbEntry(
+  apiKey: string,
+  mediaType: "movie" | "tv",
+  tmdbId: number,
+  language: string,
+): Promise<TmdbFindResult | null> {
+  const body = await getOrNull<RawResult>(apiKey, `/${mediaType}/${tmdbId}`, { language });
+  return body ? toFindResult(mediaType, body) : null;
+}
+
 // TMDB's movie or show search, narrowed to a year when there is one, for
 // releases whose xREL link didn't check out. Best matches first.
 export async function searchTmdbTitle(
@@ -191,7 +216,7 @@ export async function searchTmdbTitle(
   mediaType: "movie" | "tv",
   query: string,
   year: number | null,
-  language: string
+  language: string,
 ): Promise<TmdbFindResult[]> {
   const params: Record<string, string> = { query, language, include_adult: "false" };
   if (year) params[mediaType === "movie" ? "year" : "first_air_date_year"] = String(year);

@@ -184,6 +184,49 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX media_files_grp ON media_files (kind, grp_key);
   `,
+  `
+  -- ---- Downloads: a package per DLC container (or pasted links), its files
+  -- downloaded a few at a time, its archives extracted as they come in.
+  -- status: pending (not started yet), paused, queued, downloading,
+  -- extracting, done, failed. dir: its folder under DOWNLOAD_DIR.
+  -- started_at: when Start was pressed; the queue goes by it.
+  -- media_type, tmdb_id, title, year, poster_path: the TMDB entry its
+  -- name points to (lib/download-match.ts), NULL if none; matched_at: when
+  -- that was looked up, NULL = not yet.
+  CREATE TABLE download_packages (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    dir TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    media_type TEXT,
+    tmdb_id INTEGER,
+    title TEXT,
+    year INTEGER,
+    poster_path TEXT,
+    matched_at TEXT
+  );
+  -- status: queued, downloading, done, extracted (its archive came out and
+  -- it's deleted), skipped (left out at Start), failed. name, size: from the hoster once it's resolved
+  -- (the container's guess until then, size NULL if unknown); received:
+  -- bytes on disk.
+  CREATE TABLE download_files (
+    id INTEGER PRIMARY KEY,
+    package_id INTEGER NOT NULL REFERENCES download_packages ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    name TEXT NOT NULL,
+    size INTEGER,
+    received INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    error TEXT
+  );
+  CREATE INDEX download_files_package ON download_files (package_id);
+  -- The queue's settings from the Downloads page (slots); value is JSON.
+  CREATE TABLE download_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.
@@ -208,7 +251,7 @@ function migrate(conn: Database.Database) {
     throw new Error(
       `jellylens.db is at schema version ${version}, which this Jellylens doesn't know (it knows up to ` +
         `${MIGRATIONS.length}). A database from before 0.13.0 can't be upgraded: move it away and let the syncs ` +
-        `fill a new one (requests and release groups are lost), or run the newer Jellylens that wrote it.`
+        `fill a new one (requests and release groups are lost), or run the newer Jellylens that wrote it.`,
     );
   }
   for (let v = version; v < MIGRATIONS.length; v++) {

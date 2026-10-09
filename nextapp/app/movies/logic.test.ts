@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { movie } from "@/test/fixtures";
-import { movieMeta, movieView, type MovieFilters } from "./logic";
+import type { MovieItem } from "@/lib/api-types";
+import { movie as stored } from "@/test/fixtures";
+import { movieMeta, movieView } from "./logic";
+import type { LibraryFilters } from "@/lib/facets";
 
-const noFilters = (over: Partial<MovieFilters> = {}): MovieFilters => ({
+// A movie as /api/movies sends it.
+const movie = (over: Partial<MovieItem> & { Id: string }): MovieItem => ({ ...stored(over), Codec: "", ...over });
+
+const noFilters = (over: Partial<LibraryFilters> = {}): LibraryFilters => ({
   query: "",
   genres: new Set(),
   langs: new Set(),
@@ -26,7 +31,9 @@ describe("movieView", () => {
 
   it("searches names and combines facets", () => {
     expect(names(movieView(movies, noFilters({ query: " INTER " }), "title", "asc"))).toEqual(["Interstellar"]);
-    expect(names(movieView(movies, noFilters({ genres: new Set(["Sci-Fi"]), langs: new Set(["de"]) }), "title", "asc"))).toEqual(["Inception"]);
+    expect(
+      names(movieView(movies, noFilters({ genres: new Set(["Sci-Fi"]), langs: new Set(["de"]) }), "title", "asc")),
+    ).toEqual(["Inception"]);
   });
 
   it("sorts by the picked key", () => {

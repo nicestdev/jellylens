@@ -3,8 +3,28 @@ import { AUTH_ENABLED } from "@/lib/env";
 import { SESSION_COOKIE, activeUser } from "@/lib/session";
 
 // Missing, Releases, Analytics, Upgrades and Settings, plus everything that syncs or ignores,
-// are admin only; everyone else gets Movies, TV Shows and their own Requests.
-const ADMIN_ONLY = ["/missing", "/settings", "/api/config", "/api/sync", "/api/ignored", "/api/collections", "/api/preferences", "/releases", "/api/releases", "/api/release-groups", "/analytics", "/api/analytics", "/upgrades", "/api/upgrades", "/api/wcx-search"];
+// are admin only; everyone else gets Movies, TV Shows, Discover and their own Wishlist.
+const ADMIN_ONLY = [
+  "/missing",
+  "/downloads",
+  "/api/downloads",
+  "/settings",
+  "/api/config",
+  "/api/sync",
+  "/api/ignored",
+  "/api/collections",
+  "/api/preferences",
+  "/releases",
+  "/api/releases",
+  "/api/release-groups",
+  "/analytics",
+  "/api/analytics",
+  "/upgrades",
+  "/api/upgrades",
+  "/title",
+  "/api/wcx-search",
+  "/api/wcx-releases",
+];
 const PUBLIC = ["/login", "/api/auth"];
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
 

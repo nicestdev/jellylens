@@ -20,7 +20,7 @@ export function listIgnored(): IgnoreEntry[] {
   return all<IgnoredRow>("SELECT kind, target, item FROM ignored ORDER BY rowid").map((r) =>
     r.kind === "collection"
       ? { kind: "collection", collectionId: r.target, movieId: r.item }
-      : { kind: r.kind, seriesId: r.target, season: r.item }
+      : { kind: r.kind, seriesId: r.target, season: r.item },
   );
 }
 

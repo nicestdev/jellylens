@@ -1,74 +1,41 @@
 "use client";
 
-import { useEffect, useState, type Ref } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { FilterChips, FilterMenu } from "@/components/filter-menu";
+import { Breakable } from "@/components/breakable";
+import { LoadMore } from "@/components/load-more";
+import { CELL, MUTED_CELL, NOT_ON_PHONE, NUMBER_CELL, ROW } from "@/components/library-table";
 import { SearchInput } from "@/components/search-input";
 import { SortMenu } from "@/components/sort-menu";
 import { apiFetch, tmdbUrl } from "@/lib/api-client";
 import type { FilesResponse } from "@/lib/api-types";
-import { toggled, type SortDir } from "@/lib/facets";
+import type { SortDir } from "@/lib/facets";
 import { episodeCode, formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import {
-  FILE_SORTS,
-  codecName,
-  filesUrl,
-  groupName,
-  languageLabel,
-  pageText,
-  resolutionName,
-  type Dimension,
-  type FileSortKey,
-  type Library,
-  type ListFilters,
-  type fileFacets,
-} from "./logic";
+import type { Library } from "@/lib/libraries";
+import { FILE_SORTS, filesUrl, pageText, type FileSortKey } from "./logic";
 
-const num = "px-3 py-2 text-right tabular-nums whitespace-nowrap";
+// Size, at the right like the lists' numbers.
+const num = NUMBER_CELL;
 
-// The filter menu's sections, in order, with how each names its values.
-const FACETS: { dimension: Dimension; label: string; format: (v: string) => string; chip: string }[] = [
-  { dimension: "groups", label: "Group", format: groupName, chip: "group" },
-  { dimension: "resolutions", label: "Resolution", format: resolutionName, chip: "res" },
-  { dimension: "codecs", label: "Codec", format: codecName, chip: "codec" },
-  { dimension: "languages", label: "Audio", format: languageLabel, chip: "audio" },
-];
-
-// Every file of a library, searched, filtered by group, resolution, codec
-// and audio language, sorted and paged on the server (/api/analytics/files), a moment
-// after typing stops; the last page stays, dimmed, while the next loads.
-// The filters are the page's, since a click in the share chart sets them
-// too; facets: the menu's values and counts. The list goes back to its
-// first page whenever what's listed changes. version: bumped after a
-// sync, to load again.
-export function FileTable({
-  library,
-  facets,
-  filters,
-  onFilter,
-  version,
-  ref,
-}: {
-  library: Library;
-  facets: ReturnType<typeof fileFacets>;
-  filters: ListFilters;
-  onFilter: (dimension: Dimension, values: Set<string>) => void;
-  version?: string | null;
-  ref?: Ref<HTMLElement>;
-}) {
+// Every file of a library, to look up exactly which file you have of a
+// title: its name, then its group, resolution, codec and audio (the
+// charts' dimensions; left out on phones, where the name has them) and
+// size. Searched, sorted and paged on the server (/api/analytics/files), a
+// moment after typing stops; the list stays, dimmed, while the new one
+// loads, and further pages load as it's scrolled to the end. version:
+// bumped after a sync, to load again.
+export function FileTable({ library, version }: { library: Library; version?: string | null }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<FileSortKey>("title");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const listing = filesUrl(library, query, filters, sortKey, sortDir, 0);
-  const [paging, setPaging] = useState({ listing, offset: 0 });
-  const offset = paging.listing === listing ? paging.offset : 0;
-  const url = filesUrl(library, query, filters, sortKey, sortDir, offset);
+  const url = filesUrl(library, query, sortKey, sortDir, 0);
 
-  const [data, setData] = useState<{ url: string; offset: number; res: FilesResponse } | null>(null);
+  // The first page of what's listed, and the pages scrolled in after it.
+  const [data, setData] = useState<{ url: string; res: FilesResponse; items: FilesResponse["Items"] } | null>(null);
   const [error, setError] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
   const loading = data?.url !== url;
 
   useEffect(() => {
@@ -77,7 +44,7 @@ export function FileTable({
       try {
         const res = await apiFetch<FilesResponse>(url);
         if (cancelled) return;
-        setData({ url, offset, res });
+        setData({ url, res, items: res.Items });
         setError("");
       } catch (e) {
         if (!cancelled) setError(`Failed to load files: ${(e as Error).message}`);
@@ -87,42 +54,36 @@ export function FileTable({
       cancelled = true;
       clearTimeout(debounce);
     };
-  }, [url, offset, version]);
+  }, [url, version]);
+
+  // The next page, kept only if the list is still the one it continues.
+  async function showMore() {
+    if (loadingMore || !data || loading) return;
+    const from = data;
+    setLoadingMore(true);
+    try {
+      const res = await apiFetch<FilesResponse>(filesUrl(library, query, sortKey, sortDir, from.items.length));
+      setData((d) => (d === from ? { ...d, items: [...d.items, ...res.Items] } : d));
+    } catch (e) {
+      setError(`Failed to load files: ${(e as Error).message}`);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const res = data?.res;
-  const items = res?.Items ?? [];
-  const pageSize = res?.pageSize ?? 50;
+  const items = data?.items ?? [];
   const matched = res?.matched ?? 0;
-  const shownOffset = data?.offset ?? 0;
-  const pages = Math.max(1, Math.ceil(matched / pageSize));
-  const page = Math.floor(shownOffset / pageSize);
-  const goTo = (n: number) => setPaging({ listing, offset: n * pageSize });
-  const toggle = (dimension: Dimension, value: string) => onFilter(dimension, toggled(filters[dimension], value));
-
-  const chips = FACETS.flatMap(({ dimension, format, chip }) =>
-    [...filters[dimension]].map((v) => ({ id: `${chip}-${v}`, label: format(v), onRemove: () => toggle(dimension, v) }))
-  );
 
   return (
-    <section ref={ref} className="mt-8 scroll-mt-20">
+    <section className="mt-8">
       <h2 className="text-sm font-medium text-muted-foreground">Files</h2>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex items-center gap-2">
         <SearchInput
           value={query}
           onChange={setQuery}
           placeholder={library === "shows" ? "Search shows, episodes and files…" : "Search titles and files…"}
-          className="w-full sm:w-64"
-        />
-        <FilterMenu
-          facets={FACETS.map(({ dimension, label, format }) => ({
-            key: dimension,
-            label,
-            values: facets[dimension].values,
-            counts: facets[dimension].counts,
-            selected: filters[dimension],
-            onToggle: (v: string) => toggle(dimension, v),
-            format,
-          }))}
+          className="min-w-0 flex-1 sm:w-64 sm:flex-none"
         />
         <div className="ml-auto">
           <SortMenu
@@ -136,7 +97,6 @@ export function FileTable({
           />
         </div>
       </div>
-      <FilterChips chips={chips} onClear={() => FACETS.forEach((f) => onFilter(f.dimension, new Set()))} />
 
       {error ? (
         <Alert variant="destructive" className="mt-3">
@@ -147,29 +107,35 @@ export function FileTable({
 
       <div
         aria-busy={loading}
-        className={cn("mt-3 overflow-hidden rounded-xl border bg-card transition-opacity", loading && data && "opacity-60")}
+        className={cn("mt-3 overflow-hidden rounded-lg border transition-opacity", loading && data && "opacity-60")}
       >
-        <table className="w-full text-sm">
-          <thead className="border-b text-xs text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">Title</th>
-              <th className="px-3 py-2 text-left font-medium">Group</th>
-              <th className="hidden px-3 py-2 text-left font-medium sm:table-cell">Resolution</th>
-              <th className="hidden px-3 py-2 text-left font-medium sm:table-cell">Codec</th>
-              <th className="hidden px-3 py-2 text-left font-medium md:table-cell">Audio</th>
+        <table className="w-full border-collapse text-[13px]">
+          {/* Not on a phone, like the other tables: the rows say it all. */}
+          <thead className="max-sm:hidden">
+            <tr className="bg-card text-left text-xs text-muted-foreground">
+              <th className={cn(CELL, "font-medium")}>Title</th>
+              <th className={cn(CELL, NOT_ON_PHONE, "font-medium")}>Group</th>
+              <th className={cn(CELL, NOT_ON_PHONE, "font-medium")}>Quality</th>
+              <th className={cn(CELL, NOT_ON_PHONE, "font-medium")}>Codec</th>
+              <th className={cn(CELL, NOT_ON_PHONE, "font-medium")}>Audio</th>
               <th className={cn(num, "font-medium")}>Size</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="max-sm:[&>tr:first-child]:border-t-0">
             {items.map((f) => {
               const href = tmdbUrl(library === "shows" ? "tv" : "movie", f.tmdbId ?? undefined);
               const code = episodeCode(f.season, f.episode, f.episodeEnd);
               return (
-                <tr key={f.key}>
+                <tr key={f.key} className={ROW}>
                   <td className="w-full max-w-0 px-3 py-2">
                     <div className="truncate">
                       {href ? (
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium transition-colors hover:text-primary"
+                        >
                           {f.title}
                         </a>
                       ) : (
@@ -177,45 +143,37 @@ export function FileTable({
                       )}
                       {code ? (
                         <span className="ml-1.5 text-muted-foreground">
-                          <span className="tabular-nums">{code}</span>
+                          <span className="font-num tabular-nums">{code}</span>
                           {f.episodeTitle ? ` · ${f.episodeTitle}` : null}
                         </span>
                       ) : f.year ? (
-                        <span className="ml-1.5 text-muted-foreground">{f.year}</span>
+                        <span className="ml-1.5 font-num text-muted-foreground">{f.year}</span>
                       ) : null}
                     </div>
-                    <div className="truncate text-xs text-muted-foreground" title={f.fileName}>
-                      {f.fileName}
+                    <div
+                      className="font-mono text-[11px] [overflow-wrap:anywhere] text-muted-foreground sm:truncate"
+                      title={f.fileName}
+                    >
+                      <Breakable text={f.fileName} />
                     </div>
                   </td>
-                  <td className={cn("px-3 py-2 whitespace-nowrap", !f.group && "text-muted-foreground")}>
-                    {groupName(f.group ?? "")}
-                  </td>
-                  <td className="hidden px-3 py-2 whitespace-nowrap text-muted-foreground sm:table-cell">
-                    {resolutionName(f.resolution)}
-                  </td>
-                  <td className="hidden px-3 py-2 whitespace-nowrap text-muted-foreground sm:table-cell">
-                    {codecName(f.codec)}
-                  </td>
-                  <td
-                    className="hidden px-3 py-2 whitespace-nowrap text-muted-foreground md:table-cell"
-                    title={f.languages.map(languageLabel).join(", ") || undefined}
-                  >
-                    {f.languages.join(", ") || "–"}
-                  </td>
+                  <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{f.group ?? "—"}</td>
+                  <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{f.resolution || "—"}</td>
+                  <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{f.codec || "—"}</td>
+                  <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{f.languages.join(" · ") || "—"}</td>
                   <td className={num}>{formatBytes(f.size)}</td>
                 </tr>
               );
             })}
             {res && !items.length ? (
-              <tr>
+              <tr className="border-t border-border/70">
                 <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                  No files match. Try a different search or remove a filter.
+                  No files match. Try a different search.
                 </td>
               </tr>
             ) : null}
             {!res ? (
-              <tr>
+              <tr className="border-t border-border/70">
                 <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
                   Loading…
                 </td>
@@ -225,28 +183,10 @@ export function FileTable({
         </table>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{res ? pageText(shownOffset, items.length, matched) : ""}</span>
-        {pages > 1 ? (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" aria-label="Previous page" disabled={page === 0} onClick={() => goTo(page - 1)}>
-              <ChevronLeft />
-            </Button>
-            <span className="tabular-nums">
-              Page {page + 1} of {pages}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Next page"
-              disabled={page >= pages - 1}
-              onClick={() => goTo(page + 1)}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      {res && items.length < matched && !loading ? (
+        <LoadMore shown={items.length} onMore={showMore} loading={loadingMore} />
+      ) : null}
+      <p className="mt-2 text-xs text-muted-foreground">{res ? pageText(0, items.length, matched) : ""}</p>
     </section>
   );
 }

@@ -29,14 +29,14 @@ export type Line = {
   airing?: boolean;
 };
 export type Group = { item: ShowItem; lines: Line[] };
-export type CollectionGroup = { collection: CollectionItem; parts: CollectionPartItem[] };
+type CollectionGroup = { collection: CollectionItem; parts: CollectionPartItem[] };
 // gaps: in seasons that have finished airing; seasons: aired seasons you
 // own none of; airing: in seasons still airing.
 export type CategoryKey = "gaps" | "seasons" | "airing" | "movies" | "mismatch";
 export type ShowCategory = Exclude<CategoryKey, "movies">;
 
 // Ignored for that kind, either the season or the whole show (season null).
-export function isIgnored(ignored: ShowIgnore[], kind: IgnoreKind, seriesId: string, season: number): boolean {
+function isIgnored(ignored: ShowIgnore[], kind: IgnoreKind, seriesId: string, season: number): boolean {
   return ignored.some((e) => e.kind === kind && e.seriesId === seriesId && (e.season === null || e.season === season));
 }
 
@@ -78,17 +78,17 @@ export function lineText(line: Line): string {
   return episodeRanges(line.episodes);
 }
 
-export function isPartIgnored(ignored: CollectionIgnore[], collectionId: string, movieId: number): boolean {
+function isPartIgnored(ignored: CollectionIgnore[], collectionId: string, movieId: number): boolean {
   return ignored.some((e) => e.collectionId === collectionId && (e.movieId === null || e.movieId === movieId));
 }
 
 // A collection's parts that aren't owned, minus ignored ones.
-export function missingParts(c: CollectionItem, ignored: CollectionIgnore[]): CollectionPartItem[] {
+function missingParts(c: CollectionItem, ignored: CollectionIgnore[]): CollectionPartItem[] {
   return c.parts.filter((p) => !p.owned && !isPartIgnored(ignored, c.id, p.tmdbId));
 }
 
 // Episodes (or issues) across the groups' lines.
-export function lineCount(groups: Group[]): number {
+function lineCount(groups: Group[]): number {
   return groups.reduce((sum, g) => sum + g.lines.reduce((s, l) => s + l.count, 0), 0);
 }
 
@@ -101,7 +101,10 @@ export function missingView(shows: ShowItem[], collections: CollectionItem[], ig
   const groupsOf = (key: ShowCategory): Group[] => {
     const kind: IgnoreKind = key === "mismatch" ? "mismatch" : "missing";
     return shows
-      .map((item) => ({ item, lines: linesFor(item, key).filter((l) => !isIgnored(showIgnored, kind, item.Id, l.season)) }))
+      .map((item) => ({
+        item,
+        lines: linesFor(item, key).filter((l) => !isIgnored(showIgnored, kind, item.Id, l.season)),
+      }))
       .filter((g) => g.lines.length > 0);
   };
   const showGroups: Record<ShowCategory, Group[]> = {
@@ -123,12 +126,6 @@ export function missingView(shows: ShowItem[], collections: CollectionItem[], ig
     mismatch: of(showGroups.mismatch),
   };
   return { showIgnored, collectionIgnored, showGroups, collectionGroups, counts };
-}
-
-// Under a card's count: "episodes in 3 shows", or "nothing to do".
-export function cardHint(count: number, groups: number, unit: string, groupUnit: string): string {
-  if (!count) return "nothing to do";
-  return `${count === 1 ? unit : unit + "s"} in ${plural(groups, groupUnit)}`;
 }
 
 // "12 episodes and 3 movies", or "Nothing".

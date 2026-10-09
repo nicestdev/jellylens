@@ -6,7 +6,9 @@ import { all, one, run } from "./sql";
 // Everything the page shows is counted, searched, filtered and paged here
 // in SQL, never in the browser (a show library has tens of thousands).
 
-export type Library = "movies" | "shows";
+import type { Library } from "../libraries";
+
+export type { Library };
 const KIND: Record<Library, "movie" | "episode"> = { movies: "movie", shows: "episode" };
 
 // A file as stored. parentId: the movie, or the episode's show; title,
@@ -43,7 +45,7 @@ export function replaceFiles(files: StoredFile[]) {
   const insert = db().prepare(
     `INSERT INTO media_files (kind, item_id, idx, parent_id, title, year, tmdb_id, season, episode, episode_end, episode_title,
                               file_name, size, grp, grp_key, resolution, codec, languages, search)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const f of files) {
     insert.run(
@@ -65,9 +67,18 @@ export function replaceFiles(files: StoredFile[]) {
       f.resolution,
       f.codec,
       JSON.stringify(f.languages),
-      f.search
+      f.search,
     );
   }
+}
+
+// Each movie's video codec label (its first version's file), by item id,
+// for the Movies list; "" when Jellyfin didn't name one.
+export function movieCodecs(): Map<string, string> {
+  const rows = all<{ itemId: string; codec: string }>(
+    "SELECT item_id AS itemId, codec FROM media_files WHERE kind = 'movie' AND idx = 0",
+  );
+  return new Map(rows.map((r) => [r.itemId, r.codec]));
 }
 
 // ---- Totals, for the tiles and the share chart
@@ -84,7 +95,7 @@ export function fileSummary(library: Library): FileTotals & { titles: number; wi
     `SELECT (SELECT count(*) FROM ${library}) AS titles, count(DISTINCT parent_id) AS withFiles,
             count(*) AS files, ifnull(sum(size), 0) AS size
        FROM media_files WHERE kind = ?`,
-    KIND[library]
+    KIND[library],
   )!;
   return { ...r, pending: r.titles > 0 && r.files === 0 };
 }
@@ -96,7 +107,7 @@ function partsBy<V>(library: Library, column: "grp" | "resolution" | "codec"): F
     `SELECT ${column} AS value, count(*) AS files, sum(size) AS size
        FROM media_files WHERE kind = ? GROUP BY ${column === "grp" ? "grp_key" : column}
       ORDER BY files DESC, size DESC, value`,
-    KIND[library]
+    KIND[library],
   );
 }
 
@@ -112,12 +123,12 @@ export function filesByLanguage(library: Library): FilePart[] {
     `SELECT l.value AS value, count(*) AS files, sum(size) AS size
        FROM media_files, json_each(media_files.languages) l WHERE kind = ?
       GROUP BY l.value ORDER BY files DESC, size DESC, value`,
-    KIND[library]
+    KIND[library],
   );
   const none = one<FilePart>(
     `SELECT '' AS value, count(*) AS files, ifnull(sum(size), 0) AS size
        FROM media_files WHERE kind = ? AND languages = '[]'`,
-    KIND[library]
+    KIND[library],
   )!;
   return none.files ? [...tagged, none] : tagged;
 }
@@ -168,7 +179,10 @@ function where(library: Library, f: FileFilters): { sql: string; params: unknown
   }
   if (f.groups.length) {
     const named = f.groups.filter((g): g is string => g !== null).map((g) => g.toLowerCase());
-    const either = [named.length ? `grp_key IN (${marks(named.length)})` : "", f.groups.includes(null) ? "grp_key IS NULL" : ""];
+    const either = [
+      named.length ? `grp_key IN (${marks(named.length)})` : "",
+      f.groups.includes(null) ? "grp_key IS NULL" : "",
+    ];
     clauses.push("(" + either.filter(Boolean).join(" OR ") + ")");
     params.push(...named);
   }
@@ -208,7 +222,7 @@ export function queryFiles(
   sort: FileSort,
   asc: boolean,
   offset: number,
-  limit: number
+  limit: number,
 ): { matched: number; items: FileListRow[] } {
   const w = where(library, f);
   const rows = all<Omit<FileListRow, "languages"> & { languages: string; matched: number }>(
@@ -220,13 +234,38 @@ export function queryFiles(
       LIMIT ? OFFSET ?`,
     ...w.params,
     limit,
-    offset
+    offset,
   );
   // Past the last page there's no row to carry the count.
   const matched =
-    rows[0]?.matched ?? (offset > 0 ? one<{ n: number }>(`SELECT count(*) AS n FROM media_files ${w.sql}`, ...w.params)!.n : 0);
+    rows[0]?.matched ??
+    (offset > 0 ? one<{ n: number }>(`SELECT count(*) AS n FROM media_files ${w.sql}`, ...w.params)!.n : 0);
   return {
     matched,
-    items: rows.map(({ matched: _matched, languages, ...row }) => ({ ...row, languages: JSON.parse(languages) as string[] })),
+    items: rows.map(({ matched: _matched, languages, ...row }) => ({
+      ...row,
+      languages: JSON.parse(languages) as string[],
+    })),
   };
+}
+
+// What the library has of a TMDB movie or show, for the Downloads page:
+// each file's quality, codec and group, and an episode's season and
+// numbers.
+export type LibraryCopy = {
+  season: number | null;
+  episode: number | null;
+  episodeEnd: number | null;
+  resolution: string;
+  codec: string;
+  group: string | null;
+};
+
+export function libraryCopies(kind: "movie" | "episode", tmdbId: number): LibraryCopy[] {
+  return all<LibraryCopy>(
+    `SELECT season, episode, episode_end AS episodeEnd, resolution, codec, grp AS "group"
+     FROM media_files WHERE kind = ? AND tmdb_id = ?`,
+    kind,
+    String(tmdbId),
+  );
 }

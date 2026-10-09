@@ -8,7 +8,11 @@ async function load(authEnabled = "true") {
   vi.resetModules();
   const { proxy } = await import("./proxy");
   const { createSession, SESSION_COOKIE } = await import("./lib/session");
-  return { proxy, cookie: (admin: boolean) => `${SESSION_COOKIE}=${createSession({ id: admin ? "admin" : "user", name: "X", admin })}` };
+  return {
+    proxy,
+    cookie: (admin: boolean) =>
+      `${SESSION_COOKIE}=${createSession({ id: admin ? "admin" : "user", name: "X", admin })}`,
+  };
 }
 
 beforeEach(() => {
@@ -18,7 +22,7 @@ beforeEach(() => {
           { Id: "admin", Name: "Admin", Policy: { IsAdministrator: true } },
           { Id: "user", Name: "User", Policy: { IsAdministrator: false } },
         ])
-      : undefined
+      : undefined,
   );
 });
 
@@ -54,7 +58,16 @@ describe("proxy", () => {
       expect(res.headers.get("location"), path).toBe("http://jellylens.test/movies");
       expect(passes(await proxy(request(path, { cookie: cookie(true) }))), path).toBe(true);
     }
-    for (const path of ["/api/releases", "/api/releases/abc", "/api/release-groups", "/api/analytics", "/api/upgrades", "/api/sync/tmdb", "/api/preferences", "/api/config"]) {
+    for (const path of [
+      "/api/releases",
+      "/api/releases/abc",
+      "/api/release-groups",
+      "/api/analytics",
+      "/api/upgrades",
+      "/api/sync/tmdb",
+      "/api/preferences",
+      "/api/config",
+    ]) {
       expect((await proxy(request(path, { cookie: cookie(false) }))).status, path).toBe(403);
     }
   });
@@ -70,8 +83,12 @@ describe("proxy", () => {
     const { proxy, cookie } = await load();
     const res = await proxy(request("/api/requests", { method: "POST", cookie: cookie(true), site: "cross-site" }));
     expect(res.status).toBe(403);
-    expect((await proxy(request("/api/requests", { method: "POST", cookie: cookie(true), site: "same-site" }))).status).toBe(403);
-    expect(passes(await proxy(request("/api/requests", { method: "POST", cookie: cookie(true), site: "same-origin" })))).toBe(true);
+    expect(
+      (await proxy(request("/api/requests", { method: "POST", cookie: cookie(true), site: "same-site" }))).status,
+    ).toBe(403);
+    expect(
+      passes(await proxy(request("/api/requests", { method: "POST", cookie: cookie(true), site: "same-origin" }))),
+    ).toBe(true);
     // Reading is fine from anywhere (it's still gated by the session).
     expect(passes(await proxy(request("/api/requests", { cookie: cookie(true), site: "cross-site" })))).toBe(true);
   });

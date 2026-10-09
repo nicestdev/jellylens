@@ -48,7 +48,7 @@ const LOGIN_CLIENT = 'MediaBrowser Client="Jellylens", Device="Jellylens", Devic
 export async function authenticateUser(
   baseUrl: string,
   username: string,
-  password: string
+  password: string,
 ): Promise<{ id: string; name: string; admin: boolean } | null> {
   const res = await fetch(baseUrl + "/Users/AuthenticateByName", {
     method: "POST",

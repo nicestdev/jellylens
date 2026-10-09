@@ -26,7 +26,7 @@ describe("audioLanguages", () => {
         { Type: "Audio", Language: "eng" },
         { Type: "Audio", Language: "deu" },
         { Type: "Audio", Language: "und" },
-      ])
+      ]),
     ).toEqual(["DE", "EN"]);
     expect(audioLanguages(undefined)).toEqual([]);
   });

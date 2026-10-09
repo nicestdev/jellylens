@@ -60,7 +60,7 @@ export function ownedEpisodes(episodes: JellyfinEpisode[]): Map<string, Map<numb
 // specials TMDB's data is thin on.
 export function diffSeries(
   tmdbSeries: Record<string, TmdbSeriesEntry>,
-  owned: Map<string, Map<number, Set<number>>>
+  owned: Map<string, Map<number, Set<number>>>,
 ): { missing: Record<string, MissingEntry>; mismatches: Record<string, MismatchEntry> } {
   const missing: Record<string, MissingEntry> = {};
   const mismatches: Record<string, MismatchEntry> = {};
@@ -104,7 +104,7 @@ export function diffSeries(
   return { missing, mismatches };
 }
 
-// Out on disc or digital, by the same rules as the Requests page
+// Out on disc or digital, by the same rules as Discover and the Wishlist
 // (movieAvailability). Parts released over a year ago carry no release
 // dates (the TMDB sync skips them) and count as out; a recent one whose
 // dates couldn't be fetched doesn't, until the next TMDB sync gets them.
@@ -117,12 +117,11 @@ function homeReleased(p: CollectionPart, today: string, yearAgo: string): boolea
 
 // Per collection with a part not owned (by TMDB movie id) that's out on disc
 // or digital: its owned parts and those. Parts in cinemas, announced or
-// undated are left out until they're out. ownedMovies: TMDB id -> the
-// owned movie's file name (for matching the release group).
+// undated are left out until they're out. ownedMovies: their TMDB ids.
 export function missingCollections(
   collections: Record<string, TmdbCollection>,
-  ownedMovies: Map<number, { fileName?: string }>,
-  now = new Date()
+  ownedMovies: Set<number>,
+  now = new Date(),
 ): Record<string, MissingCollection> {
   const { today, yearAgo } = releaseWindow(now);
   const result: Record<string, MissingCollection> = {};
@@ -136,7 +135,6 @@ export function missingCollections(
         releaseDate: p.releaseDate,
         posterPath: p.posterPath,
         owned: ownedMovies.has(p.tmdbId),
-        fileName: ownedMovies.get(p.tmdbId)?.fileName,
       }));
     const count = parts.filter((p) => !p.owned).length;
     if (count) result[id] = { count, parts };
@@ -148,10 +146,10 @@ export function computeMissing(now = new Date()) {
   if (!syncedAt("tmdb")) throw new Error("Sync TMDB first — nothing to compare against yet.");
 
   const { missing, mismatches } = diffSeries(getTmdbSeries(), ownedEpisodes(getEpisodes()));
-  const ownedMovies = new Map(
+  const ownedMovies = new Set(
     libraryEntries()
       .filter((e) => e.mediaType === "movie")
-      .map((e) => [Number(e.tmdbId), { fileName: e.fileName }] as const)
+      .map((e) => Number(e.tmdbId)),
   );
   const collections = missingCollections(getTmdbCollections(), ownedMovies, now);
   const at = now.toISOString();

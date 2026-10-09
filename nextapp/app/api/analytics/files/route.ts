@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
   const { matched, items } = queryFiles(
     library,
     {
-      words: fold(params.get("q") ?? "").split(" ").filter(Boolean),
+      words: fold(params.get("q") ?? "")
+        .split(" ")
+        .filter(Boolean),
       groups: params.getAll("group").map((g) => g || null),
       resolutions: params.getAll("resolution"),
       codecs: params.getAll("codec"),
@@ -31,7 +33,7 @@ export async function GET(req: NextRequest) {
     sort,
     asc,
     offset,
-    PAGE_SIZE
+    PAGE_SIZE,
   );
   return Response.json({ matched, pageSize: PAGE_SIZE, Items: items } satisfies FilesResponse);
 }

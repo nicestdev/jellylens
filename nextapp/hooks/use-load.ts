@@ -30,7 +30,7 @@ export function useLoad<T>(load: () => Promise<T>): {
         if (!isCurrent()) return;
         setError(e instanceof Error ? e.message : String(e));
         setLoading(false);
-      }
+      },
     );
   }, []);
 

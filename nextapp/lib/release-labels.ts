@@ -3,15 +3,16 @@ import { plural } from "./format";
 import { episodesOf } from "./upgrades";
 
 // How xREL releases and their matches read, on the Releases page's tiles
-// and in the release panel (components/release-panel.tsx), which Requests
-// and Missing open too.
+// and on a title's page (components/title-view.tsx).
+
+// A file or release without a group, wherever it's named.
+export const NO_GROUP = "n/a";
 
 // xREL's category ("HD-1080p") as shown ("1080p").
 export const qualityLabel = (v: string) => v.replace(/^HD-/, "");
 
-// "2010 · 3 releases" under the poster and in the panel. releases: left out
-// while it isn't known yet (a panel opened from Requests or Missing, before
-// it has loaded).
+// "2010 · 3 releases" under a Releases poster. releases: left out while
+// it isn't known.
 export const titleMeta = (t: { year: number | null; releases?: number }) =>
   [t.year, t.releases === undefined ? null : plural(t.releases, "release")].filter(Boolean).join(" · ");
 
@@ -41,7 +42,7 @@ export function matchNote(match: MatchInfo): string | null {
 
 const withYear = (t: { title: string; year: number | null }) => (t.year ? `${t.title} (${t.year})` : t.title);
 
-// The panel's ⋯ menu for fixing a match by hand: drop TMDB's data, take
+// A title's ⋯ menu for fixing a match by hand: drop TMDB's data, take
 // xREL's link after all, or go back to the automatic check.
 export function matchActions(match: MatchInfo): { label: string; verdict: MatchInfo["verdict"] }[] {
   const actions: { label: string; verdict: MatchInfo["verdict"] }[] = [];
@@ -56,7 +57,7 @@ export function matchActions(match: MatchInfo): { label: string; verdict: MatchI
 }
 
 // A show's single episodes, one entry per season, group and version, as
-// the panel lists them: "Show.S01E01.German.1080p.WEB-GRP" and its E02 are
+// a title's page lists them: "Show.S01E01.German.1080p.WEB-GRP" and its E02 are
 // "Show.S01.German.1080p.WEB-GRP · 2 episodes". The entry keeps the newest
 // one's id, link and date (the list is newest first); a lone episode stays
 // as it is, like season packs, movies and anything else.
@@ -81,6 +82,52 @@ export function groupEpisodes(items: TitleRelease[]): TitleRelease[] {
     for (const e of episodes) season.episodes.add(e);
   }
   return out.map((e) =>
-    !("releases" in e) ? e : e.releases.length === 1 ? e.releases[0] : { ...e.releases[0], name: e.name, episodes: e.episodes.size }
+    !("releases" in e)
+      ? e
+      : e.releases.length === 1
+        ? e.releases[0]
+        : {
+            ...e.releases[0],
+            name: e.name,
+            episodes: e.episodes.size,
+            // All of them together, if xREL gave each one's.
+            sizeMb: e.releases.every((r) => r.sizeMb !== null)
+              ? e.releases.reduce((n, r) => n + (r.sizeMb ?? 0), 0)
+              : null,
+          },
   );
+}
+
+// The resolution a release name says ("2160p"), else its xREL category's
+// ("HD-1080p"), "SD" for the SD ones ("x264-SD", "XviD"); null: neither
+// says. For a title page's quality switch, xREL's and WCX's alike.
+export function resolutionOf(name: string, quality?: string | null): string | null {
+  const res = /\b(2160p|1080p|720p|576p|480p)\b/i.exec(name)?.[1] ?? /(2160p|1080p|720p)/i.exec(quality ?? "")?.[1];
+  if (res) return res.toLowerCase();
+  return /SD$|XviD/i.test(quality ?? "") ? "SD" : null;
+}
+
+// The seasons a release name holds: "S02" or "S02E05" → [2, 2],
+// "S01-S03", "S01+S02", "S01-03" → [1, 3]; null if it names none.
+export function seasonsOf(name: string): [number, number] | null {
+  const m = /\.S(\d{1,2})(?:E\d{1,3})?(?:[+-]S?(\d{1,2}))?(?=[.+-])/i.exec(name);
+  if (!m) return null;
+  const from = Number(m[1]);
+  return [from, m[2] ? Math.max(from, Number(m[2])) : from];
+}
+
+// A release's name without the title the row shows above it: what comes
+// after a show's "S01" or "S01E02", or after a movie's year (the last one
+// before the first tag, so "Blade.Runner.2049.2017" loses 2017 too). The
+// whole name if it has neither. keepEpisode: a show's from its "S01" on
+// (a title page lists every season's).
+const FIRST_TAG =
+  /[._ -](german|english|dl|ml|2160p|1080p|720p|576p|480p|uhd|web|web-?dl|webrip|bluray|hdtv)(?=[._ -])/i;
+
+export function withoutTitle(name: string, { keepEpisode = false } = {}): string {
+  const show = /^(.*?[._ -])(S\d{1,2}(?:E\d{1,3}(?:-?E\d{1,3})?)?[._ -])/i.exec(name);
+  if (show) return name.slice(show[1].length + (keepEpisode ? 0 : show[2].length)) || name;
+  const end = FIRST_TAG.exec(name)?.index ?? name.length;
+  const year = [...name.slice(0, end).matchAll(/[._ ](?:19|20)\d{2}(?=[._ ]|$)/g)].at(-1);
+  return (year && name.slice(year.index + year[0].length + 1)) || name;
 }

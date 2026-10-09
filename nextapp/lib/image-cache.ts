@@ -28,7 +28,9 @@ export function getImage(itemId: string, tag: string, height: number): Promise<C
     if (cached) return { body: cached, type: TYPES[hit.slice(stem.length)] };
 
     const url = `${JELLYFIN_URL}/Items/${itemId}/Images/Primary?fillHeight=${height}&quality=90&tag=${tag}`;
-    const res = await fetch(url, { headers: { ...authHeaders(JELLYFIN_API_KEY), Accept: "image/*" } }).catch(() => null);
+    const res = await fetch(url, { headers: { ...authHeaders(JELLYFIN_API_KEY), Accept: "image/*" } }).catch(
+      () => null,
+    );
     if (!res?.ok) return null;
     const type = (res.headers.get("content-type") || "").split(";")[0].trim();
     if (!EXT[type]) return null;

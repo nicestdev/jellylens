@@ -6,9 +6,13 @@ describe("releaseGroupOf", () => {
     expect(releaseGroupOf("Heat.1995.German.DL.1080p.BluRay.x264-GRP.mkv")).toBe("GRP");
     expect(releaseGroupOf("Spider-Man.2002.German.DTS-HD.1080p.BluRay.x264-SpiCy.mkv")).toBe("SpiCy");
     expect(releaseGroupOf("Heat.1995.1080p.x265-FuN[rarbg].mkv")).toBe("FuN");
+    // A codec after the dash is no group.
+    expect(releaseGroupOf("Heat.1995.1080p.WEB-AV1.mkv")).toBeNull();
     // An invisible character after it, a space in an episode's title.
     expect(releaseGroupOf("The.OA.S02E01.Engel.des.Todes.GERMAN.AC3.720p.WebDL.x265-w00t\u200b.mkv")).toBe("w00t");
-    expect(releaseGroupOf("The.Wire.S02E05.Neue Faelle.alte.Freunde.GERMAN.AAC.720p.BluRay.x265-w00t.mkv")).toBe("w00t");
+    expect(releaseGroupOf("The.Wire.S02E05.Neue Faelle.alte.Freunde.GERMAN.AAC.720p.BluRay.x265-w00t.mkv")).toBe(
+      "w00t",
+    );
   });
 
   it("reads it after Sonarr's and Radarr's bracketed quality", () => {
@@ -73,7 +77,10 @@ describe("storedFiles", () => {
         year: 1959,
         tmdbId: "7",
         width: 1920,
-        files: [file("Die.Bruecke.1959.2160p.x265-FuN.mkv", { Size: 9, Width: 3840, Height: 1600, Languages: ["DE", "EN"] }), file("Die Bruecke.mkv", { Codec: "" })],
+        files: [
+          file("Die.Bruecke.1959.2160p.x265-FuN.mkv", { Size: 9, Width: 3840, Height: 1600, Languages: ["DE", "EN"] }),
+          file("Die Bruecke.mkv", { Codec: "" }),
+        ],
       }),
     ]);
     expect(rows).toEqual([
@@ -116,11 +123,21 @@ describe("storedFiles", () => {
         files: [file("s01e02.mkv", { Folder: "Silo.S01.German.DL.1080p.WEB.h264-GRP" })],
       }),
     ]);
-    expect(row).toMatchObject({ kind: "episode", parentId: "s1", season: 1, episode: 2, group: "GRP", search: "silo silo holston s01e02 s01e02 mkv" });
+    expect(row).toMatchObject({
+      kind: "episode",
+      parentId: "s1",
+      season: 1,
+      episode: 2,
+      group: "GRP",
+      search: "silo silo holston s01e02 s01e02 mkv",
+    });
   });
 
   it("names a group as first spelled in the library", () => {
-    const rows = storedFiles([item({ id: "m1", files: [file("A.2001.1080p-FuN.mkv")] }), item({ id: "m2", files: [file("B.2002.1080p-FUN.mkv")] })]);
+    const rows = storedFiles([
+      item({ id: "m1", files: [file("A.2001.1080p-FuN.mkv")] }),
+      item({ id: "m2", files: [file("B.2002.1080p-FUN.mkv")] }),
+    ]);
     expect(rows.map((r) => [r.group, r.groupKey])).toEqual([
       ["FuN", "fun"],
       ["FuN", "fun"],

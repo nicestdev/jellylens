@@ -16,7 +16,7 @@ beforeEach(() => {
       shows: [show({ Id: "s", ProviderIds: { Tmdb: "10" } })],
       episodes: [],
     },
-    "2026-06-15T00:00:00Z"
+    "2026-06-15T00:00:00Z",
   );
   return () => vi.useRealTimers();
 });
@@ -30,9 +30,20 @@ function tmdb(overrides: Record<string, () => Response> = {}) {
       case "/3/tv/10":
         return json({ seasons: [{ season_number: 0 }, { season_number: 1 }, { season_number: 2 }] });
       case "/3/tv/10/season/1":
-        return json({ episodes: [{ episode_number: 2, air_date: "2023-05-12" }, { episode_number: 1, air_date: "2023-05-05" }] });
+        return json({
+          episodes: [
+            { episode_number: 2, air_date: "2023-05-12" },
+            { episode_number: 1, air_date: "2023-05-05" },
+          ],
+        });
       case "/3/tv/10/season/2":
-        return json({ episodes: [{ episode_number: 1, air_date: "2026-06-01" }, { episode_number: 2, air_date: "2026-07-01" }, { episode_number: 3, air_date: null }] });
+        return json({
+          episodes: [
+            { episode_number: 1, air_date: "2026-06-01" },
+            { episode_number: 2, air_date: "2026-07-01" },
+            { episode_number: 3, air_date: null },
+          ],
+        });
       case "/3/collection/c":
         return json({
           name: "The Collection",
@@ -44,7 +55,9 @@ function tmdb(overrides: Record<string, () => Response> = {}) {
           ],
         });
       case "/3/movie/3/release_dates":
-        return json({ results: [{ iso_3166_1: "DE", release_dates: [{ type: 3, release_date: "2026-03-01T00:00:00Z" }] }] });
+        return json({
+          results: [{ iso_3166_1: "DE", release_dates: [{ type: 3, release_date: "2026-03-01T00:00:00Z" }] }],
+        });
     }
   });
 }
@@ -107,12 +120,19 @@ describe("syncTmdb", () => {
     await sync();
     tmdb({ "/3/movie/3/release_dates": () => new Response("", { status: 500 }) });
     await sync();
-    expect(getTmdbCollections().c.parts[1].releases).toEqual({ theatrical: "2026-03-01", digital: null, physical: null });
+    expect(getTmdbCollections().c.parts[1].releases).toEqual({
+      theatrical: "2026-03-01",
+      digital: null,
+      physical: null,
+    });
   });
 
   it("drops what TMDB no longer has", async () => {
     replaceTmdb({ s: { tmdbId: "10", seasons: [] } }, {}, "2026-06-01T00:00:00Z");
-    tmdb({ "/3/tv/10": () => new Response("", { status: 404 }), "/3/collection/c": () => new Response("", { status: 404 }) });
+    tmdb({
+      "/3/tv/10": () => new Response("", { status: 404 }),
+      "/3/collection/c": () => new Response("", { status: 404 }),
+    });
     const result = await sync();
     expect(result).toMatchObject({ shows: 0, collections: 0, failed: 0 });
     expect(getTmdbSeries()).toEqual({});

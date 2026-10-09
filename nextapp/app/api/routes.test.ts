@@ -26,7 +26,11 @@ const ana: SessionUser = { id: "u2", name: "Ana", admin: false };
 const admin: SessionUser = { id: "a1", name: "Admin", admin: true };
 
 const post = (url: string, body: unknown, method = "POST") =>
-  new Request("http://jellylens.test" + url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  new Request("http://jellylens.test" + url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
 beforeEach(() => {
   jar.clear();
@@ -36,12 +40,20 @@ beforeEach(() => {
 describe("POST /api/auth/login", () => {
   const login = async (body: unknown, headers: Record<string, string> = {}) => {
     const { POST } = await import("./auth/login/route");
-    return POST(new Request("http://jellylens.test/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }));
+    return POST(
+      new Request("http://jellylens.test/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      }),
+    );
   };
   const jellyfin = (ok: boolean) =>
     mockFetch((url) => {
       if (url.pathname === "/Users/AuthenticateByName") {
-        return ok ? json({ AccessToken: "t", User: { Id: "u1", Name: "Bob", Policy: { IsAdministrator: false } } }) : new Response("", { status: 401 });
+        return ok
+          ? json({ AccessToken: "t", User: { Id: "u1", Name: "Bob", Policy: { IsAdministrator: false } } })
+          : new Response("", { status: 401 });
       }
       if (url.pathname === "/Sessions/Logout") return new Response(null, { status: 204 });
     });
@@ -92,12 +104,20 @@ describe("/api/requests", () => {
   beforeEach(() => {
     // The library's metadata language, and no release dates for anything.
     mockFetch((url) => {
-      if (url.pathname === "/System/Configuration") return json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" });
+      if (url.pathname === "/System/Configuration")
+        return json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" });
       if (url.pathname.endsWith("/release_dates")) return json({ results: [] });
     });
   });
 
-  const heat = { mediaType: "movie", tmdbId: 949, title: "Heat", year: 1995, releaseDate: "1995-12-15", posterPath: "/h.jpg" };
+  const heat = {
+    mediaType: "movie",
+    tmdbId: 949,
+    title: "Heat",
+    year: 1995,
+    releaseDate: "1995-12-15",
+    posterPath: "/h.jpg",
+  };
   const call = async (method: "GET" | "POST" | "DELETE", body?: unknown) => {
     const route = await import("./requests/route");
     const res = method === "GET" ? await route.GET() : await route[method](post("/api/requests", body, method));
@@ -143,14 +163,33 @@ describe("/api/requests", () => {
     const { addGroup, insertReleases, saveTitleMatch } = await import("@/lib/store");
     addGroup("g1", "VECTOR");
     insertReleases("g1", [
-      { id: "r1", name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", link: "https://www.xrel.to/p2p/r1", type: "movie", quality: "HD-2160p", publishedAt: 1000, titleKey: "heat", imdbId: "tt0113277" },
+      {
+        id: "r1",
+        name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR",
+        link: "https://www.xrel.to/p2p/r1",
+        type: "movie",
+        quality: "HD-2160p",
+        publishedAt: 1000,
+        titleKey: "heat",
+        imdbId: "tt0113277",
+      },
     ]);
-    saveTitleMatch("heat", "verified", { ...heat, mediaType: "movie", originalTitle: "Heat" }, { title: "Heat", year: 1995 });
+    saveTitleMatch(
+      "heat",
+      "verified",
+      { ...heat, mediaType: "movie", originalTitle: "Heat" },
+      { title: "Heat", year: 1995 },
+    );
     auth.user = bob;
     await call("POST", heat);
     await call("POST", { ...heat, tmdbId: 1, title: "Silo" });
     const items = (await call("GET")).body.Items as { title: string; releaseGroups: string[] }[];
-    expect(items.map((r) => [r.title, r.releaseGroups])).toEqual(expect.arrayContaining([["Heat", ["VECTOR"]], ["Silo", []]]));
+    expect(items.map((r) => [r.title, r.releaseGroups])).toEqual(
+      expect.arrayContaining([
+        ["Heat", ["VECTOR"]],
+        ["Silo", []],
+      ]),
+    );
   });
 
   it("rejects malformed bodies", async () => {
@@ -169,26 +208,68 @@ describe("GET /api/collections", () => {
   it("says which favorite groups have released each part you don't own", async () => {
     const store = await import("@/lib/store");
     const part = (tmdbId: number, title: string) => ({ tmdbId, title, releaseDate: "1995-12-15", posterPath: null });
-    store.replaceTmdb({}, { c1: { name: "Heat Collection", posterPath: null, parts: [part(949, "Heat"), part(1, "Heat 2")] } }, null);
+    store.replaceTmdb(
+      {},
+      { c1: { name: "Heat Collection", posterPath: null, parts: [part(949, "Heat"), part(1, "Heat 2")] } },
+      null,
+    );
     store.replaceMissing(
       {},
-      { c1: { count: 1, parts: [{ ...part(1, "Heat 2"), owned: false }, { ...part(949, "Heat"), owned: true, fileName: "Heat.mkv" }] } },
+      {
+        c1: {
+          count: 1,
+          parts: [
+            { ...part(1, "Heat 2"), owned: false },
+            { ...part(949, "Heat"), owned: true },
+          ],
+        },
+      },
       {},
-      null
+      null,
     );
     store.addGroup("g1", "VECTOR");
     store.insertReleases("g1", [
-      { id: "r1", name: "Heat.2.2026.German.DL.2160p.WEB.x265-VECTOR", link: "https://www.xrel.to/p2p/r1", type: "movie", quality: "HD-2160p", publishedAt: 1000, titleKey: "heat2", imdbId: "tt1" },
-      { id: "r2", name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", link: "https://www.xrel.to/p2p/r2", type: "movie", quality: "HD-2160p", publishedAt: 1000, titleKey: "heat", imdbId: "tt0113277" },
+      {
+        id: "r1",
+        name: "Heat.2.2026.German.DL.2160p.WEB.x265-VECTOR",
+        link: "https://www.xrel.to/p2p/r1",
+        type: "movie",
+        quality: "HD-2160p",
+        publishedAt: 1000,
+        titleKey: "heat2",
+        imdbId: "tt1",
+      },
+      {
+        id: "r2",
+        name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR",
+        link: "https://www.xrel.to/p2p/r2",
+        type: "movie",
+        quality: "HD-2160p",
+        publishedAt: 1000,
+        titleKey: "heat",
+        imdbId: "tt0113277",
+      },
     ]);
-    store.saveTitleMatch("heat2", "verified", { ...part(1, "Heat 2"), mediaType: "movie", originalTitle: "Heat 2", year: 2026 }, { title: "Heat 2", year: 2026 });
-    store.saveTitleMatch("heat", "verified", { ...part(949, "Heat"), mediaType: "movie", originalTitle: "Heat", year: 1995 }, { title: "Heat", year: 1995 });
+    store.saveTitleMatch(
+      "heat2",
+      "verified",
+      { ...part(1, "Heat 2"), mediaType: "movie", originalTitle: "Heat 2", year: 2026 },
+      { title: "Heat 2", year: 2026 },
+    );
+    store.saveTitleMatch(
+      "heat",
+      "verified",
+      { ...part(949, "Heat"), mediaType: "movie", originalTitle: "Heat", year: 1995 },
+      { title: "Heat", year: 1995 },
+    );
 
     const { GET } = await import("./collections/route");
     const body = await (await GET()).json();
-    expect(body.Items[0].parts.map((p: { title: string; releaseGroups: string[]; fileName?: string }) => [p.title, p.releaseGroups, p.fileName])).toEqual([
-      ["Heat 2", ["VECTOR"], undefined],
-      ["Heat", [], undefined],
+    expect(
+      body.Items[0].parts.map((p: { title: string; releaseGroups: string[] }) => [p.title, p.releaseGroups]),
+    ).toEqual([
+      ["Heat 2", ["VECTOR"]],
+      ["Heat", []],
     ]);
   });
 });
@@ -196,15 +277,11 @@ describe("GET /api/collections", () => {
 describe("PATCH /api/preferences", () => {
   it("takes known options and rejects anything else", async () => {
     const { PATCH } = await import("./preferences/route");
-    expect(await (await PATCH(post("/api/preferences", { showFileNames: true }, "PATCH"))).json()).toEqual({
-      showFileNames: true,
-      showSdReleases: false,
-    });
     expect(await (await PATCH(post("/api/preferences", { showSdReleases: true }, "PATCH"))).json()).toEqual({
-      showFileNames: true,
       showSdReleases: true,
     });
-    expect((await PATCH(post("/api/preferences", { showFileNames: "yes" }, "PATCH"))).status).toBe(400);
+    expect((await PATCH(post("/api/preferences", { showSdReleases: "yes" }, "PATCH"))).status).toBe(400);
+    expect((await PATCH(post("/api/preferences", { showFileNames: true }, "PATCH"))).status).toBe(400);
     expect((await PATCH(post("/api/preferences", { admin: true }, "PATCH"))).status).toBe(400);
   });
 });
@@ -235,16 +312,21 @@ describe("GET /api/movies and /api/analytics", () => {
     });
     replaceJellyfin(
       {
-        movies: [movie({ Id: "m1", Name: "Heat", FileName: "Heat.1995.1080p.x264-GRP.mkv" }), movie({ Id: "m2", Name: "Alien" })],
+        movies: [
+          movie({ Id: "m1", Name: "Heat", FileName: "Heat.1995.1080p.x264-GRP.mkv" }),
+          movie({ Id: "m2", Name: "Alien" }),
+        ],
         shows: [show({ Id: "s1", Name: "Silo" })],
         episodes: [],
         files: storedFiles([
-          item("movie", "m1", "Heat", [{ Name: "Heat.1995.1080p.x264-GRP.mkv", Size: 42, Codec: "h264", Width: 1920, Height: 800 }]),
+          item("movie", "m1", "Heat", [
+            { Name: "Heat.1995.1080p.x264-GRP.mkv", Size: 42, Codec: "h264", Width: 1920, Height: 800 },
+          ]),
           item("movie", "m2", "Alien", [{ Name: "Alien.mkv", Size: 8, Codec: "" }]),
           item("episode", "e1", "Silo", [{ Name: "Silo.S01E01.1080p.WEB.h264-cnhd.mkv", Size: 3, Codec: "h264" }]),
         ]),
       },
-      "2026-10-01T00:00:00.000Z"
+      "2026-10-01T00:00:00.000Z",
     );
   };
   const files = async (query: string) => {
@@ -252,19 +334,25 @@ describe("GET /api/movies and /api/analytics", () => {
     return (await GET(new NextRequest("http://jellylens.test/api/analytics/files?" + query))).json();
   };
 
-  it("keeps file names out of the movie list", async () => {
+  it("keeps file names out of the movie list, but gives each its codec", async () => {
     library();
     const { GET } = await import("./movies/route");
-    const [item] = (await (await GET()).json()).Items;
-    expect(item).toMatchObject({ Id: "m1" });
-    expect(item).not.toHaveProperty("FileName");
+    const [heat, alien] = (await (await GET()).json()).Items;
+    expect(heat).toMatchObject({ Id: "m1", Codec: "x264" });
+    expect(heat).not.toHaveProperty("FileName");
+    expect(alien).toMatchObject({ Id: "m2", Codec: "" });
   });
 
   it("sums up each library's files by group, resolution, codec and language", async () => {
     library();
     const { GET } = await import("./analytics/route");
     const body = await (await GET()).json();
-    expect(body.shows).toMatchObject({ titles: 1, withFiles: 1, files: 1, groups: [{ value: "cnhd", files: 1, size: 3 }] });
+    expect(body.shows).toMatchObject({
+      titles: 1,
+      withFiles: 1,
+      files: 1,
+      groups: [{ value: "cnhd", files: 1, size: 3 }],
+    });
     expect({ ...body, shows: undefined }).toEqual({
       movies: {
         titles: 2,
@@ -293,13 +381,22 @@ describe("GET /api/movies and /api/analytics", () => {
   it("pages the files, searched and filtered", async () => {
     library();
     expect(await files("")).toMatchObject({ matched: 2, pageSize: 50, Items: [{ title: "Alien" }, { title: "Heat" }] });
-    expect(await files("q=heat 1995")).toMatchObject({ matched: 1, Items: [{ fileName: "Heat.1995.1080p.x264-GRP.mkv" }] });
+    expect(await files("q=heat 1995")).toMatchObject({
+      matched: 1,
+      Items: [{ fileName: "Heat.1995.1080p.x264-GRP.mkv" }],
+    });
     // An empty value: files without a group, or an unknown codec.
     expect(await files("group=")).toMatchObject({ matched: 1, Items: [{ title: "Alien" }] });
-    expect(await files("group=grp&codec=x264&resolution=1080p")).toMatchObject({ matched: 1, Items: [{ title: "Heat" }] });
+    expect(await files("group=grp&codec=x264&resolution=1080p")).toMatchObject({
+      matched: 1,
+      Items: [{ title: "Heat" }],
+    });
     expect(await files("sort=size")).toMatchObject({ Items: [{ size: 42 }, { size: 8 }] });
     expect(await files("sort=nonsense&offset=1")).toMatchObject({ matched: 2, Items: [{ title: "Heat" }] });
-    expect(await files("library=shows")).toMatchObject({ matched: 1, Items: [{ title: "Silo", season: 1, episode: 1 }] });
+    expect(await files("library=shows")).toMatchObject({
+      matched: 1,
+      Items: [{ title: "Silo", season: 1, episode: 1 }],
+    });
   });
 });
 
@@ -327,7 +424,7 @@ describe("GET /api/upgrades", () => {
           },
         ]),
       },
-      "2026-10-01T00:00:00.000Z"
+      "2026-10-01T00:00:00.000Z",
     );
     addGroup("g1", "VECTOR");
     insertReleases("g1", [
@@ -342,7 +439,12 @@ describe("GET /api/upgrades", () => {
         titleKey: "t1",
       },
     ]);
-    saveTitleMatch("t1", "verified", { mediaType: "movie", tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null }, { title: "Heat", year: 1995 });
+    saveTitleMatch(
+      "t1",
+      "verified",
+      { mediaType: "movie", tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null },
+      { title: "Heat", year: 1995 },
+    );
 
     const body = await upgrades("library=movies");
     expect(body).toMatchObject({
@@ -371,12 +473,19 @@ describe("/api/release-groups", () => {
         const q = url.searchParams.get("q")!.toLowerCase();
         if (url.searchParams.get("scene") === "1") {
           const name = scene.find((n) => n.toLowerCase() === q);
-          return json({ results: name ? [{ id: "s1", dirname: `X.1080p.WEB-${name}`, link_href: "", time: 0, group_name: name }] : [] });
+          return json({
+            results: name
+              ? [{ id: "s1", dirname: `X.1080p.WEB-${name}`, link_href: "", time: 0, group_name: name }]
+              : [],
+          });
         }
         const name = p2p.find((n) => "-" + n.toLowerCase() === q);
-        return json({ p2p_results: name ? [{ id: "r", dirname: "x", link_href: "", pub_time: 0, group: { id: "g1", name } }] : [] });
+        return json({
+          p2p_results: name ? [{ id: "r", dirname: "x", link_href: "", pub_time: 0, group: { id: "g1", name } }] : [],
+        });
       }
-      if (url.pathname === "/v2/p2p/releases.json") return json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 0 }, list: [] });
+      if (url.pathname === "/v2/p2p/releases.json")
+        return json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 0 }, list: [] });
       if (url.pathname === "/System/Configuration") return json({});
     });
   // Searches are spaced 2.5 s apart; skip the waits.
@@ -453,7 +562,14 @@ describe("/api/release-groups", () => {
 });
 
 describe("/api/releases/<key>", () => {
-  const heat = { mediaType: "movie" as const, tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null };
+  const heat = {
+    mediaType: "movie" as const,
+    tmdbId: 949,
+    title: "Heat",
+    originalTitle: "Heat",
+    year: 1995,
+    posterPath: null,
+  };
   const release = (id: string, titleKey: string, name: string, publishedAt: number) => ({
     id,
     titleKey,
@@ -490,10 +606,16 @@ describe("/api/releases/<key>", () => {
     mockFetch(() => new Response("", { status: 404 }));
     await seed();
     const { POST } = await import("./releases/[key]/route");
-    const res = await POST(post("/api/releases/movie:949", { titleKey: "heat-sd", verdict: "wrong" }), params("movie:949"));
+    const res = await POST(
+      post("/api/releases/movie:949", { titleKey: "heat-sd", verdict: "wrong" }),
+      params("movie:949"),
+    );
     expect((await res.json()).titles.map((t: { titleKey: string }) => t.titleKey)).toEqual(["heat"]);
 
-    const last = await POST(post("/api/releases/movie:949", { titleKey: "heat", verdict: "wrong" }), params("movie:949"));
+    const last = await POST(
+      post("/api/releases/movie:949", { titleKey: "heat", verdict: "wrong" }),
+      params("movie:949"),
+    );
     const body = await last.json();
     expect(body.key).toBe("heat");
     expect(body.titles[0].match).toMatchObject({ status: "rejected", verdict: "wrong" });
@@ -511,7 +633,8 @@ describe("/api/releases/<key>", () => {
 describe("GET /api/tmdb-image", () => {
   it("refuses sizes and names it doesn't serve", async () => {
     const { GET } = await import("./tmdb-image/[size]/[file]/route");
-    const call = (size: string, file: string) => GET(new Request("http://x"), { params: Promise.resolve({ size, file }) });
+    const call = (size: string, file: string) =>
+      GET(new Request("http://x"), { params: Promise.resolve({ size, file }) });
     expect((await call("original", "a.jpg")).status).toBe(400);
     expect((await call("w342", "..%2Fsecret")).status).toBe(400);
   });
@@ -523,7 +646,9 @@ describe("POST /api/sync/<stage>", () => {
     const { POST } = await import("./sync/[stage]/route");
     const { GET } = await import("./status/route");
 
-    const res = await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "jellyfin" }) });
+    const res = await POST(new Request("http://x", { method: "POST" }), {
+      params: Promise.resolve({ stage: "jellyfin" }),
+    });
     expect(res.status).toBe(202);
     const status = await (await GET()).json();
     expect(status.jellyfin).toMatchObject({ running: true, error: null });
@@ -537,12 +662,18 @@ describe("POST /api/sync/<stage>", () => {
     // The missing recheck fails without a TMDB sync to compare against.
     await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "missing" }) });
     await new Promise((resolve) => setImmediate(resolve));
-    expect((await (await GET()).json()).missing).toMatchObject({ running: false, error: expect.stringMatching(/Sync TMDB first/) });
+    expect((await (await GET()).json()).missing).toMatchObject({
+      running: false,
+      error: expect.stringMatching(/Sync TMDB first/),
+    });
   });
 
   it("refuses an unknown stage", async () => {
     const { POST } = await import("./sync/[stage]/route");
-    expect((await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "toString" }) })).status).toBe(404);
+    expect(
+      (await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "toString" }) }))
+        .status,
+    ).toBe(404);
   });
 });
 
@@ -551,12 +682,20 @@ describe("GET /api/wcx-search", () => {
     const { GET } = await import("./wcx-search/route");
     return GET(new Request("http://jellylens.test/api/wcx-search?" + params));
   };
-  const heat = { mediaType: "movie" as const, tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null };
+  const heat = {
+    mediaType: "movie" as const,
+    tmdbId: 949,
+    title: "Heat",
+    originalTitle: "Heat",
+    year: 1995,
+    posterPath: null,
+  };
 
   it("searches WCX by the IMDb id a release's lookup found, and stores a hit", async () => {
     saveImdbLookup("tt0113277", heat);
     const fetch = mockFetch((url) => {
-      if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "abc123" }] } });
+      if (url.hostname === "api.wcx.test")
+        return json({ items: { data: [{ uid: "abc123", options: { imdb_id: "tt0113277" } }] } });
     });
     const res = await call("tmdbId=movie:949");
     expect(await res.json()).toEqual({ url: "https://wcx.test/detail/abc123" });
@@ -574,7 +713,10 @@ describe("GET /api/wcx-search", () => {
   it("asks TMDB for the IMDb id when no release came across the entry", async () => {
     const fetch = mockFetch((url) => {
       if (url.pathname === "/3/tv/1399/external_ids") return json({ imdb_id: "tt0944947" });
-      if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "got" }] } });
+      if (url.hostname === "api.wcx.test")
+        return json({
+          items: { data: [{ uid: "got", type: "series", options: { imdb_id: "tt0944947", tmdb_id: 1399 } }] },
+        });
     });
     expect(await (await call("tmdbId=tv:1399")).json()).toEqual({ url: "https://wcx.test/detail/got" });
     const wcx = fetch.mock.calls.map(([u]) => new URL(String(u))).find((u) => u.hostname === "api.wcx.test");
@@ -603,6 +745,33 @@ describe("GET /api/wcx-search", () => {
     expect(fetch2).not.toHaveBeenCalled();
   });
 
+  it("skips a hit that is another entry with a similar IMDb id", async () => {
+    saveImdbLookup("tt16248144", { ...heat, tmdbId: 893364 });
+    mockFetch((url) => {
+      if (url.hostname === "api.wcx.test")
+        return json({
+          items: {
+            data: [
+              { uid: "jaguar", type: "movie", options: { imdb_id: "tt16740144", tmdb_id: 959098 } },
+              { uid: "belle", type: "movie", options: { imdb_id: "tt16248144", tmdb_id: 893364 } },
+            ],
+          },
+        });
+    });
+    expect(await (await call("tmdbId=movie:893364")).json()).toEqual({ url: "https://wcx.test/detail/belle" });
+  });
+
+  it("finds nothing when every hit is another entry", async () => {
+    saveImdbLookup("tt16248144", { ...heat, tmdbId: 893364 });
+    mockFetch((url) => {
+      if (url.hostname === "api.wcx.test")
+        return json({
+          items: { data: [{ uid: "jaguar", type: "movie", options: { imdb_id: "tt16740144", tmdb_id: 959098 } }] },
+        });
+    });
+    expect(await (await call("tmdbId=movie:893364")).json()).toEqual({ url: null });
+  });
+
   it("asks again after a failed request, which isn't remembered", async () => {
     saveImdbLookup("tt0113277", heat);
     mockFetch(() => new Response("", { status: 503 }));
@@ -612,7 +781,10 @@ describe("GET /api/wcx-search", () => {
 
     mockFetch((url) => {
       if (url.pathname === "/3/tv/5/external_ids") return json({ imdb_id: "tt5" });
-      if (url.hostname === "api.wcx.test") return json({ items: { data: [{ uid: "found" }] } });
+      if (url.hostname === "api.wcx.test") {
+        const q = url.searchParams.get("q");
+        return json({ items: { data: [{ uid: "found", options: { imdb_id: q } }] } });
+      }
     });
     expect(await (await call("tmdbId=movie:949")).json()).toEqual({ url: "https://wcx.test/detail/found" });
     expect(await (await call("tmdbId=tv:5")).json()).toEqual({ url: "https://wcx.test/detail/found" });
@@ -624,4 +796,3 @@ describe("GET /api/wcx-search", () => {
     expect((await call("tmdbId=person:1")).status).toBe(400);
   });
 });
-

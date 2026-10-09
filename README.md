@@ -18,18 +18,18 @@ to add next.
 
 ## Features
 
-- 🎬 **Library overview**: poster grids for movies and shows. Search, sort, and filter by genre, audio language or airing status.
+- 🎬 **Library overview**: your movies and shows as a poster grid, with the resolution on each movie and the airing status on each show. Search, sort, and filter by genre or audio language.
 - 🧩 **Missing episodes**: gaps, whole missing seasons and seasons that are still airing, all checked against TMDB. Ignore anything you don't care about.
-- 🎞️ **Movie collections**: for every TMDB collection you own part of (*The Lord of the Rings*, *Bourne*, …), the movies you don't have yet. Only those out on disc or digital count, and each one can be requested right from its card. A badge shows which of your favorite release groups have released a missing movie; click it to see the releases. Optionally shows the file names you own, so you can get the rest from the same release group.
+- 🎞️ **Movie collections**: for every TMDB collection you own part of (*The Lord of the Rings*, *Bourne*, …), the movies you don't have yet. Only those out on disc or digital count, and each one goes on your wishlist with a click on its poster. A badge shows which of your favorite release groups have released a missing movie; click it to see the releases.
 - 🔍 **Mismatch detection**: episodes and seasons TMDB doesn't know about, usually a wrong match or a duplicate file.
 - 🗣️ **Language coverage**: flags shows where only some seasons have your audio language.
-- 📝 **Requests**: search TMDB or browse what's trending and keep a wishlist. Titles you own are marked, and requests switch to *Available* when they show up in Jellyfin. Everyone has their own list; admins see all of them, most wanted first, with a badge for the favorite release groups that have released each one, which opens its releases.
-- 📦 **Releases**: pick your favorite P2P groups in Settings, and Jellylens keeps their release lists from [xREL](https://www.xrel.to) in sync. The Releases page shows one poster per title with the qualities it comes in; search and filter by group, quality or type to see whether something is out from a group you like. Releases below 720p (XviD, SD, DVD) are hidden unless you turn them on in Settings. Each title is checked against its release names, so a release xREL linked to the wrong movie doesn't show that movie's poster or title.
+- 📝 **Discover and Wishlist**: search TMDB or browse what's trending and put what you want on your Wishlist. Titles you own are marked, and wishlist entries switch to *In library* when they show up in Jellyfin, with the next digital or Blu-ray date for what isn't out yet. Everyone has their own Wishlist; admins see all of them, most wanted first, with a badge for the favorite release groups that have released each one, which opens its releases.
+- 📦 **Releases**: pick your favorite P2P and scene groups in Settings, and Jellylens keeps their release lists from [xREL](https://www.xrel.to) in sync. The Releases page shows each title as a poster with the qualities it comes in; search and filter by group or quality to see whether something is out from a group you like, and open a title for its page with every release of it. Releases below 720p (XviD, SD, DVD) are hidden unless you turn them on in Settings. Each title is checked against its release names, so a release xREL linked to the wrong movie doesn't show that movie's poster or title.
 - 📊 **Analytics**: what your movies' and episodes' files are made of: totals, and charts of files and storage by release group, audio language, resolution and codec. Click a piece of a chart to list its files, or search, filter and sort every file below.
 - ⬆️ **Upgrades**: pick one of your favorite release groups and see which of your movies, or seasons of your shows, it has released too, in the quality and codec you want: what changes for each (group, quality, codec, original audio), how much storage it frees or takes, and how the group's share of your library would grow. Narrow it to the groups you have now, or to releases that add the original audio to a German-only file.
 - 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing, Releases, Analytics, Upgrades and Settings are for Jellyfin admins only.
 - 🔄 **Automatic sync**: Jellyfin, TMDB and xREL refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync or recheck what's missing right away.
-- 📱 **Works on any device**: responsive, dark UI that works on desktop and phone.
+- 📱 **Works on any device**: responsive, dark UI with a sidebar on desktop and a full-screen menu on phones.
 
 ## Installation
 
@@ -115,12 +115,13 @@ docker compose -f docker-compose.dev.yml up -d   # next dev
 docker compose up -d --build                     # local production build
 ```
 
-Tests, lint and type checks run inside the dev container (CI runs the same
+Tests, lint, formatting and type checks run inside the dev container (CI runs the same
 before every image build):
 
 ```bash
 docker compose -f docker-compose.dev.yml exec media-overview npm test
 docker compose -f docker-compose.dev.yml exec media-overview npm run lint
+docker compose -f docker-compose.dev.yml exec media-overview npm run format:check
 docker compose -f docker-compose.dev.yml exec media-overview npm run typecheck
 ```
 

@@ -11,7 +11,7 @@ const monthAgo = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOStri
 
 // xREL's sub-categories below 720p (its /p2p/categories). Unless the
 // showSdReleases preference is on, their releases are stored but left out
-// everywhere else: no tile, panel or filter shows them, and a title with
+// everywhere else: no tile, title page or filter shows them, and a title with
 // nothing else isn't checked on TMDB. Stored, so turning it on shows them
 // at once and a group's sync still knows where it left off.
 export const SD_QUALITIES = ["XviD", "x264-SD", "x265-SD", "DVD-R"];
@@ -39,7 +39,7 @@ export const sceneGroupId = (name: string) => "scene:" + name;
 export function listGroups(): ReleaseGroup[] {
   return all<{ id: string; kind: GroupKind; name: string; count: number; synced_at: string | null; complete: number }>(
     `SELECT g.id, g.kind, g.name, g.synced_at, g.complete, (SELECT count(*) FROM releases r WHERE r.group_id = g.id) AS count
-       FROM release_groups g ORDER BY g.added_at, g.rowid`
+       FROM release_groups g ORDER BY g.added_at, g.rowid`,
   ).map((g) => ({
     id: g.id,
     kind: g.kind,
@@ -60,7 +60,7 @@ export function addGroup(id: string, name: string, kind: GroupKind = "p2p") {
     id,
     kind,
     name,
-    new Date().toISOString()
+    new Date().toISOString(),
   );
 }
 
@@ -75,7 +75,7 @@ export function markGroupSynced(id: string, at: string) {
 
 export function releaseCounts() {
   return one<{ groups: number; releases: number }>(
-    "SELECT (SELECT count(*) FROM release_groups) AS groups, (SELECT count(*) FROM releases) AS releases"
+    "SELECT (SELECT count(*) FROM release_groups) AS groups, (SELECT count(*) FROM releases) AS releases",
   )!;
 }
 
@@ -88,7 +88,7 @@ export function insertReleases(groupId: string, releases: Release[]): { added: n
     const upsert = db().prepare(
       `INSERT INTO releases (id, group_id, title_key, name, link, type, quality, published_at, imdb_id, search, size_mb)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET size_mb = excluded.size_mb WHERE releases.size_mb IS NULL`
+       ON CONFLICT (id) DO UPDATE SET size_mb = excluded.size_mb WHERE releases.size_mb IS NULL`,
     );
     let added = 0;
     for (const r of releases) {
@@ -104,7 +104,7 @@ export function insertReleases(groupId: string, releases: Release[]): { added: n
         r.publishedAt,
         r.imdbId ?? null,
         fold(r.name),
-        r.sizeMb ?? null
+        r.sizeMb ?? null,
       );
     }
     return { added, known: added < releases.length };
@@ -131,7 +131,7 @@ export function unlookedImdbIds(): { imdbId: string; type: string }[] {
        FROM releases r LEFT JOIN imdb_lookups l ON l.imdb_id = r.imdb_id
       WHERE r.imdb_id IS NOT NULL AND ${shownReleases()} AND (l.imdb_id IS NULL OR (l.tmdb_id IS NULL AND l.checked_at < ?))
       GROUP BY r.imdb_id`,
-    monthAgo()
+    monthAgo(),
   );
 }
 
@@ -151,7 +151,7 @@ export function saveImdbLookup(imdbId: string, entry: TmdbEntry | null) {
       entry?.originalTitle ?? null,
       entry?.year ?? null,
       entry?.posterPath ?? null,
-      new Date().toISOString()
+      new Date().toISOString(),
     );
     // A new candidate may change what its titles show: check them again.
     run("DELETE FROM title_matches WHERE title_key IN (SELECT title_key FROM releases WHERE imdb_id = ?)", imdbId);
@@ -183,8 +183,20 @@ function candidateFor(imdbId: string | null): TmdbEntry | null {
 
 // ---- What each title shows (title_matches) and decisions made by hand
 
-export type MatchStatus = "verified" | "searched" | "unverified" | "confirmed" | "rejected";
-export type Verdict = "wrong" | "xrel";
+// A poster (and year) TMDB added after the titles were matched to it.
+export function setMatchPoster(mediaType: "movie" | "tv", tmdbId: number, posterPath: string, year: number | null) {
+  run(
+    `UPDATE title_matches SET poster_path = ?, year = coalesce(year, ?)
+      WHERE media_type = ? AND tmdb_id = ? AND poster_path IS NULL`,
+    posterPath,
+    year,
+    mediaType,
+    tmdbId,
+  );
+}
+
+type MatchStatus = "verified" | "searched" | "unverified" | "confirmed" | "rejected";
+type Verdict = "wrong" | "xrel";
 
 const verdictFor = (titleKey: string) =>
   one<{ verdict: Verdict }>("SELECT verdict FROM match_overrides WHERE title_key = ?", titleKey)?.verdict ?? null;
@@ -196,7 +208,7 @@ const imdbIdOf = (titleKey: string) =>
 // A title whose match needs working out: new, or unverified a month ago
 // (TMDB or xREL may have fixed it). names: a sample of its release names;
 // candidate: the TMDB entry behind xREL's IMDb id, if any.
-export type PendingTitle = {
+type PendingTitle = {
   titleKey: string;
   type: string;
   names: string[];
@@ -211,7 +223,7 @@ export function pendingTitles(only?: string): PendingTitle[] {
        FROM releases r LEFT JOIN title_matches t ON t.title_key = r.title_key
       WHERE ${shownReleases()} AND (${only ? "r.title_key = ?" : "t.title_key IS NULL OR (t.status = 'unverified' AND t.checked_at < ?)"})
       GROUP BY r.title_key`,
-    only ?? monthAgo()
+    only ?? monthAgo(),
   );
   return rows.map((r) => ({
     titleKey: r.titleKey,
@@ -228,7 +240,7 @@ export function saveTitleMatch(
   titleKey: string,
   status: MatchStatus,
   entry: TmdbEntry | null,
-  fallback: { title: string; year: number | null }
+  fallback: { title: string; year: number | null },
 ) {
   const title = entry?.title ?? fallback.title;
   run(
@@ -245,11 +257,11 @@ export function saveTitleMatch(
     entry ? entry.year : fallback.year,
     entry?.posterPath ?? null,
     foldTitle(title) + (entry?.originalTitle ? " " + foldTitle(entry.originalTitle) : ""),
-    new Date().toISOString()
+    new Date().toISOString(),
   );
 }
 
-// A decision from a title's panel (null takes it back). Its match is
+// A decision from a title's page (null takes it back). Its match is
 // dropped, to be worked out again right after.
 export function setVerdict(titleKey: string, verdict: Verdict | null) {
   tx(() => {
@@ -259,7 +271,7 @@ export function setVerdict(titleKey: string, verdict: Verdict | null) {
          ON CONFLICT (title_key) DO UPDATE SET verdict = excluded.verdict`,
         titleKey,
         verdict,
-        new Date().toISOString()
+        new Date().toISOString(),
       );
     } else {
       run("DELETE FROM match_overrides WHERE title_key = ?", titleKey);
@@ -270,13 +282,19 @@ export function setVerdict(titleKey: string, verdict: Verdict | null) {
 
 export type MatchInfo = {
   status: MatchStatus | null;
-  shown: { title: string; year: number | null; posterPath: string | null; mediaType: "movie" | "tv" | null; tmdbId: number | null } | null;
+  shown: {
+    title: string;
+    year: number | null;
+    posterPath: string | null;
+    mediaType: "movie" | "tv" | null;
+    tmdbId: number | null;
+  } | null;
   verdict: Verdict | null;
   candidate: { title: string; year: number | null } | null;
 };
 
-// For a title's panel: how its match came about, what the tile shows now
-// (so the panel can follow a decision at once), and xREL's candidate when
+// For a title's page: how its match came about, what the tile shows now
+// (so the page can follow a decision at once), and xREL's candidate when
 // that isn't what's shown (so it can be picked by hand).
 export function matchInfo(titleKey: string): MatchInfo {
   const t = one<{
@@ -300,7 +318,7 @@ export function matchInfo(titleKey: string): MatchInfo {
 
 // ---- The Releases page
 
-export type TitleFilters = { words: string[]; group: string[]; quality: string[]; type: string[] };
+export type TitleFilters = { words: string[]; group: string[]; quality: string[] };
 
 // One tile per TMDB entry: xREL sometimes keeps two titles for one movie
 // (old SD rips and later releases, named a little differently), and those
@@ -319,7 +337,6 @@ export type TitleRow = {
   posterPath: string | null;
   mediaType: "movie" | "tv" | null;
   tmdbId: number | null;
-  type: string;
   releases: number;
   qualities: string[]; // xREL sub-categories among the matching releases
   groups: string[];
@@ -346,7 +363,6 @@ function where(f: TitleFilters): { sql: string; params: unknown[] } {
   for (const [column, values] of [
     ["g.name", f.group],
     ["r.quality", f.quality],
-    ["r.type", f.type],
   ] as const) {
     if (!values.length) continue;
     clauses.push(`${column} IN (${values.map(() => "?").join(", ")})`);
@@ -360,7 +376,7 @@ export function queryTitles(
   sort: "date" | "title",
   asc: boolean,
   offset: number,
-  limit: number
+  limit: number,
 ): { matched: number; items: TitleRow[] } {
   const w = where(f);
   const title = "coalesce(max(t.title), max(r.name))";
@@ -368,7 +384,7 @@ export function queryTitles(
   const rows = all<Omit<TitleRow, "qualities" | "groups"> & { qualities: string; groups: string; matched: number }>(
     `SELECT ${TILE} AS key, ${title} AS title,
             max(t.year) AS year, max(t.poster_path) AS posterPath,
-            max(t.media_type) AS mediaType, max(t.tmdb_id) AS tmdbId, max(r.type) AS type,
+            max(t.media_type) AS mediaType, max(t.tmdb_id) AS tmdbId,
             count(*) AS releases, group_concat(DISTINCT r.quality) AS qualities,
             group_concat(DISTINCT g.name) AS groups, max(r.published_at) AS latest, max(r.name) AS sample,
             count(*) OVER () AS matched
@@ -378,7 +394,7 @@ export function queryTitles(
       LIMIT ? OFFSET ?`,
     ...w.params,
     limit,
-    offset
+    offset,
   );
   return {
     // Past the last page there's no row to carry the count.
@@ -390,7 +406,6 @@ export function queryTitles(
       posterPath: r.posterPath,
       mediaType: r.mediaType,
       tmdbId: r.tmdbId,
-      type: r.type,
       releases: r.releases,
       qualities: r.qualities.split(",").filter(Boolean),
       groups: r.groups.split(","),
@@ -405,26 +420,26 @@ function countTitles(w: { sql: string; params: unknown[] }): number {
 }
 
 // Every tile, for "42 of 11.314 titles".
-export const tileCount = () => countTitles(where({ words: [], group: [], quality: [], type: [] }));
+export const tileCount = () => countTitles(where({ words: [], group: [], quality: [] }));
 
 // What the filter menu offers, over everything so it doesn't shrink as you
 // narrow it down, A→Z.
-export type ReleaseFacets = Record<"group" | "quality" | "type", string[]>;
+export type ReleaseFacets = Record<"group" | "quality", string[]>;
 
 export function releaseFacets(): ReleaseFacets {
-  const distinct = (column: "quality" | "type") =>
-    all<{ v: string }>(
-      `SELECT DISTINCT r.${column} AS v FROM releases r WHERE r.${column} <> '' AND ${shownReleases()} ORDER BY v`
-    ).map((r) => r.v);
+  const qualities = all<{ v: string }>(
+    `SELECT DISTINCT r.quality AS v FROM releases r WHERE r.quality <> '' AND ${shownReleases()} ORDER BY v`,
+  ).map((r) => r.v);
   const groups = all<{ name: string }>(
     `SELECT name FROM release_groups g WHERE EXISTS (SELECT 1 FROM releases r WHERE r.group_id = g.id AND ${shownReleases()})
-      ORDER BY lower(name)`
+      ORDER BY lower(name)`,
   );
-  return { group: groups.map((g) => g.name), quality: distinct("quality"), type: distinct("type") };
+  return { group: groups.map((g) => g.name), quality: qualities };
 }
 
 // episodes: how many episodes one entry stands for (groupEpisodes in
-// lib/release-labels.ts), absent for a single release.
+// lib/release-labels.ts), absent for a single release. sizeMb: null if
+// xREL gave none.
 export type TitleRelease = {
   id: string;
   name: string;
@@ -432,16 +447,17 @@ export type TitleRelease = {
   quality: string;
   publishedAt: number;
   group: string;
+  sizeMb: number | null;
   episodes?: number;
 };
 
 // Every release of one title, newest first.
 export function titleReleases(titleKey: string): TitleRelease[] {
   return all<TitleRelease>(
-    `SELECT r.id, r.name, r.link, r.quality, r.published_at AS publishedAt, g.name AS "group"
+    `SELECT r.id, r.name, r.link, r.quality, r.published_at AS publishedAt, g.name AS "group", r.size_mb AS sizeMb
        FROM releases r JOIN release_groups g ON g.id = r.group_id
       WHERE r.title_key = ? AND ${shownReleases()} ORDER BY r.published_at DESC`,
-    titleKey
+    titleKey,
   );
 }
 
@@ -452,7 +468,7 @@ export function tileTitleKeys(key: string): string[] {
     `SELECT r.title_key AS titleKey FROM releases r LEFT JOIN title_matches t ON t.title_key = r.title_key
       WHERE ${shownReleases()} AND ${tmdb ? "t.media_type = ? AND t.tmdb_id = ?" : "r.title_key = ? AND t.tmdb_id IS NULL"}
       GROUP BY r.title_key ORDER BY max(r.published_at) DESC, r.title_key`,
-    ...(tmdb ? [tmdb[1], Number(tmdb[2])] : [key])
+    ...(tmdb ? [tmdb[1], Number(tmdb[2])] : [key]),
   ).map((r) => r.titleKey);
 }
 
@@ -464,7 +480,7 @@ export function groupsByTile(keys: string[]): Map<string, string[]> {
        FROM title_matches t JOIN releases r ON r.title_key = t.title_key JOIN release_groups g ON g.id = r.group_id
       WHERE t.tmdb_id IS NOT NULL AND ${shownReleases()} AND t.media_type || ':' || t.tmdb_id IN (SELECT value FROM json_each(?))
       GROUP BY key, g.id ORDER BY lower(g.name)`,
-    JSON.stringify(keys)
+    JSON.stringify(keys),
   );
   const groups = new Map<string, string[]>();
   for (const r of rows) groups.set(r.key, [...(groups.get(r.key) ?? []), r.name]);
@@ -478,7 +494,10 @@ const hourAgo = () => new Date(Date.now() - 60 * 60 * 1000).toISOString();
 // What's known of an entry's WCX page: its uid, null for a recent miss,
 // undefined if WCX has to be asked (never, or the miss is an hour old).
 export function wcxUid(tmdbId: string): string | null | undefined {
-  const row = one<{ uid: string | null; checked_at: string }>("SELECT uid, checked_at FROM wcx WHERE tmdb_id = ?", tmdbId);
+  const row = one<{ uid: string | null; checked_at: string }>(
+    "SELECT uid, checked_at FROM wcx WHERE tmdb_id = ?",
+    tmdbId,
+  );
   if (!row || (row.uid === null && row.checked_at < hourAgo())) return undefined;
   return row.uid;
 }
@@ -490,7 +509,7 @@ export function setWcxUid(tmdbId: string, uid: string | null) {
      ON CONFLICT (tmdb_id) DO UPDATE SET uid = excluded.uid, checked_at = excluded.checked_at WHERE wcx.uid IS NULL`,
     tmdbId,
     uid,
-    new Date().toISOString()
+    new Date().toISOString(),
   );
 }
 
@@ -500,7 +519,7 @@ export function imdbIdOfTmdb(mediaType: "movie" | "tv", tmdbId: number): string 
     one<{ imdbId: string }>(
       "SELECT max(imdb_id) AS imdbId FROM imdb_lookups WHERE media_type = ? AND tmdb_id = ?",
       mediaType,
-      tmdbId
+      tmdbId,
     )?.imdbId ?? null
   );
 }
@@ -509,7 +528,7 @@ export function imdbIdOfTmdb(mediaType: "movie" | "tv", tmdbId: number): string 
 export function tileOf(titleKey: string): string {
   const t = one<{ media_type: string | null; tmdb_id: number | null }>(
     "SELECT media_type, tmdb_id FROM title_matches WHERE title_key = ?",
-    titleKey
+    titleKey,
   );
   return t?.tmdb_id ? `${t.media_type}:${t.tmdb_id}` : titleKey;
 }

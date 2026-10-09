@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen } from "@testing-library/react";
 import "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import type { LibraryAnalytics } from "@/lib/api-types";
@@ -27,17 +26,12 @@ const movies: LibraryAnalytics = {
   ],
 };
 
-// The file list's requests, by their filter params.
-function files() {
-  return mockFetch((url) => {
+// The file list's requests, answered with none.
+const files = () =>
+  mockFetch((url) => {
     if (url.pathname !== "/api/analytics/files") return;
     return json({ matched: 0, pageSize: 50, Items: [] });
   });
-}
-const lastFilters = (fetch: ReturnType<typeof files>) => {
-  const url = new URL(String(fetch.mock.calls.at(-1)![0]), "http://jellylens.test");
-  return { group: url.searchParams.getAll("group"), language: url.searchParams.getAll("language") };
-};
 
 describe("LibraryView", () => {
   it("shows the tiles, the charts and the file list", async () => {
@@ -47,23 +41,6 @@ describe("LibraryView", () => {
     expect(screen.getByText("Files by group")).toBeInTheDocument();
     expect(screen.getByText("Files by audio language")).toBeInTheDocument();
     expect(await screen.findByText("No files")).toBeInTheDocument();
-  });
-
-  it("lists a piece's files: its filter is set, shown as a chip, and asked for", async () => {
-    const user = userEvent.setup();
-    const fetch = files();
-    render(<LibraryView library="movies" stats={movies} version={null} />);
-
-    await user.click(screen.getByRole("button", { name: /^GRP: 1 file/ }));
-    expect(screen.getByRole("button", { name: "GRP" })).toBeInTheDocument();
-    await waitFor(() => expect(lastFilters(fetch)).toEqual({ group: ["GRP"], language: [] }));
-
-    // Another dimension's piece adds its own filter.
-    await user.click(screen.getByRole("button", { name: /^English: 1 file/ }));
-    await waitFor(() => expect(lastFilters(fetch)).toEqual({ group: ["GRP"], language: ["EN"] }));
-
-    await user.click(screen.getByRole("button", { name: "Clear all" }));
-    await waitFor(() => expect(lastFilters(fetch)).toEqual({ group: [], language: [] }));
   });
 
   it("says when there's nothing synced yet", () => {

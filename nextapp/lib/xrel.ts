@@ -100,11 +100,7 @@ export function toRelease(r: XrelP2pRelease): Release {
 
 // One page of a group's releases, newest first.
 export async function fetchGroupReleases(groupId: string, page: number) {
-  const data = await call<XrelPage>(
-    "/p2p/releases.json",
-    { group_id: groupId, per_page: 100, page },
-    RESERVE
-  );
+  const data = await call<XrelPage>("/p2p/releases.json", { group_id: groupId, per_page: 100, page }, RESERVE);
   return { releases: data.list.map(toRelease), totalPages: data.pagination.total_pages };
 }
 
@@ -123,7 +119,7 @@ function throttledSearch<T>(fn: () => Promise<T>): Promise<T> {
 // at the end of release names; plain "NAME" mostly finds titles with it.
 export async function findGroup(name: string): Promise<{ id: string; name: string } | null> {
   const data = await throttledSearch(() =>
-    call<{ p2p_results?: XrelP2pRelease[] }>("/search/releases.json", { q: "-" + name, scene: 0, p2p: 1, limit: 100 })
+    call<{ p2p_results?: XrelP2pRelease[] }>("/search/releases.json", { q: "-" + name, scene: 0, p2p: 1, limit: 100 }),
   );
   const wanted = name.toLowerCase();
   const hit = data.p2p_results?.find((r) => r.group?.name.toLowerCase() === wanted);
@@ -174,7 +170,7 @@ export function toSceneRelease(r: XrelSceneRelease): Release {
 // it searches the plain name and keeps the ones tagged with it.
 async function searchScene(name: string, reserve = 0): Promise<XrelSceneRelease[]> {
   const data = await throttledSearch(() =>
-    call<{ results?: XrelSceneRelease[] }>("/search/releases.json", { q: name, scene: 1, p2p: 0, limit: 100 }, reserve)
+    call<{ results?: XrelSceneRelease[] }>("/search/releases.json", { q: name, scene: 1, p2p: 0, limit: 100 }, reserve),
   );
   const wanted = name.toLowerCase();
   return (data.results ?? []).filter((r) => r.group_name?.toLowerCase() === wanted);

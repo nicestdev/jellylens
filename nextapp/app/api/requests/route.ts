@@ -97,7 +97,7 @@ export async function POST(req: Request) {
         posterPath: typeof body.posterPath === "string" ? body.posterPath : null,
         requestedAt: now,
       },
-      [me]
+      [me],
     );
   } else if (AUTH_ENABLED) {
     addRequester(body.mediaType, body.tmdbId, me);

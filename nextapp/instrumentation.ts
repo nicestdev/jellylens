@@ -26,4 +26,7 @@ export async function register() {
   triggerReleasesSync().catch(() => {});
 
   applySchedules();
+
+  const { resumeDownloads } = await import("./lib/downloader");
+  resumeDownloads();
 }

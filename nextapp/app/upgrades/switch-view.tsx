@@ -1,32 +1,29 @@
 "use client";
 
+import type { Library } from "@/lib/libraries";
 import { useEffect, useMemo, useState } from "react";
 import { PackageSearch } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { LoadMore } from "@/components/load-more";
 import { EmptyState } from "@/components/empty-state";
-import { FilterChips, FilterMenu, type Facet } from "@/components/filter-menu";
+import { FacetMenu, FilterChips, type Facet } from "@/components/filter-menu";
 import { SearchInput } from "@/components/search-input";
 import { SortMenu } from "@/components/sort-menu";
 import { StatTile } from "@/components/stat-tile";
 import type { UpgradesResponse } from "@/lib/api-types";
 import { toggled, type SortDir } from "@/lib/facets";
-import { plural } from "@/lib/format";
-import { ChipsList } from "./chips-list";
+import { SwitchTable } from "./switch-table";
+import { FormatMenu } from "./format-menu";
 import {
-  CODEC_PICKS,
-  QUALITY_PICKS,
   SWITCH_SORTS,
   UNIT,
   fromFacet,
-  panelFor,
+  titleHref,
   searchRows,
   sortRows,
   switchSummary,
   switchTiles,
   startChoices,
   targetGroups,
-  type Library,
-  type PanelFor,
   type Choices,
   type CodecPick,
   type QualityPick,
@@ -64,7 +61,7 @@ export function SwitchView({
 }: {
   library: Library;
   data: UpgradesResponse;
-  onOpen: (p: PanelFor) => void;
+  onOpen: (href: string) => void;
 }) {
   const groups = useMemo(() => targetGroups(data.favorites), [data.favorites]);
   const [start] = useState(() => startChoices(groups, savedChoices(library)));
@@ -81,12 +78,12 @@ export function SwitchView({
 
   const options = useMemo(
     () => ({ target, from, quality, codec, onlyAudio }),
-    [target, from, quality, codec, onlyAudio]
+    [target, from, quality, codec, onlyAudio],
   );
   const summary = useMemo(() => switchSummary(data.units, options), [data.units, options]);
   const rows = useMemo(
     () => sortRows(searchRows(summary.rows, query), sortKey, sortDir),
-    [summary.rows, query, sortKey, sortDir]
+    [summary.rows, query, sortKey, sortDir],
   );
   const facet = fromFacet(data, target);
   const unit = UNIT[library].one;
@@ -95,14 +92,12 @@ export function SwitchView({
     setTarget(v);
     setFrom(new Set());
   };
-  const qualityName = (k: string) => QUALITY_PICKS.find((q) => q.key === k)?.label ?? k;
-  const codecName = (k: string) => CODEC_PICKS.find((c) => c.key === k)?.label ?? k;
 
-  // Everything in the one filter menu, like the other pages: the target
-  // group (the one to switch to), quality and codec are picked one of
-  // each; source groups (what you have now) and "adds original audio" are checked.
+  // The toolbar's menus, from → to: the source groups (what you have
+  // now) and the target group (the one to switch to, always one: the
+  // tiles and rows are about it); what the release must be (quality, codec, original audio)
+  // is the Format menu beside them.
   const facets: Facet[] = [
-    { key: "group", label: "Target", values: groups, selected: new Set([target]), onToggle: pickGroup, single: true },
     {
       key: "from",
       label: "Source",
@@ -112,34 +107,7 @@ export function SwitchView({
       onToggle: (v) => setFrom(toggled(from, v)),
       format: (v) => facet.names.get(v) ?? v,
     },
-    {
-      key: "quality",
-      label: "Quality",
-      values: QUALITY_PICKS.map((q) => q.key),
-      selected: new Set([quality]),
-      onToggle: (v) => setQuality(v as QualityPick),
-      format: qualityName,
-      single: true,
-      changed: quality !== "same",
-    },
-    {
-      key: "codec",
-      label: "Codec",
-      values: CODEC_PICKS.map((c) => c.key),
-      selected: new Set([codec]),
-      onToggle: (v) => setCodec(v as CodecPick),
-      format: codecName,
-      single: true,
-      changed: codec !== "any",
-    },
-    {
-      key: "audio",
-      label: "Audio",
-      values: ["dl"],
-      selected: onlyAudio ? new Set(["dl"]) : new Set(),
-      onToggle: () => setOnlyAudio(!onlyAudio),
-      format: () => "Adds original audio",
-    },
+    { key: "group", label: "Target", values: groups, selected: new Set([target]), onToggle: pickGroup, single: true },
   ];
 
   // What's off its default, removable; the group shows in the tiles.
@@ -166,7 +134,7 @@ export function SwitchView({
 
   return (
     <>
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {switchTiles(summary, options, library).map((t) => (
           <StatTile key={t.label} {...t} />
         ))}
@@ -175,7 +143,17 @@ export function SwitchView({
       <section className="mt-8">
         <div className="flex flex-wrap items-center gap-2">
           <SearchInput value={query} onChange={setQuery} placeholder="Search titles…" className="w-full sm:w-64" />
-          <FilterMenu facets={facets} />
+          {facets.map((f) => (
+            <FacetMenu key={f.key} facet={f} />
+          ))}
+          <FormatMenu
+            quality={quality}
+            codec={codec}
+            onlyAudio={onlyAudio}
+            onQuality={setQuality}
+            onCodec={setCodec}
+            onOnlyAudio={setOnlyAudio}
+          />
           <div className="ml-auto">
             <SortMenu
               options={SWITCH_SORTS}
@@ -191,7 +169,7 @@ export function SwitchView({
         <FilterChips chips={chips} onClear={clearAll} />
 
         {rows.length ? (
-          <ChipsList rows={rows.slice(0, shown)} onOpen={(r) => onOpen(panelFor(r.unit, options, library))} />
+          <SwitchTable rows={rows.slice(0, shown)} onOpen={(r) => onOpen(titleHref(r.unit, options, library))} />
         ) : (
           <div className="mt-3">
             <EmptyState
@@ -205,13 +183,7 @@ export function SwitchView({
             />
           </div>
         )}
-        {rows.length > shown ? (
-          <div className="mt-3 flex justify-center">
-            <Button variant="outline" size="sm" onClick={() => setShown(shown + PAGE)}>
-              Show more ({plural(rows.length - shown, unit)} left)
-            </Button>
-          </div>
-        ) : null}
+        {rows.length > shown ? <LoadMore shown={shown} onMore={() => setShown(shown + PAGE)} /> : null}
       </section>
     </>
   );

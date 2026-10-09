@@ -8,7 +8,7 @@ export function tmdbPosterPaths(): Set<string> {
     `SELECT poster_path AS path FROM requests
      UNION SELECT poster_path FROM tmdb_collections
      UNION SELECT json_extract(p.value, '$.posterPath') FROM tmdb_collections c, json_each(c.parts) p
-     UNION SELECT poster_path FROM title_matches`
+     UNION SELECT poster_path FROM title_matches`,
   );
   return new Set(rows.map((r) => r.path).filter((p): p is string => Boolean(p)));
 }

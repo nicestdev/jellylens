@@ -1,5 +1,13 @@
 import type { AnalyticsResponse, LibraryAnalytics } from "@/lib/api-types";
-import { fileSummary, filesByCodec, filesByGroup, filesByLanguage, filesByResolution, syncedAt, type Library } from "@/lib/store";
+import {
+  fileSummary,
+  filesByCodec,
+  filesByGroup,
+  filesByLanguage,
+  filesByResolution,
+  syncedAt,
+  type Library,
+} from "@/lib/store";
 
 const totals = (library: Library): LibraryAnalytics => ({
   ...fileSummary(library),

@@ -11,7 +11,9 @@ function jellyfin(episodes: number[]) {
     const type = url.searchParams.get("IncludeItemTypes");
     if (type === "Series") return json({ Items: [{ Id: "s", Name: "Silo", ProviderIds: { Tmdb: "10" } }] });
     if (type === "Episode") {
-      return json({ Items: episodes.map((n) => ({ Id: "e" + n, Name: "E", SeriesId: "s", ParentIndexNumber: 1, IndexNumber: n })) });
+      return json({
+        Items: episodes.map((n) => ({ Id: "e" + n, Name: "E", SeriesId: "s", ParentIndexNumber: 1, IndexNumber: n })),
+      });
     }
     return json({ Items: [] });
   });
@@ -19,7 +21,11 @@ function jellyfin(episodes: number[]) {
 
 describe("the Jellyfin stage", () => {
   it("rechecks what's missing right after, once TMDB was synced", async () => {
-    replaceTmdb({ s: { tmdbId: "10", seasons: [{ season: 1, airedEpisodeNumbers: [1, 2], episodeNumbers: [1, 2] }] } }, {}, "2026-06-01T00:00:00Z");
+    replaceTmdb(
+      { s: { tmdbId: "10", seasons: [{ season: 1, airedEpisodeNumbers: [1, 2], episodeNumbers: [1, 2] }] } },
+      {},
+      "2026-06-01T00:00:00Z",
+    );
 
     jellyfin([1]);
     await stageTriggers.jellyfin();

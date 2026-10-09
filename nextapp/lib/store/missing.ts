@@ -23,17 +23,15 @@ export type MissingEntry = { count: number; seasons: MissingSeason[] };
 
 // A collection with at least one part not owned that's out on disc or
 // digital. Parts not out that way yet are left out until they are.
-// fileName: the owned movie's file (see JellyfinMovie.FileName), so you can
-// get the missing parts from the same release group.
 export type MissingCollection = {
   count: number; // home-released parts not owned
-  parts: (Omit<CollectionPart, "releases"> & { owned: boolean; fileName?: string })[];
+  parts: (Omit<CollectionPart, "releases"> & { owned: boolean })[];
 };
 
 // Owned episodes/seasons TMDB doesn't know about for that series — usually
 // means the Jellyfin item is matched to the wrong TMDB show, not that
 // episodes are actually missing.
-export type ExtraSeason = { season: number; episodes: string; count: number };
+type ExtraSeason = { season: number; episodes: string; count: number };
 export type MismatchEntry = { extraSeasons: number[]; extraEpisodes: ExtraSeason[] };
 
 export const getMissingSeries = () => byKey<MissingEntry>(all("SELECT series_id AS key, data FROM missing_series"));
@@ -43,7 +41,7 @@ export const getMismatches = () => byKey<MismatchEntry>(all("SELECT series_id AS
 
 export function missingCounts() {
   return one<{ series: number; collections: number; mismatches: number }>(
-    "SELECT (SELECT count(*) FROM missing_series) AS series, (SELECT count(*) FROM missing_collections) AS collections, (SELECT count(*) FROM mismatches) AS mismatches"
+    "SELECT (SELECT count(*) FROM missing_series) AS series, (SELECT count(*) FROM missing_collections) AS collections, (SELECT count(*) FROM mismatches) AS mismatches",
   )!;
 }
 
@@ -51,7 +49,7 @@ export function replaceMissing(
   bySeriesId: Record<string, MissingEntry>,
   byCollectionId: Record<string, MissingCollection>,
   mismatches: Record<string, MismatchEntry>,
-  at: string | null
+  at: string | null,
 ) {
   tx(() => {
     const tables = [

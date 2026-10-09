@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Plus, X } from "lucide-react";
-import { CornerBadge, PosterCard, type PosterBadge } from "@/components/poster-card";
-import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
+import { useRouter } from "next/navigation";
+import { HeartMinus, HeartPlus } from "lucide-react";
+import { PosterCard } from "@/components/poster-card";
+import { REQUESTS_CHANGED, apiFetch, tmdbImage, tmdbUrl, jsonRequest } from "@/lib/api-client";
 import type { DiscoverItem, DiscoverResponse, RequestItem as Request, RequestsResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { releasedHint, releasedLabel } from "@/lib/release-labels";
+import { titlePath } from "@/lib/title-path";
+import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
 type MediaType = "movie" | "tv";
 
@@ -18,19 +22,11 @@ export type Result = Pick<DiscoverItem, "mediaType" | "tmdbId" | "title" | "year
   releaseDate?: string | null;
   posterPath: string | null;
 };
-type Availability = Result["availability"];
 
 export const itemKey = (r: { mediaType: MediaType; tmdbId: number }) => `${r.mediaType}:${r.tmdbId}`;
 const TYPE_LABEL: Record<MediaType, string> = { movie: "Movie", tv: "Show" };
 
-const loadRequests = () => apiFetch<RequestsResponse>("/api/requests");
-
-// Only the not-yet-home-watchable states get a badge; fully out is normal.
-const STATUS_BADGE: Record<NonNullable<Availability>["status"], PosterBadge> = {
-  upcoming: { label: "Upcoming", tone: "neutral", hint: "Not released yet" },
-  cinema: { label: "In cinemas", tone: "warning", hint: "In cinemas only — not streaming or on disc yet" },
-  digital: { label: "Digital only", tone: "neutral", hint: "Streaming, but no Blu-ray yet" },
-};
+export const loadRequests = () => apiFetch<RequestsResponse>("/api/requests");
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -41,8 +37,8 @@ function shortDate(iso: string): string {
   return [d, MONTHS[m - 1], y === new Date().getFullYear() ? null : y].filter(Boolean).join(" ");
 }
 
-// Year, then the next release date if one is coming (e.g. "Digital 28 Sep")
-// — the badge already says what state it's in — or else Movie/Show.
+// Year, then the next release date if one is coming (e.g. "Digital 28 Sep"),
+// or else Movie/Show.
 function metaLine(item: Result): string {
   const next = item.availability?.next;
   return [item.year, next ? `${next.kind} ${shortDate(next.date)}` : TYPE_LABEL[item.mediaType]]
@@ -50,53 +46,53 @@ function metaLine(item: Result): string {
     .join(" · ");
 }
 
-function statusBadge(item: Result, ownedLabel: string): PosterBadge | undefined {
-  if (item.library) return { label: ownedLabel, tone: "success" };
-  return item.availability ? STATUS_BADGE[item.availability.status] : undefined;
+// A poster's corner badge, like its own (S01·E9–10, 1080p): the wishlist
+// toggle and the In library mark.
+const CORNER_BADGE =
+  "flex h-5 items-center rounded-md bg-background/75 px-1.5 text-[10px] font-semibold whitespace-nowrap text-foreground ring-1 ring-white/15 backdrop-blur-md ring-inset";
+
+// A poster's In library mark: a corner badge with nothing to click.
+function LibraryMark({ className = "absolute right-2 bottom-2" }: { className?: string }) {
+  return <span className={cn(CORNER_BADGE, className)}>In library</span>;
 }
 
-function posterSrc(path: string | null): string | null {
-  return tmdbImage(path);
-}
-
-// The ✓ on a Discover tile that's already requested. Deliberately not a
-// button: a second tap there was usually meant as "add", not "cancel".
-// Taking a request back happens on the Your requests tab (×).
-function RequestedMark() {
-  return (
-    <span
-      title="Requested"
-      aria-label="Requested"
-      className="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground shadow-md backdrop-blur-md"
-    >
-      <Check className="size-4" />
-    </span>
-  );
-}
-
-// The round button on a tile's poster: + to request, × to remove from the
-// requests list.
-function TileButton({
-  icon: Icon,
-  label,
+// A poster's wishlist toggle, a badge in its bottom-right corner:
+// "+ Wishlist" puts the title on the wishlist; once there it reads
+// "Wishlisted", and a click takes it off again (Undo in the note). Off the wishlist it only shows while the tile is
+// hovered or the button focused, except on touch screens, which can't
+// hover; on it, it always shows, as the poster's wishlist state. The rest of the poster
+// still opens the title.
+// everyone: it takes it off everyone's (the Wishlist's overview).
+function WishlistToggle({
+  on,
+  everyone = false,
   disabled,
   onClick,
+  className = "absolute right-2 bottom-2",
 }: {
-  icon: typeof Plus;
-  label: string;
+  on: boolean;
+  everyone?: boolean;
+  className?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
+  const label = on ? (everyone ? "Remove for everyone" : "Remove from wishlist") : "Add to wishlist";
   return (
     <button
       type="button"
-      title={label}
       aria-label={label}
+      aria-pressed={on}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-full bg-background/75 text-foreground shadow-md ring-1 ring-white/15 backdrop-blur-md transition-colors ring-inset hover:bg-primary hover:text-primary-foreground disabled:opacity-60"
+      className={cn(
+        // Styled like the poster's own corner badges (S01·E9–10, 1080p).
+        "pointer-events-auto transition hover:bg-sidebar-accent disabled:opacity-60",
+        CORNER_BADGE,
+        className,
+        !on && "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+      )}
     >
-      <Icon className="size-4" />
+      {on ? "Wishlisted" : "+ Wishlist"}
     </button>
   );
 }
@@ -114,17 +110,16 @@ export function useRequests() {
   const [pending, setPending] = useState<Set<string>>(() => new Set());
   // Errors of what the user just did; the load's own error shows otherwise.
   const [actionError, setError] = useState("");
-  const error = actionError || (list.error && `Failed to load requests: ${list.error}`);
+  const error = actionError || (list.error && `Failed to load the wishlist: ${list.error}`);
 
   // everyone: an admin removing the request for all who asked.
   async function toggle(item: Result, requested: boolean, everyone = false) {
     const k = itemKey(item);
     setPending((prev) => new Set(prev).add(k));
     try {
-      const res = await apiFetch<RequestsResponse>("/api/requests", {
-        method: requested ? "DELETE" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const res = await apiFetch<RequestsResponse>(
+        "/api/requests",
+        jsonRequest(requested ? "DELETE" : "POST", {
           mediaType: item.mediaType,
           tmdbId: item.tmdbId,
           title: item.title,
@@ -133,11 +128,30 @@ export function useRequests() {
           posterPath: item.posterPath,
           everyone,
         }),
-      });
+      );
       list.setData(res);
+      window.dispatchEvent(new CustomEvent(REQUESTS_CHANGED, { detail: res }));
       setError("");
+      // A note that it worked: to see the list, or to take it back (not for
+      // a removal for everyone, which one request can't restore).
+      const description = item.year ? `${item.title} (${item.year})` : item.title;
+      if (!requested)
+        toast("Added to your wishlist", {
+          description,
+          tone: "success",
+          icon: HeartPlus,
+          action: { label: "View", href: "/wishlist" },
+        });
+      else if (everyone) toast("Removed for everyone", { description, tone: "removed", icon: HeartMinus });
+      else
+        toast("Removed from your wishlist", {
+          description,
+          tone: "removed",
+          icon: HeartMinus,
+          action: { label: "Undo", onClick: () => void toggle(item, false) },
+        });
     } catch (e) {
-      setError(`Couldn't update request: ${(e as Error).message}`);
+      setError(`Couldn't update the wishlist: ${(e as Error).message}`);
     } finally {
       setPending((prev) => {
         const next = new Set(prev);
@@ -153,7 +167,7 @@ export function useRequests() {
     (a, b) =>
       Number(Boolean(b.library)) - Number(Boolean(a.library)) ||
       (b.requesters?.length ?? 0) - (a.requesters?.length ?? 0) ||
-      latestRequest(b).localeCompare(latestRequest(a))
+      latestRequest(b).localeCompare(latestRequest(a)),
   );
   return {
     requests: sorted,
@@ -176,17 +190,20 @@ export function useDiscover(q: string) {
   const [results, setResults] = useState<{ q: string; items: Result[]; error: string } | null>(null);
   useEffect(() => {
     const ctrl = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const res = await apiFetch<DiscoverResponse>(`/api/discover?q=${encodeURIComponent(q)}`, {
-          signal: ctrl.signal,
-        });
-        setResults({ q, items: res.Items, error: "" });
-      } catch (e) {
-        if (ctrl.signal.aborted) return;
-        setResults({ q, items: [], error: `TMDB search failed: ${(e as Error).message}` });
-      }
-    }, q ? 350 : 0);
+    const timer = setTimeout(
+      async () => {
+        try {
+          const res = await apiFetch<DiscoverResponse>(`/api/discover?q=${encodeURIComponent(q)}`, {
+            signal: ctrl.signal,
+          });
+          setResults({ q, items: res.Items, error: "" });
+        } catch (e) {
+          if (ctrl.signal.aborted) return;
+          setResults({ q, items: [], error: `TMDB search failed: ${(e as Error).message}` });
+        }
+      },
+      q ? 350 : 0,
+    );
     return () => {
       clearTimeout(timer);
       ctrl.abort();
@@ -204,19 +221,22 @@ type TileContext = {
   showReleases?: (item: Result) => void;
 };
 
-// The bottom-right corner of anything that can be requested (Discover,
-// Releases): In library when it's owned, else + to request, ✓ once
-// requested (not clickable). Requested needs no badge — the filled ✓
-// already says so.
+// The posters' context on Discover and the Wishlist: the requests, and for
+// admins a title's page to open.
+export function useTileContext(r: ReturnType<typeof useRequests>) {
+  const router = useRouter();
+  return { ...r, showReleases: r.admin ? (item: Result) => router.push(titlePath(itemKey(item))) : undefined };
+}
+
+// A poster's wishlist action (Discover's grid, Releases, Missing): In
+// library bottom right when it's owned, else the wishlist toggle there.
 export function RequestAction({ item, requested, ctx }: { item: Result; requested: boolean; ctx: TileContext }) {
-  if (item.library) return <CornerBadge badge={{ label: "In library", tone: "success" }} className="relative" />;
-  if (requested) return <RequestedMark />;
+  if (item.library) return <LibraryMark />;
   return (
-    <TileButton
-      icon={Plus}
-      label="Request"
+    <WishlistToggle
+      on={requested}
       disabled={ctx.pending.has(itemKey(item))}
-      onClick={() => ctx.toggle(item, false)}
+      onClick={() => ctx.toggle(item, requested)}
     />
   );
 }
@@ -227,10 +247,9 @@ export function ResultTile({ item, requested, ctx }: { item: Result; requested: 
     <PosterCard
       onClick={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
       href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
-      imageSrc={posterSrc(item.posterPath)}
+      imageSrc={tmdbImage(item.posterPath)}
       title={item.title}
       meta={metaLine(item)}
-      badge={item.availability ? STATUS_BADGE[item.availability.status] : undefined}
       action={<RequestAction item={item} requested={requested} ctx={ctx} />}
     />
   );
@@ -241,35 +260,38 @@ function requesterNames(item: Request): string {
   return (item.requesters ?? []).map((q) => q.name).join(", ");
 }
 
-// One request: × removes it; bottom left, a badge for the favorite groups
-// that have released it ("FuN +1"), which opens their releases for an admin. In the admin's overview (item.requesters
-// set) the info line says who asked, a badge top left counts them once it's
-// more than one, and × removes it for all of them.
-export function RequestTile({ item, ctx }: { item: Request; ctx: TileContext }) {
+// One request as a Wishlist poster: the favorite groups that released it
+// bottom left, In library and Wishlisted bottom right (a click takes it
+// off, for everyone in an admin's overview, where the info line says who
+// asked).
+export function WishlistTile({ item, ctx }: { item: Request; ctx: TileContext }) {
   const overview = Boolean(item.requesters);
-  const count = item.requesters?.length ?? 0;
-  const names = requesterNames(item);
   return (
     <PosterCard
       onClick={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
       href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
-      imageSrc={posterSrc(item.posterPath)}
+      imageSrc={tmdbImage(item.posterPath)}
       title={item.title}
-      meta={overview ? [item.year, names].filter(Boolean).join(" · ") : metaLine(item)}
-      badge={statusBadge(item, "Available")}
+      meta={overview ? [item.year, requesterNames(item)].filter(Boolean).join(" · ") : metaLine(item)}
       filterBadge={
-        item.releaseGroups.length
+        item.releaseGroups.length && !item.library
           ? { label: releasedLabel(item.releaseGroups), hint: releasedHint(item.releaseGroups) }
           : undefined
       }
-      countBadge={count > 1 ? { label: `${count} requests`, tone: "accent", hint: names } : undefined}
       action={
-        <TileButton
-          icon={X}
-          label={overview ? "Remove for everyone" : "Remove request"}
-          disabled={ctx.pending.has(itemKey(item))}
-          onClick={() => ctx.toggle(item, true, overview)}
-        />
+        <>
+          {/* Side by side in the corner, the mark before the toggle. */}
+          <div className="absolute right-2 bottom-2 flex gap-1">
+            {item.library ? <LibraryMark className="" /> : null}
+            <WishlistToggle
+              on
+              everyone={overview}
+              disabled={ctx.pending.has(itemKey(item))}
+              onClick={() => ctx.toggle(item, true, overview)}
+              className=""
+            />
+          </div>
+        </>
       }
     />
   );

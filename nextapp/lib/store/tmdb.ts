@@ -23,29 +23,29 @@ export type TmdbCollection = { name: string; posterPath: string | null; parts: C
 export function getTmdbSeries(): Record<string, TmdbSeriesEntry> {
   const rows = all<{ series_id: string; tmdb_id: string; seasons: string }>("SELECT * FROM tmdb_series");
   return Object.fromEntries(
-    rows.map((r) => [r.series_id, { tmdbId: r.tmdb_id, seasons: fromJson<TmdbSeason[]>(r.seasons) }])
+    rows.map((r) => [r.series_id, { tmdbId: r.tmdb_id, seasons: fromJson<TmdbSeason[]>(r.seasons) }]),
   );
 }
 
 export function getTmdbCollections(): Record<string, TmdbCollection> {
   const rows = all<{ id: string; name: string; poster_path: string | null; parts: string }>(
-    "SELECT * FROM tmdb_collections"
+    "SELECT * FROM tmdb_collections",
   );
   return Object.fromEntries(
-    rows.map((r) => [r.id, { name: r.name, posterPath: r.poster_path, parts: fromJson<CollectionPart[]>(r.parts) }])
+    rows.map((r) => [r.id, { name: r.name, posterPath: r.poster_path, parts: fromJson<CollectionPart[]>(r.parts) }]),
   );
 }
 
 export function tmdbCounts() {
   return one<{ shows: number; collections: number }>(
-    "SELECT (SELECT count(*) FROM tmdb_series) AS shows, (SELECT count(*) FROM tmdb_collections) AS collections"
+    "SELECT (SELECT count(*) FROM tmdb_series) AS shows, (SELECT count(*) FROM tmdb_collections) AS collections",
   )!;
 }
 
 export function replaceTmdb(
   bySeriesId: Record<string, TmdbSeriesEntry>,
   byCollectionId: Record<string, TmdbCollection>,
-  at: string | null
+  at: string | null,
 ) {
   tx(() => {
     run("DELETE FROM tmdb_series");

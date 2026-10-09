@@ -14,7 +14,7 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (url: string) => {
       throw new Error("Unexpected fetch in a test: " + url);
-    })
+    }),
   );
 
   // A fresh, empty database and no leftover rate limits, caches or queues.

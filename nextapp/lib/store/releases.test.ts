@@ -43,8 +43,15 @@ const release = (id: string, over: Partial<Release> = {}): Release => ({
   ...over,
 });
 
-const heat: TmdbEntry = { mediaType: "movie", tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: "/heat.jpg" };
-const noFilters: TitleFilters = { words: [], group: [], quality: [], type: [] };
+const heat: TmdbEntry = {
+  mediaType: "movie",
+  tmdbId: 949,
+  title: "Heat",
+  originalTitle: "Heat",
+  year: 1995,
+  posterPath: "/heat.jpg",
+};
+const noFilters: TitleFilters = { words: [], group: [], quality: [] };
 
 describe("groups", () => {
   it("lists groups in the order they were added, with their release counts", () => {
@@ -103,7 +110,10 @@ describe("insertReleases", () => {
       { id: "2", sizeMb: 4200 },
     ]);
     // Seen again with a size: filled in, but not counted as new.
-    expect(insertReleases("g1", [release("1", { sizeMb: 7000 }), release("2", { sizeMb: 1 })])).toEqual({ added: 0, known: true });
+    expect(insertReleases("g1", [release("1", { sizeMb: 7000 }), release("2", { sizeMb: 1 })])).toEqual({
+      added: 0,
+      known: true,
+    });
     expect(sizes()).toEqual([
       { id: "1", sizeMb: 7000 },
       { id: "2", sizeMb: 4200 },
@@ -120,10 +130,22 @@ describe("queryTitles", () => {
     addGroup("g2", "FuN");
     insertReleases("g1", [
       release("1", { name: "Heat.1995.German.DL.1080p.BluRay.x265-VECTOR", titleKey: "heat", publishedAt: 300 }),
-      release("2", { name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", titleKey: "heat", quality: "HD-2160p", publishedAt: 100 }),
-      release("3", { name: "Ein.Muenchner.im.Himmel.2026.German.1080p-VECTOR", titleKey: "himmel", imdbId: "tt3", publishedAt: 200 }),
+      release("2", {
+        name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR",
+        titleKey: "heat",
+        quality: "HD-2160p",
+        publishedAt: 100,
+      }),
+      release("3", {
+        name: "Ein.Muenchner.im.Himmel.2026.German.1080p-VECTOR",
+        titleKey: "himmel",
+        imdbId: "tt3",
+        publishedAt: 200,
+      }),
     ]);
-    insertReleases("g2", [release("4", { name: "Silo.2023.S01E01.German.DL.1080p-FuN", titleKey: "silo", type: "tv", publishedAt: 50 })]);
+    insertReleases("g2", [
+      release("4", { name: "Silo.2023.S01E01.German.DL.1080p-FuN", titleKey: "silo", type: "tv", publishedAt: 50 }),
+    ]);
     saveTitleMatch("heat", "verified", heat, { title: "Heat", year: 1995 });
   }
 
@@ -153,7 +175,12 @@ describe("queryTitles", () => {
   it("finds words in release names and checked titles, umlauts either way", () => {
     seed();
     expect(query({ words: ["muenchner", "himmel"] }).items.map((t) => t.key)).toEqual(["himmel"]);
-    saveTitleMatch("silo", "verified", { ...heat, tmdbId: 1, mediaType: "tv", title: "Silo – Die Zuflucht", originalTitle: "Silo" }, { title: "Silo", year: 2023 });
+    saveTitleMatch(
+      "silo",
+      "verified",
+      { ...heat, tmdbId: 1, mediaType: "tv", title: "Silo – Die Zuflucht", originalTitle: "Silo" },
+      { title: "Silo", year: 2023 },
+    );
     expect(query({ words: ["zuflucht"] }).items.map((t) => t.key)).toEqual(["tv:1"]);
   });
 
@@ -163,13 +190,13 @@ describe("queryTitles", () => {
     expect(query({ words: ["_"] }).matched).toBe(0);
   });
 
-  it("filters by group, quality and type; values of one kind are alternatives", () => {
+  it("filters by group and quality; values of one kind are alternatives", () => {
     seed();
     expect(query({ group: ["FuN"] }).items.map((t) => t.key)).toEqual(["silo"]);
     expect(query({ quality: ["HD-2160p"] }).items.map((t) => t.key)).toEqual(["movie:949"]);
     expect(query({ quality: ["HD-2160p"] }).items[0].qualities).toEqual(["HD-2160p"]);
-    expect(query({ type: ["tv", "movie"] }).matched).toBe(3);
-    expect(query({ group: ["VECTOR"], type: ["tv"] }).matched).toBe(0);
+    expect(query({ quality: ["HD-2160p", "HD-1080p"] }).matched).toBe(3);
+    expect(query({ group: ["FuN"], quality: ["HD-2160p"] }).matched).toBe(0);
   });
 
   it("sorts by title and pages", () => {
@@ -187,12 +214,18 @@ describe("releaseFacets", () => {
     addGroup("g2", "VECTOR");
     addGroup("g1", "FuN");
     addGroup("g3", "Empty");
-    insertReleases("g1", [release("1", { titleKey: "a", quality: "HD-2160p" }), release("2", { titleKey: "a", type: "tv" })]);
+    insertReleases("g1", [
+      release("1", { titleKey: "a", quality: "HD-2160p" }),
+      release("2", { titleKey: "a", type: "tv" }),
+    ]);
     insertReleases("g2", [release("3", { titleKey: "b" })]);
-    expect(releaseFacets()).toEqual({ group: ["FuN", "VECTOR"], quality: ["HD-1080p", "HD-2160p"], type: ["movie", "tv"] });
+    expect(releaseFacets()).toEqual({
+      group: ["FuN", "VECTOR"],
+      quality: ["HD-1080p", "HD-2160p"],
+    });
     expect(tileCount()).toBe(2);
     removeGroup("g1");
-    expect(releaseFacets()).toEqual({ group: ["VECTOR"], quality: ["HD-1080p"], type: ["movie"] });
+    expect(releaseFacets()).toEqual({ group: ["VECTOR"], quality: ["HD-1080p"] });
     expect(tileCount()).toBe(1);
   });
 });
@@ -204,8 +237,18 @@ describe("tiles", () => {
     setPreferences({ showSdReleases: true });
     addGroup("g1", "VECTOR");
     insertReleases("g1", [
-      release("1", { titleKey: "heat-sd", name: "Heat.German.AC3.HDRip.XViD-VECTOR", quality: "XviD", publishedAt: 100 }),
-      release("2", { titleKey: "heat", name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", quality: "HD-2160p", publishedAt: 300 }),
+      release("1", {
+        titleKey: "heat-sd",
+        name: "Heat.German.AC3.HDRip.XViD-VECTOR",
+        quality: "XviD",
+        publishedAt: 100,
+      }),
+      release("2", {
+        titleKey: "heat",
+        name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR",
+        quality: "HD-2160p",
+        publishedAt: 300,
+      }),
       release("3", { titleKey: "silo", name: "Silo.2023.S01E01.German.DL.1080p-VECTOR", type: "tv", publishedAt: 200 }),
     ]);
     saveTitleMatch("heat", "verified", heat, { title: "Heat", year: 1995 });
@@ -305,12 +348,19 @@ describe("matching", () => {
     });
 
     saveTitleMatch("heat", "unverified", null, { title: "Heat", year: 1995 });
-    expect(matchInfo("heat")).toMatchObject({ status: "unverified", shown: { tmdbId: null }, candidate: { title: "Heat", year: 1995 } });
+    expect(matchInfo("heat")).toMatchObject({
+      status: "unverified",
+      shown: { tmdbId: null },
+      candidate: { title: "Heat", year: 1995 },
+    });
   });
 
   it("lists a title's releases, newest first", () => {
     addGroup("g1", "VECTOR");
-    insertReleases("g1", [release("1", { titleKey: "x", publishedAt: 1 }), release("2", { titleKey: "x", publishedAt: 2 })]);
+    insertReleases("g1", [
+      release("1", { titleKey: "x", publishedAt: 1 }),
+      release("2", { titleKey: "x", publishedAt: 2 }),
+    ]);
     expect(titleReleases("x").map((r) => [r.id, r.group])).toEqual([
       ["2", "VECTOR"],
       ["1", "VECTOR"],
@@ -359,12 +409,22 @@ describe("releases below 720p", () => {
     addGroup("g1", "VECTOR");
     addGroup("g2", "FuN");
     insertReleases("g1", [
-      release("1", { titleKey: "heat", imdbId: "tt0113277", name: "Heat.German.AC3.HDRip.XViD-VECTOR", quality: "XviD" }),
+      release("1", {
+        titleKey: "heat",
+        imdbId: "tt0113277",
+        name: "Heat.German.AC3.HDRip.XViD-VECTOR",
+        quality: "XviD",
+      }),
       release("2", { titleKey: "heat", imdbId: "tt0113277", name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR" }),
     ]);
     insertReleases("g2", [
       release("3", { titleKey: "ronin", imdbId: "tt0122690", name: "Ronin.German.DVDRip.XviD-FuN", quality: "XviD" }),
-      release("4", { titleKey: "ronin", imdbId: "tt0122690", name: "Ronin.1998.German.BDRip.x264-FuN", quality: "x264-SD" }),
+      release("4", {
+        titleKey: "ronin",
+        imdbId: "tt0122690",
+        name: "Ronin.1998.German.BDRip.x264-FuN",
+        quality: "x264-SD",
+      }),
     ]);
   }
 
@@ -377,13 +437,15 @@ describe("releases below 720p", () => {
     expect(tileCount()).toBe(1);
     expect(tileTitleKeys("ronin")).toEqual([]);
     expect(titleReleases("heat").map((r) => r.id)).toEqual(["2"]);
-    expect(releaseFacets()).toEqual({ group: ["VECTOR"], quality: ["HD-1080p"], type: ["movie"] });
+    expect(releaseFacets()).toEqual({ group: ["VECTOR"], quality: ["HD-1080p"] });
   });
 
   it("doesn't check titles on TMDB that have nothing else", () => {
     seed();
     expect(unlookedImdbIds().map((l) => l.imdbId)).toEqual(["tt0113277"]);
-    expect(pendingTitles()).toMatchObject([{ titleKey: "heat", names: ["Heat.1995.German.DL.1080p.BluRay.x264-VECTOR"] }]);
+    expect(pendingTitles()).toMatchObject([
+      { titleKey: "heat", names: ["Heat.1995.German.DL.1080p.BluRay.x264-VECTOR"] },
+    ]);
   });
 
   it("leaves them out of which groups released a TMDB entry", () => {

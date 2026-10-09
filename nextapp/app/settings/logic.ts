@@ -23,3 +23,9 @@ export function pollDelay({
     (groups !== null && (groups.matching || groups.Items.some((g) => g.syncing || !g.complete)));
   return running ? FAST_POLL_MS : SLOW_POLL_MS;
 }
+
+// Every section a framed area like Missing's, its heading inside; the
+// tables and lists in it go flat (DataTable's flat, LIST) and edge to edge.
+export const SECTION = "overflow-hidden rounded-lg border bg-card p-3";
+// A list of rows as a section's last part, edge to edge with a line on top.
+export const LIST = "-mx-3 -mb-3 divide-y border-t";

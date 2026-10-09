@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { episodeCode, formatBytes, formatDate, formatNumber, plural, relativeTime, resolutionLabel, seasonLabel } from "./format";
+import {
+  episodeCode,
+  formatBytes,
+  formatDate,
+  formatNumber,
+  plural,
+  relativeTime,
+  resolutionLabel,
+  seasonCode,
+  seasonLabel,
+} from "./format";
 
 describe("plural", () => {
   it("adds s, or es after a hissing sound", () => {
@@ -51,6 +61,12 @@ describe("formatBytes", () => {
     expect(formatBytes(1.234 * 1024 ** 4)).toBe("1,23 TB");
     expect(formatBytes(1.999 * 1024 ** 3)).toBe("2,00 GB");
   });
+
+  it("takes the next unit from 1000 on, so it's never four digits", () => {
+    expect(formatBytes(999 * 1024 ** 2)).toBe("999,00 MB");
+    expect(formatBytes(1010 * 1024 ** 2)).toBe("0,99 GB");
+    expect(formatBytes(1000)).toBe("0,98 KB");
+  });
 });
 
 describe("resolutionLabel", () => {
@@ -69,5 +85,14 @@ describe("episodeCode", () => {
     expect(episodeCode(10, 101, 102)).toBe("S10E101-E102");
     expect(episodeCode(1, 2, 2)).toBe("S01E02");
     expect(episodeCode(null, 2)).toBe("");
+  });
+});
+
+describe("seasonCode", () => {
+  it("pads the season, and names a range by both ends", () => {
+    expect(seasonCode(1)).toBe("S01");
+    expect(seasonCode(12)).toBe("S12");
+    expect(seasonCode(1, 1)).toBe("S01");
+    expect(seasonCode(1, 3)).toBe("S01–S03");
   });
 });

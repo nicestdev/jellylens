@@ -36,7 +36,10 @@ describe("toRelease", () => {
 
   it("splits a movie's releases by the year in their names, not a show's", () => {
     expect(xrel.toRelease(p2p({ dirname: "Heat.German.AC3.HDRip.XViD-VECTOR" })).titleKey).toBe("e1");
-    const show = p2p({ dirname: "The.Boys.2019.S04E08.German.DL.2160p.WEB.H265-ZeroTwo", ext_info: { id: "e2", type: "tv" } });
+    const show = p2p({
+      dirname: "The.Boys.2019.S04E08.German.DL.2160p.WEB.H265-ZeroTwo",
+      ext_info: { id: "e2", type: "tv" },
+    });
     expect(xrel.toRelease(show).titleKey).toBe("e2");
   });
 
@@ -54,7 +57,7 @@ describe("toRelease", () => {
 describe("fetchGroupReleases", () => {
   it("asks for a page of 100 and maps it", async () => {
     const fetch = mockFetch(() =>
-      json({ total_count: 1, pagination: { current_page: 2, per_page: 100, total_pages: 3 }, list: [p2p()] })
+      json({ total_count: 1, pagination: { current_page: 2, per_page: 100, total_pages: 3 }, list: [p2p()] }),
     );
     const page = await xrel.fetchGroupReleases("g1", 2);
     expect(page.totalPages).toBe(3);
@@ -66,7 +69,10 @@ describe("fetchGroupReleases", () => {
 
   it("stops before using up the last calls of the hour", async () => {
     const fetch = mockFetch(() =>
-      json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 1 }, list: [] }, { headers: limitHeaders(10) })
+      json(
+        { total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 1 }, list: [] },
+        { headers: limitHeaders(10) },
+      ),
     );
     await xrel.fetchGroupReleases("g1", 1);
     await expect(xrel.fetchGroupReleases("g1", 2)).rejects.toThrow(/rate limit reached, try again in 30 minutes/);
@@ -75,7 +81,10 @@ describe("fetchGroupReleases", () => {
 
   it("carries on once the hour has passed", async () => {
     mockFetch(() =>
-      json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 1 }, list: [] }, { headers: limitHeaders(0, -1) })
+      json(
+        { total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 1 }, list: [] },
+        { headers: limitHeaders(0, -1) },
+      ),
     );
     await xrel.fetchGroupReleases("g1", 1);
     await expect(xrel.fetchGroupReleases("g1", 2)).resolves.toBeDefined();
@@ -95,7 +104,9 @@ describe("fetchGroupReleases", () => {
 describe("findGroup", () => {
   it("finds a group by the tag at the end of its release names", async () => {
     const fetch = mockFetch(() =>
-      json({ p2p_results: [p2p({ group: { id: "other", name: "GOG" } }), p2p({ group: { id: "g1", name: "VECTOR" } })] })
+      json({
+        p2p_results: [p2p({ group: { id: "other", name: "GOG" } }), p2p({ group: { id: "g1", name: "VECTOR" } })],
+      }),
     );
     expect(await xrel.findGroup("vector")).toEqual({ id: "g1", name: "VECTOR" });
     const url = new URL(String(fetch.mock.calls[0][0]));
@@ -151,7 +162,11 @@ describe("scene groups", () => {
     const fetch = mockFetch(() => json({ results: [hit(), hit({ id: "s2", group_name: "OTHER" })] }));
     expect((await xrel.fetchSceneReleases("wayne")).map((r) => r.id)).toEqual(["s1"]);
     const url = new URL(String(fetch.mock.calls[0][0]));
-    expect([url.searchParams.get("q"), url.searchParams.get("scene"), url.searchParams.get("p2p")]).toEqual(["wayne", "1", "0"]);
+    expect([url.searchParams.get("q"), url.searchParams.get("scene"), url.searchParams.get("p2p")]).toEqual([
+      "wayne",
+      "1",
+      "0",
+    ]);
   });
 
   it("finds a scene group as xREL spells it, or tells a typo", async () => {
@@ -183,4 +198,3 @@ describe("scene groups", () => {
     }
   });
 });
-

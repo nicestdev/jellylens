@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, LogIn } from "lucide-react";
+import { AlertCircle, LockOpen } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, jsonRequest } from "@/lib/api-client";
 
 export function LoginForm({ next }: { next: string }) {
   const [username, setUsername] = useState("");
@@ -18,11 +18,7 @@ export function LoginForm({ next }: { next: string }) {
     setError("");
     setBusy(true);
     try {
-      await apiFetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+      await apiFetch("/api/auth/login", jsonRequest("POST", { username, password }));
       // A full load, so the server-rendered header picks up the new session.
       window.location.replace(next);
     } catch (err) {
@@ -64,7 +60,7 @@ export function LoginForm({ next }: { next: string }) {
         />
       </label>
       <Button type="submit" className="w-full" disabled={busy || !username.trim()}>
-        <LogIn />
+        <LockOpen />
         {busy ? "Signing in…" : "Sign in"}
       </Button>
     </form>

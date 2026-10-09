@@ -2,6 +2,8 @@
 // of the library pages. Plain functions, so the pages' logic.ts can use and
 // test them without React.
 
+import { matchesWords } from "./text";
+
 export type SortDir = "asc" | "desc";
 
 // A copy of the set with value added or removed.
@@ -39,3 +41,35 @@ export function sortedBy<T>(items: T[], valueOf: (item: T) => string | number, d
   const sign = dir === "asc" ? 1 : -1;
   return [...items].sort((a, b) => sign * compareValues(valueOf(a), valueOf(b)));
 }
+
+export type LibraryFilters = { query: string; genres: Set<string>; langs: Set<string> };
+
+// What a library page (Movies, TV Shows) shows: its items by name, genre
+// and language, sorted. Menu counts come from the whole library, so the
+// menus don't shrink as you filter; an item matches a facet if it has any
+// selected value.
+export function libraryView<T extends { Name: string; Genres: string[] }>(
+  items: T[],
+  filters: LibraryFilters,
+  langsOf: (item: T) => string[],
+  sortValue: (item: T) => string | number,
+  sortDir: SortDir,
+) {
+  const matches = matchesWords(filters.query);
+  const filtered = items.filter(
+    (item) => matches(item.Name) && matchesAny(filters.genres, item.Genres) && matchesAny(filters.langs, langsOf(item)),
+  );
+  return {
+    rows: sortedBy(filtered, sortValue, sortDir),
+    genreCounts: countValues(items, (i) => i.Genres),
+    langCounts: countValues(items, langsOf),
+    narrowed: Boolean(filters.query.trim()) || filters.genres.size > 0 || filters.langs.size > 0,
+  };
+}
+
+// A value's place in an ordered list (best first), anything not in it
+// after all that are.
+export const rankIn =
+  (list: readonly string[]) =>
+  (value: string): number =>
+    list.includes(value) ? list.indexOf(value) : list.length;

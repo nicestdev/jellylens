@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CollectionItem, IgnoreEntry, MissingSeason, ShowItem } from "@/lib/api-types";
 import { show } from "@/test/fixtures";
-import { cardHint, episodeRanges, lineText, linesFor, missingView, summary } from "./logic";
+import { episodeRanges, lineText, linesFor, missingView, summary } from "./logic";
 
 const season = (n: number, over: Partial<MissingSeason> = {}): MissingSeason => ({
   season: n,
@@ -26,7 +26,14 @@ const collection = (id: string, parts: [number, boolean][]): CollectionItem => (
   name: id,
   posterPath: null,
   count: parts.filter(([, owned]) => !owned).length,
-  parts: parts.map(([tmdbId, owned]) => ({ tmdbId, title: `Part ${tmdbId}`, releaseDate: null, posterPath: null, owned, releaseGroups: [] })),
+  parts: parts.map(([tmdbId, owned]) => ({
+    tmdbId,
+    title: `Part ${tmdbId}`,
+    releaseDate: null,
+    posterPath: null,
+    owned,
+    releaseGroups: [],
+  })),
 });
 
 describe("linesFor", () => {
@@ -38,8 +45,14 @@ describe("linesFor", () => {
   });
 
   it("lists mismatches by season, whole extra seasons included", () => {
-    const lines = linesFor(item("s", [], { extraSeasons: [4], extraEpisodes: [{ season: 1, episodes: "9", count: 1 }] }), "mismatch");
-    expect(lines.map((l) => [l.season, lineText(l)])).toEqual([[1, "E9"], [4, "Not on TMDB"]]);
+    const lines = linesFor(
+      item("s", [], { extraSeasons: [4], extraEpisodes: [{ season: 1, episodes: "9", count: 1 }] }),
+      "mismatch",
+    );
+    expect(lines.map((l) => [l.season, lineText(l)])).toEqual([
+      [1, "E9"],
+      [4, "Not on TMDB"],
+    ]);
   });
 });
 
@@ -52,9 +65,19 @@ describe("episodeRanges", () => {
 describe("missingView", () => {
   const shows = [
     item("a", [season(1, { count: 3 }), season(2, { count: 1, ended: false })]),
-    item("b", [season(1, { count: 4 }), season(2, { count: 10, wholeSeason: true })], { extraSeasons: [5], extraEpisodes: [] }),
+    item("b", [season(1, { count: 4 }), season(2, { count: 10, wholeSeason: true })], {
+      extraSeasons: [5],
+      extraEpisodes: [],
+    }),
   ];
-  const collections = [collection("c1", [[1, true], [2, false], [3, false]]), collection("c2", [[4, false]])];
+  const collections = [
+    collection("c1", [
+      [1, true],
+      [2, false],
+      [3, false],
+    ]),
+    collection("c2", [[4, false]]),
+  ];
 
   it("counts what's missing per category", () => {
     const view = missingView(shows, collections, []);
@@ -88,13 +111,5 @@ describe("missingView", () => {
 
   it("says Nothing when nothing is missing", () => {
     expect(summary(missingView([], [], []).counts)).toBe("Nothing");
-  });
-});
-
-describe("cardHint", () => {
-  it("names what a card counts and where, or says there's nothing", () => {
-    expect(cardHint(12, 3, "episode", "show")).toBe("episodes in 3 shows");
-    expect(cardHint(1, 1, "movie", "collection")).toBe("movie in 1 collection");
-    expect(cardHint(0, 0, "issue", "show")).toBe("nothing to do");
   });
 });

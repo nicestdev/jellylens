@@ -4,7 +4,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@/test/dom";
 import type { LibraryAnalytics } from "@/lib/api-types";
-import { noListFilters, type ListFilters } from "./logic";
 import { ShareChart } from "./share-chart";
 
 const GB = 1024 ** 3;
@@ -33,46 +32,47 @@ const movies: LibraryAnalytics = {
   ],
 };
 
-const chart = (over: { filters?: ListFilters; onSelect?: () => void } = {}) =>
-  render(<ShareChart stats={movies} filters={over.filters ?? noListFilters()} onSelect={over.onSelect ?? (() => {})} />);
+const chart = () => render(<ShareChart stats={movies} />);
 
 describe("ShareChart", () => {
   it("has a ring each for files and storage by group, and files by resolution and codec", () => {
     chart();
-    expect(screen.getByRole("button", { name: "FuN: 3 files, 75 % of files by group" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "GRP: 3,00 GB, 75 % of storage by group" })).toBeInTheDocument();
-    // A legend per ring, with that ring's share and value.
+    expect(screen.getByLabelText("FuN: 3 files, 75,0 % of files by group")).toBeInTheDocument();
+    expect(screen.getByLabelText("GRP: 3,00 GB, 75,0 % of storage by group")).toBeInTheDocument();
+    // A legend per ring, with that ring's share.
     expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-      "FuN75 %3",
-      "GRP25 %1",
-      "FuN25 %1,00 GB",
-      "GRP75 %3,00 GB",
+      "FuN75,0 %",
+      "GRP25,0 %",
+      "FuN25,0 %",
+      "GRP75,0 %",
       // Languages out of every file, so they can add up to more.
-      "German100 %4",
-      "English25 %1",
+      "German100,0 %",
+      "English25,0 %",
       // Resolutions and codecs with the most files first.
-      "1080p75 %3",
-      "4K25 %1",
-      "x26575 %3",
-      "x26425 %1",
+      "1080p75,0 %",
+      "4K25,0 %",
+      "x26575,0 %",
+      "x26425,0 %",
     ]);
+    // Each entry's value is its tooltip.
+    expect(screen.getByTitle("3,00 GB")).toHaveTextContent("GRP75,0 %");
   });
 
-  it("has a ring per audio language, out of every file, that lists its files", async () => {
-    const user = userEvent.setup();
-    const onSelect = vi.fn();
-    chart({ onSelect });
-    await user.click(screen.getByRole("button", { name: "English: 1 file, 25 % of all files" }));
-    expect(onSelect.mock.calls.map(([s]) => [s.dimension, s.values])).toEqual([["languages", ["EN"]]]);
+  it("has a ring per audio language, out of every file", () => {
+    chart();
+    expect(screen.getByLabelText("German: 4 files, 100,0 % of all files")).toBeInTheDocument();
+    expect(screen.getByLabelText("English: 1 file, 25,0 % of all files")).toBeInTheDocument();
   });
 
   it("shows the totals in the middle, or the piece under the pointer", async () => {
     const user = userEvent.setup();
     chart();
-    expect(screen.getByText("4,00 GB")).toBeInTheDocument();
+    // Storage as its number over its unit.
+    expect(screen.getByText("4,00")).toBeInTheDocument();
+    expect(screen.getByText("GB")).toBeInTheDocument();
     expect(screen.getAllByText("files")).toHaveLength(3);
 
-    const grp = screen.getByRole("button", { name: /^GRP: 1 file/ });
+    const grp = screen.getByLabelText(/^GRP: 1 file/);
     await user.hover(grp);
     expect(screen.getByText("1 file")).toBeInTheDocument();
     // Both group rings pick it out in the middle, besides their legends.
@@ -83,28 +83,18 @@ describe("ShareChart", () => {
 
   it("does the same on keyboard focus", () => {
     chart();
-    fireEvent.focus(screen.getByRole("button", { name: /^x265: 3 files/ }));
+    const x265 = screen.getByLabelText(/^x265: 3 files/);
+    fireEvent.focus(x265);
     expect(screen.getByText("3 files")).toBeInTheDocument();
+    fireEvent.blur(x265);
+    expect(screen.queryByText("3 files")).not.toBeInTheDocument();
   });
 
-  it("lists a piece's files on click, Enter, or a click in the legend", async () => {
-    const user = userEvent.setup();
-    const onSelect = vi.fn();
-    chart({ onSelect });
-    await user.click(screen.getByRole("button", { name: /^GRP: 1 file/ }));
-    fireEvent.keyDown(screen.getByRole("button", { name: /^4K: 1 file/ }), { key: "Enter" });
-    await user.click(screen.getAllByRole("button", { name: /^x264/ }).find((b) => b.tagName === "BUTTON")!);
-    expect(onSelect.mock.calls.map(([s]) => [s.dimension, s.values])).toEqual([
-      ["groups", ["GRP"]],
-      ["resolutions", ["4K"]],
-      ["codecs", ["x264"]],
-    ]);
-  });
-
-  it("picks out the pieces whose files are listed", () => {
-    chart({ filters: { ...noListFilters(), groups: new Set(["GRP"]), codecs: new Set(["x264"]) } });
-    // The files ring by group and the codec ring, without hovering.
-    expect(screen.getAllByText("1 file")).toHaveLength(2);
+  it("picks out a piece on a tap in the legend, for touch screens", () => {
+    chart();
+    fireEvent.click(screen.getByRole("button", { name: /^4K/ }));
+    expect(screen.getByText("1 file")).toBeInTheDocument();
+    expect(screen.getAllByText("4K")).toHaveLength(2);
   });
 
   it("steps through the charts one at a time with the arrows", async () => {
@@ -117,7 +107,8 @@ describe("ShareChart", () => {
       scrollWidth: { value: 1500 },
       scrollLeft: { value: 0, writable: true },
     });
-    for (const card of track.children) vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ width: 294 } as DOMRect);
+    for (const card of track.children)
+      vi.spyOn(card, "getBoundingClientRect").mockReturnValue({ width: 294 } as DOMRect);
     const scrollBy = vi.fn();
     track.scrollBy = scrollBy;
     fireEvent.scroll(track);
@@ -129,7 +120,7 @@ describe("ShareChart", () => {
 
   it("draws nothing without files", () => {
     const { container } = render(
-      <ShareChart stats={{ ...movies, files: 0, size: 0, groups: [], resolutions: [], codecs: [], languages: [] }} filters={noListFilters()} onSelect={() => {}} />
+      <ShareChart stats={{ ...movies, files: 0, size: 0, groups: [], resolutions: [], codecs: [], languages: [] }} />,
     );
     expect(container).toBeEmptyDOMElement();
   });

@@ -1,19 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { AlertCircle, Film } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmptyState } from "@/components/empty-state";
-import { SearchInput } from "@/components/search-input";
-import { FilterChips, FilterMenu } from "@/components/filter-menu";
+import { LibraryToolbar, useLibraryFilters } from "@/components/library-toolbar";
 import { POSTER_GRID, PosterCard, PosterGridSkeleton } from "@/components/poster-card";
-import { SortMenu } from "@/components/sort-menu";
 import { apiFetch, tmdbUrl } from "@/lib/api-client";
 import type { MovieItem as Movie, MoviesResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
-import { byCount, toggled, type SortDir } from "@/lib/facets";
-import { resolutionLabel } from "@/lib/format";
-import { languageName } from "@/lib/languages";
+import { formatNumber, plural, resolutionLabel } from "@/lib/format";
 import { SORTS, movieMeta, movieView, type SortKey } from "./logic";
 
 function MovieCard({ item, href }: { item: Movie; href?: string }) {
@@ -25,7 +20,8 @@ function MovieCard({ item, href }: { item: Movie; href?: string }) {
       imageTag={item.ImageTags?.Primary}
       title={item.Name}
       meta={movieMeta(item)}
-      badge={res ? { label: res, tone: res === "4K" ? "accent" : "neutral" } : undefined}
+      // 1080p is the norm, so only the exceptions (4K, 720p, SD) get a badge.
+      badge={res && res !== "1080p" ? { label: res } : undefined}
     />
   );
 }
@@ -37,41 +33,20 @@ export default function MoviesPage() {
   const movies = library.data ?? [];
   const loading = library.loading;
   const error = library.error && `Failed to load library: ${library.error}`;
-  const [query, setQuery] = useState("");
-  const [genreFilter, setGenreFilter] = useState<Set<string>>(() => new Set());
-  const [langFilter, setLangFilter] = useState<Set<string>>(() => new Set());
-  const [sortKey, setSortKey] = useState<SortKey>("title");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const lib = useLibraryFilters<SortKey>("title");
 
-  const { rows, genreCounts, langCounts, narrowed } = movieView(
-    movies,
-    { query, genres: genreFilter, langs: langFilter },
-    sortKey,
-    sortDir
-  );
-  const chips = [
-    ...[...genreFilter].map((g) => ({
-      id: `genre-${g}`,
-      label: g,
-      onRemove: () => setGenreFilter((prev) => toggled(prev, g)),
-    })),
-    ...[...langFilter].map((l) => ({
-      id: `lang-${l}`,
-      label: languageName(l),
-      onRemove: () => setLangFilter((prev) => toggled(prev, l)),
-    })),
-  ];
+  const { rows, genreCounts, langCounts, narrowed } = movieView(movies, lib.filters, lib.sortKey, lib.sortDir);
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Movies</h1>
+        <h1 className="text-xl font-semibold">Movies</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {loading
             ? "Loading…"
             : narrowed
-              ? `${rows.length} of ${movies.length} movies`
-              : `${movies.length} movies`}
+              ? `${formatNumber(rows.length)} of ${plural(movies.length, "movie")}`
+              : plural(movies.length, "movie")}
         </p>
       </div>
 
@@ -82,48 +57,12 @@ export default function MoviesPage() {
         </Alert>
       ) : null}
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <SearchInput value={query} onChange={setQuery} placeholder="Search movies…" className="w-full sm:w-64" />
-        <FilterMenu
-          facets={[
-            {
-              key: "genre",
-              label: "Genre",
-              values: byCount(genreCounts),
-              counts: genreCounts,
-              selected: genreFilter,
-              onToggle: (v) => setGenreFilter((prev) => toggled(prev, v)),
-            },
-            {
-              key: "lang",
-              label: "Language",
-              values: byCount(langCounts),
-              counts: langCounts,
-              selected: langFilter,
-              onToggle: (v) => setLangFilter((prev) => toggled(prev, v)),
-              format: languageName,
-            },
-          ]}
-        />
-        <div className="ml-auto">
-          <SortMenu
-            options={SORTS}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onChange={(key, dir) => {
-              setSortKey(key);
-              setSortDir(dir);
-            }}
-          />
-        </div>
-      </div>
-
-      <FilterChips
-        chips={chips}
-        onClear={() => {
-          setGenreFilter(new Set());
-          setLangFilter(new Set());
-        }}
+      <LibraryToolbar
+        state={lib}
+        sorts={SORTS}
+        genreCounts={genreCounts}
+        langCounts={langCounts}
+        placeholder="Search movies…"
       />
 
       <div className="mt-6">

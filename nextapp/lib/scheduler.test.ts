@@ -95,11 +95,14 @@ describe("trigger state", () => {
   it("says whether a run is going and how the last one failed", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     let finish!: () => void;
-    const trigger = makeTrigger("test", vi
-      .fn()
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)))
-      .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValueOnce(undefined));
+    const trigger = makeTrigger(
+      "test",
+      vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)))
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValueOnce(undefined),
+    );
 
     const run = trigger();
     expect(trigger.running()).toBe(true);

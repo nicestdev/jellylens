@@ -68,7 +68,10 @@ describe("release names", () => {
   it("reads a show release's season and episodes", () => {
     expect(episodesOf("Silo.2023.S01E02.German.DL.1080p.WEB.H264-ZeroTwo")).toEqual({ season: 1, episodes: [2] });
     expect(episodesOf("Silo.2023.S01E01E02.German.DL.1080p.WEB.H264-ZeroTwo")).toEqual({ season: 1, episodes: [1, 2] });
-    expect(episodesOf("Silo.2023.S01E01-E03.German.DL.1080p.WEB.H264-ZeroTwo")).toEqual({ season: 1, episodes: [1, 2, 3] });
+    expect(episodesOf("Silo.2023.S01E01-E03.German.DL.1080p.WEB.H264-ZeroTwo")).toEqual({
+      season: 1,
+      episodes: [1, 2, 3],
+    });
     expect(episodesOf("Silo.2023.S02.German.DL.1080p.WEB.H264-ZeroTwo")).toEqual({ season: 2, episodes: null });
     expect(episodesOf("Silo.S01-S02.German.DL.1080p.WEB.H264-ZeroTwo")).toBeNull();
   });
@@ -77,12 +80,20 @@ describe("release names", () => {
 describe("movieUnits", () => {
   it("has a unit per movie with its files and every favorite's release of it", () => {
     const [unit] = movieUnits(
-      [owned(), owned({ fileName: "Heat.1995.German.2160p.UHD.x265-FUN.mkv", group: "FUN", resolution: "1080p", size: 2000 * MB })],
+      [
+        owned(),
+        owned({
+          fileName: "Heat.1995.German.2160p.UHD.x265-FUN.mkv",
+          group: "FUN",
+          resolution: "1080p",
+          size: 2000 * MB,
+        }),
+      ],
       [
         release("Heat.1995.German.DTSD.DL.1080p.BluRay.x264-VECTOR"),
         release("Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR", { quality: "HD-2160p", sizeMb: null }),
         release("Alien.1979.German.DL.1080p.BluRay.x264-VECTOR", { tmdbId: 348 }),
-      ]
+      ],
     );
     expect(unit).toMatchObject({
       key: "m1",
@@ -136,20 +147,47 @@ describe("seasonUnits", () => {
       ...over,
     });
   const zt = (name: string, over: Partial<GroupRelease> = {}) =>
-    release(`Silo.2023.${name}.German.DL.1080p.WEB.H264-ZeroTwo`, { tmdbId: 125988, group: "ZeroTwo", sizeMb: 800, ...over });
+    release(`Silo.2023.${name}.German.DL.1080p.WEB.H264-ZeroTwo`, {
+      tmdbId: 125988,
+      group: "ZeroTwo",
+      sizeMb: 800,
+      ...over,
+    });
 
   it("has a unit per season, offering a pack and all owned episodes one by one", () => {
     const units = seasonUnits(
       [ep(1, 1), ep(1, 2), ep(2, 1)],
-      [zt("S01", { sizeMb: 3000, publishedAt: 5 }), zt("S01E01", { publishedAt: 3 }), zt("S01E02", { publishedAt: 9 }), zt("S02E02")]
+      [
+        zt("S01", { sizeMb: 3000, publishedAt: 5 }),
+        zt("S01E01", { publishedAt: 3 }),
+        zt("S01E02", { publishedAt: 9 }),
+        zt("S02E02"),
+      ],
     );
     expect(units.map((u) => u.key)).toEqual(["s1:1", "s1:2"]);
     const [first, second] = units;
-    expect(first).toMatchObject({ season: 1, files: 2, size: 2000 * MB, fileName: "Silo.S01E01.German.1080p.WEB.x264-w00t.mkv" });
+    expect(first).toMatchObject({
+      season: 1,
+      files: 2,
+      size: 2000 * MB,
+      fileName: "Silo.S01E01.German.1080p.WEB.x264-w00t.mkv",
+    });
     expect(first.alternatives).toEqual([
-      expect.objectContaining({ group: "ZeroTwo", pack: true, episodes: 2, size: 3000 * MB, name: "Silo.2023.S01.German.DL.1080p.WEB.H264-ZeroTwo" }),
+      expect.objectContaining({
+        group: "ZeroTwo",
+        pack: true,
+        episodes: 2,
+        size: 3000 * MB,
+        name: "Silo.2023.S01.German.DL.1080p.WEB.H264-ZeroTwo",
+      }),
       // The episodes add up; the newest of them says when.
-      expect.objectContaining({ pack: false, episodes: 2, size: 1600 * MB, name: "Silo.2023.S01E01.German.DL.1080p.WEB.H264-ZeroTwo", publishedAt: 9 }),
+      expect.objectContaining({
+        pack: false,
+        episodes: 2,
+        size: 1600 * MB,
+        name: "Silo.2023.S01E01.German.DL.1080p.WEB.H264-ZeroTwo",
+        publishedAt: 9,
+      }),
     ]);
     // ZeroTwo has episode 2 of season 2, not the one you have: nothing.
     expect(second.alternatives).toEqual([]);
@@ -162,7 +200,7 @@ describe("seasonUnits", () => {
         zt("S01E01"),
         zt("S01E02", { sizeMb: null }),
         release("Silo.2023.S01E01.German.DL.1080p.WEB.H265-ZeroTwo", { tmdbId: 125988, group: "ZeroTwo" }),
-      ]
+      ],
     );
     expect(unit.alternatives).toEqual([expect.objectContaining({ codec: "x264", episodes: 2, size: null })]);
   });

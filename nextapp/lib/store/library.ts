@@ -89,14 +89,16 @@ export function libraryEntries(): LibraryEntry[] {
        FROM movies WHERE tmdb_id IS NOT NULL
      UNION ALL
      SELECT 'tv', id, tmdb_id, ifnull(json_extract(data, '$.ServerId'), ''), json_extract(data, '$.ImageTags.Primary'), NULL
-       FROM shows WHERE tmdb_id IS NOT NULL`
+       FROM shows WHERE tmdb_id IS NOT NULL`,
   );
   return rows.map((r) => ({ ...r, imageTag: r.imageTag ?? undefined, fileName: r.fileName ?? undefined }));
 }
 
 // The TMDB collections owned movies belong to, and the shows matched to TMDB.
 export const collectionIds = () =>
-  all<{ id: string }>("SELECT DISTINCT collection_id AS id FROM movies WHERE collection_id IS NOT NULL").map((r) => r.id);
+  all<{ id: string }>("SELECT DISTINCT collection_id AS id FROM movies WHERE collection_id IS NOT NULL").map(
+    (r) => r.id,
+  );
 export const matchedShows = () =>
   all<{ id: string; tmdbId: string }>("SELECT id, tmdb_id AS tmdbId FROM shows WHERE tmdb_id IS NOT NULL");
 
@@ -106,7 +108,7 @@ export function libraryIds(): Set<string> {
 
 export function libraryCounts() {
   return one<{ movies: number; shows: number; episodes: number }>(
-    "SELECT (SELECT count(*) FROM movies) AS movies, (SELECT count(*) FROM shows) AS shows, (SELECT count(*) FROM episodes) AS episodes"
+    "SELECT (SELECT count(*) FROM movies) AS movies, (SELECT count(*) FROM shows) AS shows, (SELECT count(*) FROM episodes) AS episodes",
   )!;
 }
 
@@ -118,7 +120,7 @@ export function replaceJellyfin(
     episodes,
     files = [],
   }: { movies: JellyfinMovie[]; shows: JellyfinShow[]; episodes: JellyfinEpisode[]; files?: StoredFile[] },
-  at: string | null
+  at: string | null,
 ) {
   tx(() => {
     run("DELETE FROM movies");
@@ -131,7 +133,7 @@ export function replaceJellyfin(
     const show = db().prepare("INSERT INTO shows (id, tmdb_id, data) VALUES (?, ?, ?)");
     for (const s of shows) show.run(s.Id, s.ProviderIds?.Tmdb ?? null, toJson(s));
     const episode = db().prepare(
-      "INSERT INTO episodes (id, series_id, season, number, number_end, size, audio_languages) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO episodes (id, series_id, season, number, number_end, size, audio_languages) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
     for (const e of episodes) {
       episode.run(
@@ -141,7 +143,7 @@ export function replaceJellyfin(
         e.IndexNumber,
         e.IndexNumberEnd,
         e.Size,
-        toJson(e.AudioLanguages)
+        toJson(e.AudioLanguages),
       );
     }
     replaceFiles(files);

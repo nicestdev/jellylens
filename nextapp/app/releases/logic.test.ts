@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReleasesResponse } from "@/lib/api-types";
-import {
-  facetValues,
-  noFilters,
-  qualityBadges,
-  releasesUrl,
-  subtitle,
-} from "./logic";
+import { facetValues, noFilters, releasesUrl, subtitle } from "./logic";
 
 describe("releasesUrl", () => {
   it("sends the trimmed search, the sort, the page and every selected value", () => {
@@ -30,17 +24,9 @@ describe("facetValues", () => {
   });
 
   it("hides a facet with a single value unless it's in use", () => {
-    expect(facetValues("type", ["movie"], new Set())).toEqual([]);
-    expect(facetValues("type", ["movie"], new Set(["movie"]))).toEqual(["movie"]);
+    expect(facetValues("group", ["FuN"], new Set())).toEqual([]);
+    expect(facetValues("group", ["FuN"], new Set(["FuN"]))).toEqual(["FuN"]);
   });
-});
-
-describe("qualityBadges", () => {
-  it("badges the HD resolutions a title comes in, 4K last", () => {
-    expect(qualityBadges(["HD-2160p", "SD", "HD-1080p"])).toEqual([{ label: "1080p" }, { label: "4K", tone: "accent" }]);
-    expect(qualityBadges(["DVDR"])).toEqual([]);
-  });
-
 });
 
 describe("subtitle", () => {
@@ -48,7 +34,7 @@ describe("subtitle", () => {
     total: 11337,
     matched: 42,
     Items: [],
-    facets: { group: [], quality: [], type: [] },
+    facets: { group: [], quality: [] },
     groups: 3,
     syncing: false,
     ...over,

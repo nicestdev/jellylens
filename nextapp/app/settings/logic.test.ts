@@ -6,7 +6,13 @@ const stage = { syncedAt: "2026-10-01T00:00:00Z", running: false, error: null };
 const status = (running: Partial<Record<keyof StatusResponse, boolean>> = {}): StatusResponse => ({
   jellyfin: { ...stage, running: Boolean(running.jellyfin), movies: 1, shows: 1 },
   tmdb: { ...stage, running: Boolean(running.tmdb), shows: 1, collections: 1 },
-  missing: { ...stage, running: Boolean(running.missing), incompleteCount: 0, incompleteCollectionCount: 0, mismatchCount: 0 },
+  missing: {
+    ...stage,
+    running: Boolean(running.missing),
+    incompleteCount: 0,
+    incompleteCollectionCount: 0,
+    mismatchCount: 0,
+  },
   releases: { ...stage, running: Boolean(running.releases), groups: 1, releases: 1 },
 });
 const group = (over: Partial<ReleaseGroupItem> = {}): ReleaseGroupItem => ({

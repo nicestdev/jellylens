@@ -3,7 +3,7 @@ import { tx } from "../db";
 import { all, one, run } from "./sql";
 
 // Something the user wants added to the library, picked from TMDB search on
-// the Requests page. Title/year/poster are copied in so the list renders
+// Discover and kept on the Wishlist. Title/year/poster are copied in so the list renders
 // without calling TMDB again. Whether it has arrived isn't stored: it's
 // derived on read by matching tmdbId against the Jellyfin library.
 // One entry per title, however many people asked for it: requesters lists
@@ -22,7 +22,7 @@ export type RequestEntry = {
 };
 
 // A Jellyfin user, by id; the name is kept for the admin's overview.
-export type Requester = { id: string; name: string; requestedAt: string };
+type Requester = { id: string; name: string; requestedAt: string };
 
 // Requests come back in the order they were first made.
 type RequestRow = {
@@ -68,7 +68,7 @@ export function createRequest(entry: Omit<RequestEntry, "requesters">, requester
       entry.year,
       entry.releaseDate,
       entry.posterPath,
-      entry.requestedAt
+      entry.requestedAt,
     );
     for (const q of requesters) addRequester(entry.mediaType, entry.tmdbId, q);
   });
@@ -82,7 +82,7 @@ export function addRequester(mediaType: string, tmdbId: number, q: Requester) {
     tmdbId,
     q.id,
     q.name,
-    q.requestedAt
+    q.requestedAt,
   );
 }
 
@@ -100,7 +100,7 @@ export function removeRequester(mediaType: string, tmdbId: number, userId: strin
       mediaType,
       tmdbId,
       mediaType,
-      tmdbId
+      tmdbId,
     );
   });
 }
@@ -115,7 +115,7 @@ export function adoptLocalRequests(user: SessionUser) {
          SELECT 1 FROM requesters q
           WHERE q.media_type = requesters.media_type AND q.tmdb_id = requesters.tmdb_id AND q.user_id = ?)`,
       LOCAL_USER.id,
-      user.id
+      user.id,
     );
     run("UPDATE requesters SET user_id = ?, name = ? WHERE user_id = ?", user.id, user.name, LOCAL_USER.id);
   });

@@ -1,5 +1,5 @@
 import type { MovieItem } from "@/lib/api-types";
-import { countValues, matchesAny, sortedBy, type SortDir } from "@/lib/facets";
+import { libraryView, type LibraryFilters, type SortDir } from "@/lib/facets";
 
 // What the Movies page shows: the library filtered, sorted, and the counts
 // for its filter menus. No React here, so it's tested on its own
@@ -23,28 +23,21 @@ export type SortKey = (typeof SORTS)[number]["key"];
 
 function sortValue(item: MovieItem, key: SortKey): string | number {
   switch (key) {
-    case "title": return item.Name.toLowerCase();
-    case "year": return item.ProductionYear ?? 0;
-    case "duration": return item.RunTimeTicks ?? 0;
+    case "title":
+      return item.Name.toLowerCase();
+    case "year":
+      return item.ProductionYear ?? 0;
+    case "duration":
+      return item.RunTimeTicks ?? 0;
   }
 }
 
-export type MovieFilters = { query: string; genres: Set<string>; langs: Set<string> };
-
-// Menu counts come from the whole library, so the menus don't shrink as
-// you filter. A movie matches a facet if it has any selected value.
-export function movieView(movies: MovieItem[], filters: MovieFilters, sortKey: SortKey, sortDir: SortDir) {
-  const q = filters.query.trim().toLowerCase();
-  const filtered = movies.filter(
-    (item) =>
-      (!q || item.Name.toLowerCase().includes(q)) &&
-      matchesAny(filters.genres, item.Genres) &&
-      matchesAny(filters.langs, item.AudioLanguages)
+// The library filtered and sorted, and the counts for its filter menus.
+export const movieView = (movies: MovieItem[], filters: LibraryFilters, sortKey: SortKey, sortDir: SortDir) =>
+  libraryView(
+    movies,
+    filters,
+    (m) => m.AudioLanguages,
+    (m) => sortValue(m, sortKey),
+    sortDir,
   );
-  return {
-    rows: sortedBy(filtered, (m) => sortValue(m, sortKey), sortDir),
-    genreCounts: countValues(movies, (m) => m.Genres),
-    langCounts: countValues(movies, (m) => m.AudioLanguages),
-    narrowed: Boolean(q) || filters.genres.size > 0 || filters.langs.size > 0,
-  };
-}

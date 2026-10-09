@@ -1,14 +1,15 @@
+import type { Library } from "@/lib/libraries";
 import type { Alternative, UpgradesResponse, Tier, Unit } from "@/lib/api-types";
 import type { SortDir } from "@/lib/facets";
-import { formatBytes, formatNumber, plural, seasonLabel } from "@/lib/format";
-import { audioOf, codecOf, episodesOf, tierOfRelease } from "@/lib/upgrades";
-import { fold } from "@/lib/text";
+import { formatBytes, formatNumber, plural } from "@/lib/format";
+import { audioOf } from "@/lib/upgrades";
+import { NO_GROUP } from "@/lib/release-labels";
+import { matchesWords } from "@/lib/text";
+import { titlePath } from "@/lib/title-path";
 
 // What the Upgrades page works out from /api/upgrades: for a group you'd
 // like more of, which of your movies or seasons it has released and what
 // that would cost in storage. No React here, so it's tested on its own.
-
-export type Library = "movies" | "shows";
 
 // What a movie or a season is called in counts.
 export const UNIT: Record<Library, { one: string; title: string }> = {
@@ -17,8 +18,7 @@ export const UNIT: Record<Library, { one: string; title: string }> = {
 };
 
 const key = (group: string | null) => group?.toLowerCase() ?? "";
-const NO_GROUP = "n/a";
-export const groupName = (g: string | null) => g || NO_GROUP;
+const groupName = (g: string | null) => g || NO_GROUP;
 
 // ---- Which release a group offers
 
@@ -36,24 +36,24 @@ const TIER_ORDER: Tier[] = ["2160p", "1080p", "720p", "SD", ""];
 
 // The codec it should have: the file's own, any (the file's first, if the
 // group has both), or one in particular.
-export type CodecPick = "same" | "any" | "x264" | "x265";
+export type CodecPick = "same" | "any" | "x264" | "x265" | "AV1";
 export const CODEC_PICKS: { key: CodecPick; label: string }[] = [
   { key: "same", label: "Same as now" },
   { key: "any", label: "Any" },
   { key: "x264", label: "x264" },
   { key: "x265", label: "x265" },
+  { key: "AV1", label: "AV1" },
 ];
 
 // A group's release of a unit in that quality and codec: a season's pack
 // before its episodes one by one, the file's codec first, then the
-// newest. others: how many more it has like that (a remux, the other
-// codec).
+// newest.
 export function pickAlternative(
   u: Unit,
   group: string,
   quality: QualityPick,
-  codec: CodecPick = "any"
-): { alt: Alternative; others: number } | null {
+  codec: CodecPick = "any",
+): Alternative | null {
   const wanted = codec === "same" ? u.codec : codec;
   const ofGroup = u.alternatives.filter((a) => key(a.group) === key(group) && (wanted === "any" || a.codec === wanted));
   let tier: Tier | undefined;
@@ -68,9 +68,9 @@ export function pickAlternative(
       (a, b) =>
         Number(b.pack) - Number(a.pack) ||
         Number(b.codec === u.codec) - Number(a.codec === u.codec) ||
-        b.publishedAt - a.publishedAt
+        b.publishedAt - a.publishedAt,
     );
-  return matching.length ? { alt: matching[0], others: matching.length - 1 } : null;
+  return matching[0] ?? null;
 }
 
 // What a file has as a release would name it: DL or ML by its name, else
@@ -99,7 +99,12 @@ export function attributes(u: Unit, alt: Alternative): Attribute[] {
     ["codec", u.codec || "?", alt.codec || "?"],
     ["audio", audio, alt.audio ?? "DE"],
   ];
-  return pairs.map(([key, before, after]) => ({ key, before, after, same: before.toLowerCase() === after.toLowerCase() }));
+  return pairs.map(([key, before, after]) => ({
+    key,
+    before,
+    after,
+    same: before.toLowerCase() === after.toLowerCase(),
+  }));
 }
 
 // A file has one language only, and the release is DL or ML.
@@ -107,7 +112,7 @@ export const addsAudio = (u: Unit, alt: Alternative) => u.languages.length < 2 &
 
 // Bytes more (or, negative, less) the release takes than the files; null
 // if xREL gave no size.
-export const sizeChange = (u: Unit, alt: Alternative) => (alt.size === null ? null : alt.size - u.size);
+const sizeChange = (u: Unit, alt: Alternative) => (alt.size === null ? null : alt.size - u.size);
 
 // "+2,30 GB", "−1,10 GB", "±0 B"; "?" without a size.
 export function formatChange(bytes: number | null): string {
@@ -132,12 +137,11 @@ export type SwitchOptions = {
 export type SwitchRow = {
   unit: Unit;
   alt: Alternative;
-  others: number;
   change: number | null;
   addsAudio: boolean;
 };
 
-export type SwitchSummary = {
+type SwitchSummary = {
   rows: SwitchRow[];
   considered: number; // units not all from the target, after "from"
   audio: number; // rows that add a language
@@ -148,21 +152,22 @@ export type SwitchSummary = {
   shareAfter: number;
 };
 
-const fromTarget = (u: Unit, target: string) => u.groups.filter((g) => key(g.name) === key(target)).reduce((s, g) => s + g.files, 0);
+const fromTarget = (u: Unit, target: string) =>
+  u.groups.filter((g) => key(g.name) === key(target)).reduce((s, g) => s + g.files, 0);
 
 export function switchSummary(units: Unit[], o: SwitchOptions): SwitchSummary {
   const total = units.reduce((s, u) => s + u.files, 0);
   const owned = units.reduce((s, u) => s + fromTarget(u, o.target), 0);
   const considered = units.filter(
-    (u) => fromTarget(u, o.target) < u.files && (!o.from.size || o.from.has(key(u.groups[0]?.name ?? null)))
+    (u) => fromTarget(u, o.target) < u.files && (!o.from.size || o.from.has(key(u.groups[0]?.name ?? null))),
   );
   const rows: SwitchRow[] = [];
   for (const unit of considered) {
-    const pick = pickAlternative(unit, o.target, o.quality, o.codec);
-    if (!pick) continue;
-    const audio = addsAudio(unit, pick.alt);
+    const alt = pickAlternative(unit, o.target, o.quality, o.codec);
+    if (!alt) continue;
+    const audio = addsAudio(unit, alt);
     if (o.onlyAudio && !audio) continue;
-    rows.push({ unit, alt: pick.alt, others: pick.others, change: sizeChange(unit, pick.alt), addsAudio: audio });
+    rows.push({ unit, alt, change: sizeChange(unit, alt), addsAudio: audio });
   }
   const sized = rows.filter((r) => r.alt.size !== null);
   const switched = rows.reduce((s, r) => s + r.unit.files - fromTarget(r.unit, o.target), 0);
@@ -178,7 +183,7 @@ export function switchSummary(units: Unit[], o: SwitchOptions): SwitchSummary {
   };
 }
 
-export type Tile = { label: string; value: string; hint: string; muted?: boolean; tone?: "good" | "bad" };
+type Tile = { label: string; value: string; hint: string; muted?: boolean };
 
 const pct = (share: number) => `${Math.round(share * 100)} %`;
 
@@ -201,14 +206,15 @@ export function switchTiles(s: SwitchSummary, o: SwitchOptions, library: Library
     {
       label: "Storage",
       value: s.rows.length - s.unknown ? formatChange(change) : "–",
-      hint: s.unknown ? `${plural(s.unknown, unit)} without a size` : `${formatBytes(s.added)} for ${formatBytes(s.removed)}`,
+      hint: s.unknown
+        ? `${plural(s.unknown, unit)} without a size`
+        : `${formatBytes(s.added)} for ${formatBytes(s.removed)}`,
       muted: !s.rows.length,
-      tone: change < 0 ? "good" : change > 0 ? "bad" : undefined,
     },
     {
       label: `${o.target}'s share`,
-      value: `${pct(s.shareNow)} → ${pct(s.shareAfter)}`,
-      hint: library === "movies" ? "of the movie files" : "of the episode files",
+      value: pct(s.shareAfter),
+      hint: `of the ${library === "movies" ? "movie" : "episode"} files, ${pct(s.shareNow)} now`,
     },
   ];
 }
@@ -239,12 +245,8 @@ export function sortRows(rows: SwitchRow[], sortKey: SwitchSortKey, dir: SortDir
 
 // Every word in the title.
 export function searchRows<T extends { unit: Unit }>(rows: T[], query: string): T[] {
-  const words = fold(query).split(" ").filter(Boolean);
-  if (!words.length) return rows;
-  return rows.filter((r) => {
-    const title = fold(r.unit.title);
-    return words.every((w) => title.includes(w));
-  });
+  const matches = matchesWords(query);
+  return rows.filter((r) => matches(r.unit.title));
 }
 
 // The Source filter's values: the library's groups other than the target,
@@ -277,34 +279,46 @@ export function startChoices(groups: string[], saved: unknown): Choices {
   };
 }
 
-// The release panel for a row's title (components/release-panel.tsx),
-// listing only what the filters allow: the target group's releases, in
-// the quality and codec picked (the file's own for "same as now", all for
-// "any"), and a season's only those of that season.
-export function panelFor(u: Unit, o: Pick<SwitchOptions, "target" | "quality" | "codec">, library: Library) {
-  const mediaType = library === "movies" ? ("movie" as const) : ("tv" as const);
-  const season = u.season;
+// A row's title page (lib/title-path.ts) on just the target group's
+// releases, in the quality and codec picked (the file's own for "same as
+// now", all for "any"), and a season's only those of that season.
+export function titleHref(u: Unit, o: Pick<SwitchOptions, "target" | "quality" | "codec">, library: Library): string {
+  const mediaType = library === "movies" ? "movie" : "tv";
   const tier = o.quality === "any" ? null : o.quality === "same" ? u.tier : o.quality;
   const codec = o.codec === "any" ? null : o.codec === "same" ? u.codec : o.codec;
-  const kind = [tier, codec].filter(Boolean).join(" ");
-  return {
-    title: {
-      key: `${mediaType}:${u.tmdbId}`,
-      title: u.title,
-      year: u.year,
-      posterPath: null,
-      mediaType,
-      tmdbId: u.tmdbId,
-      library: { id: u.parentId, imageTag: u.imageTag },
-    },
-    only: {
-      keep: (r: { group: string; name: string; quality: string }) =>
-        key(r.group) === key(o.target) &&
-        (tier === null || tierOfRelease(r.quality) === tier) &&
-        (codec === null || codecOf(r.name) === codec) &&
-        (season === null || episodesOf(r.name)?.season === season),
-      note: `Only ${o.target}'s ${kind ? kind + " " : ""}releases${season === null ? "" : ` of ${seasonLabel(season)}`}`,
-    },
-  };
+  return titlePath(`${mediaType}:${u.tmdbId}`, { group: o.target, tier, codec, season: u.season });
 }
-export type PanelFor = ReturnType<typeof panelFor>;
+
+export { withoutTitle } from "@/lib/release-labels";
+
+// A release's name in pieces, the ones that say a changed attribute marked
+// with it (key), so the list can color them: the group after the last
+// "-", the quality ("1080p"), the codec ("x265", "H.264", "HEVC"), and the
+// audio tag (DL, ML; "German" when the original audio would be lost).
+// What the name doesn't say stays unmarked.
+const NAME_PATTERNS: Record<Attribute["key"], (after: string) => RegExp> = {
+  group: () => /(?<=-)[^.-]+$/,
+  quality: () => /(?<=^|[._-])(2160p|1080p|720p|576p|480p)(?=[._-])/i,
+  codec: () => /(?<=^|[._-])([xh]\.?26[45]|hevc|avc|av1)(?=[._-])/i,
+  audio: (after) => (after === "DE" ? /(?<=^|[._-])german(?=[._-])/i : /(?<=^|\.)(DL|ML)(?=\.)/i),
+};
+
+export function nameParts(name: string, attrs: Attribute[]): { text: string; key?: Attribute["key"] }[] {
+  const marks = attrs
+    .filter((a) => !a.same)
+    .flatMap((a) => {
+      const m = NAME_PATTERNS[a.key](a.after).exec(name);
+      return m ? [{ key: a.key, start: m.index, end: m.index + m[0].length }] : [];
+    })
+    .sort((a, b) => a.start - b.start);
+  const parts: { text: string; key?: Attribute["key"] }[] = [];
+  let at = 0;
+  for (const m of marks) {
+    if (m.start < at) continue;
+    if (m.start > at) parts.push({ text: name.slice(at, m.start) });
+    parts.push({ text: name.slice(m.start, m.end), key: m.key });
+    at = m.end;
+  }
+  if (at < name.length) parts.push({ text: name.slice(at) });
+  return parts;
+}

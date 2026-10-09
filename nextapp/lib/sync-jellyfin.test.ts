@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { fileNameOf, folderOf, mediaFilesOf, mediaItems, syncJellyfin, toEpisode, toMovie, toShow } from "./sync-jellyfin";
+import {
+  fileNameOf,
+  folderOf,
+  mediaFilesOf,
+  mediaItems,
+  syncJellyfin,
+  toEpisode,
+  toMovie,
+  toShow,
+} from "./sync-jellyfin";
 import { fileSummary, getEpisodes, getMovies, getShows, queryFiles, syncedAt } from "./store";
 import { json, mockFetch } from "@/test/http";
 
@@ -17,7 +26,16 @@ describe("mediaItems", () => {
     const [item] = mediaItems(
       [],
       [{ Id: "s1", Name: "Silo", ProductionYear: 2023, ProviderIds: { Tmdb: "125988" } }],
-      [{ Id: "e1", Name: "Holston", SeriesId: "s1", ParentIndexNumber: 1, IndexNumber: 2, MediaSources: [{ Path: "/tv/s01e02.mkv", Size: 3 }] }]
+      [
+        {
+          Id: "e1",
+          Name: "Holston",
+          SeriesId: "s1",
+          ParentIndexNumber: 1,
+          IndexNumber: 2,
+          MediaSources: [{ Path: "/tv/s01e02.mkv", Size: 3 }],
+        },
+      ],
     );
     expect(item).toMatchObject({
       kind: "episode",
@@ -90,13 +108,38 @@ describe("toMovie and toShow", () => {
       ],
     };
     expect(mediaFilesOf(raw)).toEqual([
-      { Name: "Heat.1995.1080p-GRP.mkv", Folder: "media", Size: 99, Codec: "hevc", Width: 1920, Height: 800, Languages: ["DE", "EN"] },
-      { Name: "Heat.2160p-FuN.mkv", Folder: undefined, Size: 0, Codec: "", Width: undefined, Height: undefined, Languages: [] },
+      {
+        Name: "Heat.1995.1080p-GRP.mkv",
+        Folder: "media",
+        Size: 99,
+        Codec: "hevc",
+        Width: 1920,
+        Height: 800,
+        Languages: ["DE", "EN"],
+      },
+      {
+        Name: "Heat.2160p-FuN.mkv",
+        Folder: undefined,
+        Size: 0,
+        Codec: "",
+        Width: undefined,
+        Height: undefined,
+        Languages: [],
+      },
     ]);
   });
 
   it("keeps a show's season and episode counts and status", () => {
-    expect(toShow({ Id: "s1", Name: "Silo", Status: "Continuing", ChildCount: 2, RecursiveItemCount: 20, Genres: ["Drama"] })).toMatchObject({
+    expect(
+      toShow({
+        Id: "s1",
+        Name: "Silo",
+        Status: "Continuing",
+        ChildCount: 2,
+        RecursiveItemCount: 20,
+        Genres: ["Drama"],
+      }),
+    ).toMatchObject({
       Id: "s1",
       Status: "Continuing",
       ChildCount: 2,
@@ -117,7 +160,7 @@ describe("toEpisode", () => {
         IndexNumber: 1,
         IndexNumberEnd: 2,
         MediaSources: [{ Size: 99, MediaStreams: [{ Type: "Audio", Language: "ger" }] }],
-      })
+      }),
     ).toEqual({
       Id: "e1",
       SeriesId: "s1",
@@ -146,10 +189,29 @@ describe("syncJellyfin", () => {
       if (url.pathname !== "/Users/admin/Items") return;
       const type = url.searchParams.get("IncludeItemTypes");
       if (type === "Movie") {
-        return json({ Items: [{ Id: "m1", Name: "Heat", Path: "/x/Heat.mkv", MediaSources: [{ Path: "/x/Heat.1995.1080p-GRP.mkv", Size: 5, MediaStreams: [{ Type: "Audio", Language: "ger" }, { Type: "Audio", Language: "eng" }] }] }] });
+        return json({
+          Items: [
+            {
+              Id: "m1",
+              Name: "Heat",
+              Path: "/x/Heat.mkv",
+              MediaSources: [
+                {
+                  Path: "/x/Heat.1995.1080p-GRP.mkv",
+                  Size: 5,
+                  MediaStreams: [
+                    { Type: "Audio", Language: "ger" },
+                    { Type: "Audio", Language: "eng" },
+                  ],
+                },
+              ],
+            },
+          ],
+        });
       }
       if (type === "Series") return json({ Items: [{ Id: "s1", Name: "Silo" }] });
-      if (type === "Episode") return json({ Items: [{ Id: "e1", Name: "E1", SeriesId: "s1", ParentIndexNumber: 1, IndexNumber: 1 }] });
+      if (type === "Episode")
+        return json({ Items: [{ Id: "e1", Name: "E1", SeriesId: "s1", ParentIndexNumber: 1, IndexNumber: 1 }] });
     });
 
     const result = await syncJellyfin({ jellyfinUrl: "http://jf", jellyfinApiKey: "key", jellyfinUserId: "admin" });
@@ -160,9 +222,10 @@ describe("syncJellyfin", () => {
     expect(getEpisodes().map((e) => e.Id)).toEqual(["e1"]);
     // The library's files, for Analytics.
     expect(fileSummary("movies")).toMatchObject({ files: 1, size: 5 });
-    expect(queryFiles("movies", { words: [], groups: [], resolutions: [], codecs: [], languages: [] }, "title", true, 0, 1).items).toMatchObject([
-      { title: "Heat", fileName: "Heat.1995.1080p-GRP.mkv", group: "GRP", languages: ["DE", "EN"] },
-    ]);
+    expect(
+      queryFiles("movies", { words: [], groups: [], resolutions: [], codecs: [], languages: [] }, "title", true, 0, 1)
+        .items,
+    ).toMatchObject([{ title: "Heat", fileName: "Heat.1995.1080p-GRP.mkv", group: "GRP", languages: ["DE", "EN"] }]);
     expect(syncedAt("jellyfin")).toBe(result.syncedAt);
     // Authenticated with the API key.
     expect(fetch.mock.calls[0][1]).toMatchObject({ headers: { "X-Emby-Token": "key" } });
@@ -170,9 +233,9 @@ describe("syncJellyfin", () => {
 
   it("keeps the old library when Jellyfin fails", async () => {
     mockFetch(() => new Response("down", { status: 500 }));
-    await expect(syncJellyfin({ jellyfinUrl: "http://jf", jellyfinApiKey: "key", jellyfinUserId: "admin" })).rejects.toThrow(
-      /HTTP 500/
-    );
+    await expect(
+      syncJellyfin({ jellyfinUrl: "http://jf", jellyfinApiKey: "key", jellyfinUserId: "admin" }),
+    ).rejects.toThrow(/HTTP 500/);
     expect(syncedAt("jellyfin")).toBeNull();
   });
 });

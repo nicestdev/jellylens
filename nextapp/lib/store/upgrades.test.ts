@@ -35,7 +35,9 @@ function library() {
       title: "Heat",
       year: 1995,
       tmdbId: "949",
-      files: [{ Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv", Size: 8, Codec: "h264", Width: 1920, Languages: ["DE"] }],
+      files: [
+        { Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv", Size: 8, Codec: "h264", Width: 1920, Languages: ["DE"] },
+      ],
     },
     {
       kind: "episode",
@@ -56,7 +58,7 @@ function library() {
       episodes: [],
       files: storedFiles(items),
     },
-    "2026-10-01T00:00:00.000Z"
+    "2026-10-01T00:00:00.000Z",
   );
 }
 
@@ -90,7 +92,9 @@ describe("upgrades", () => {
         languages: ["DE"],
       },
     ]);
-    expect(ownedFiles("shows")).toEqual([expect.objectContaining({ parentId: "s1", season: 1, episode: 2, imageTag: null, group: "FuN" })]);
+    expect(ownedFiles("shows")).toEqual([
+      expect.objectContaining({ parentId: "s1", season: 1, episode: 2, imageTag: null, group: "FuN" }),
+    ]);
   });
 
   it("finds the favorites' releases of what the library has, by its checked TMDB match", () => {
@@ -108,7 +112,14 @@ describe("upgrades", () => {
 
     // Alien isn't in the library; the XviD is SD, hidden.
     expect(libraryReleases("movies")).toEqual([
-      { tmdbId: 949, group: "VECTOR", name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR", quality: "HD-1080p", sizeMb: 9000, publishedAt: 1000 },
+      {
+        tmdbId: 949,
+        group: "VECTOR",
+        name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR",
+        quality: "HD-1080p",
+        sizeMb: 9000,
+        publishedAt: 1000,
+      },
     ]);
     expect(libraryReleases("shows")).toEqual([expect.objectContaining({ tmdbId: 125988, sizeMb: null })]);
     setPreferences({ showSdReleases: true });

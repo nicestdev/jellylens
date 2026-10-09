@@ -8,7 +8,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const tag = req.nextUrl.searchParams.get("tag") ?? "";
   // Snap to 40px steps so callers can't fill the disk with one-off sizes.
-  const h = Math.min(1200, Math.max(40, Math.round(Number(req.nextUrl.searchParams.get("h")) / 40) * 40 || 240));
+  // No height (or none that's a number) is the default, 240.
+  const asked = Number(req.nextUrl.searchParams.get("h") || NaN);
+  const h = Number.isNaN(asked) ? 240 : Math.min(1200, Math.max(40, Math.round(asked / 40) * 40));
   if (!/^[0-9a-f]{32}$/i.test(id) || !/^[0-9a-z]{1,64}$/i.test(tag)) {
     return new Response("Bad image request", { status: 400 });
   }

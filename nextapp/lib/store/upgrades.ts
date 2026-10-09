@@ -16,7 +16,7 @@ export function ownedFiles(library: Library): OwnedFile[] {
             f.season, f.episode, f.episode_end AS episodeEnd, f.file_name AS fileName, f.size, f.grp AS "group", f.resolution, f.codec, f.languages
        FROM media_files f LEFT JOIN ${ITEMS[library]} i ON i.id = f.parent_id
       WHERE f.kind = ? ORDER BY f.parent_id, f.season, f.episode, f.item_id, f.idx`,
-    KIND[library]
+    KIND[library],
   ).map((f) => ({ ...f, languages: JSON.parse(f.languages) as string[] }));
 }
 
@@ -29,7 +29,7 @@ export function libraryReleases(library: Library): GroupRelease[] {
       WHERE t.media_type = ? AND ${shownReleases()}
         AND t.tmdb_id IN (SELECT CAST(tmdb_id AS INTEGER) FROM media_files WHERE kind = ? AND tmdb_id IS NOT NULL)`,
     library === "movies" ? "movie" : "tv",
-    KIND[library]
+    KIND[library],
   );
 }
 

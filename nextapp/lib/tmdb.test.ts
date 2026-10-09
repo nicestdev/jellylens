@@ -19,7 +19,12 @@ describe("the TMDB request", () => {
     await searchTmdb("key", "heat", "de-DE");
     const url = new URL(String(fetch.mock.calls[0][0]));
     expect(url.pathname).toBe("/3/search/multi");
-    expect(Object.fromEntries(url.searchParams)).toEqual({ query: "heat", language: "de-DE", include_adult: "false", api_key: "key" });
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      query: "heat",
+      language: "de-DE",
+      include_adult: "false",
+      api_key: "key",
+    });
   });
 
   it("waits out a 429 and tries again", async () => {
@@ -27,7 +32,7 @@ describe("the TMDB request", () => {
     try {
       let calls = 0;
       mockFetch(() =>
-        ++calls === 1 ? new Response("", { status: 429, headers: { "retry-after": "2" } }) : json({ seasons: [] })
+        ++calls === 1 ? new Response("", { status: 429, headers: { "retry-after": "2" } }) : json({ seasons: [] }),
       );
       const show = fetchTmdbShow("key", "1");
       await vi.advanceTimersByTimeAsync(2000);
@@ -73,7 +78,11 @@ describe("earliestReleases", () => {
         dates("FR", [4, "2025-12-01T00:00:00Z"]),
       ],
     };
-    expect(earliestReleases(raw, ["DE", "US"])).toEqual({ theatrical: "2026-01-15", digital: "2026-05-01", physical: "2026-06-01" });
+    expect(earliestReleases(raw, ["DE", "US"])).toEqual({
+      theatrical: "2026-01-15",
+      digital: "2026-05-01",
+      physical: "2026-06-01",
+    });
   });
 
   it("falls back to every country when none of the given ones has dates", () => {
@@ -95,7 +104,9 @@ describe("toResult", () => {
   it("drops people and entries without a poster", () => {
     expect(toResult({ media_type: "person", id: 1, name: "Al Pacino", poster_path: "/p.jpg" })).toBeNull();
     expect(toResult({ media_type: "movie", id: 1, title: "Heat", poster_path: null })).toBeNull();
-    expect(toResult({ media_type: "tv", id: 2, name: "Silo", first_air_date: "2023-05-04", poster_path: "/s.jpg" })).toEqual({
+    expect(
+      toResult({ media_type: "tv", id: 2, name: "Silo", first_air_date: "2023-05-04", poster_path: "/s.jpg" }),
+    ).toEqual({
       mediaType: "tv",
       tmdbId: 2,
       title: "Silo",
@@ -112,7 +123,7 @@ describe("findTmdbByImdb", () => {
       json({
         movie_results: [{ id: 1, title: "Movie", release_date: "2020-01-01" }],
         tv_results: [{ id: 2, name: "Show", original_name: "Show", first_air_date: "2019-01-01" }],
-      })
+      }),
     );
     expect(await findTmdbByImdb("key", "tt1", "de-DE", "tv")).toMatchObject({ mediaType: "tv", tmdbId: 2, year: 2019 });
     expect(await findTmdbByImdb("key", "tt1", "de-DE", "movie")).toMatchObject({ mediaType: "movie", tmdbId: 1 });
@@ -163,10 +174,20 @@ describe("fetchTmdbTitles", () => {
     mockFetch(() =>
       json({
         alternative_titles: { titles: [{ title: "Poseidon Inferno" }, { title: "Poseidon" }] },
-        translations: { translations: [{ data: { title: "Die Höllenfahrt der Poseidon" } }, { data: { title: "Poseidon" } }, { data: {} }] },
-      })
+        translations: {
+          translations: [
+            { data: { title: "Die Höllenfahrt der Poseidon" } },
+            { data: { title: "Poseidon" } },
+            { data: {} },
+          ],
+        },
+      }),
     );
-    expect(await fetchTmdbTitles("key", "movie", 551)).toEqual(["Poseidon Inferno", "Poseidon", "Die Höllenfahrt der Poseidon"]);
+    expect(await fetchTmdbTitles("key", "movie", 551)).toEqual([
+      "Poseidon Inferno",
+      "Poseidon",
+      "Die Höllenfahrt der Poseidon",
+    ]);
   });
 
   it("has none for an entry TMDB removed", async () => {
@@ -175,7 +196,12 @@ describe("fetchTmdbTitles", () => {
   });
 
   it("reads shows' alternative titles from results", async () => {
-    mockFetch(() => json({ alternative_titles: { results: [{ title: "Silo (DE)" }] }, translations: { translations: [{ data: { name: "Silo" } }] } }));
+    mockFetch(() =>
+      json({
+        alternative_titles: { results: [{ title: "Silo (DE)" }] },
+        translations: { translations: [{ data: { name: "Silo" } }] },
+      }),
+    );
     expect(await fetchTmdbTitles("key", "tv", 1)).toEqual(["Silo (DE)", "Silo"]);
   });
 });

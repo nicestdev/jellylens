@@ -3,7 +3,9 @@ import { vi } from "vitest";
 // Answers a test's fetch calls: the handler gets each request's URL and
 // returns a Response, or undefined for one the test didn't expect (which
 // then fails). Returns the mock, to check what was requested.
-export function mockFetch(handler: (url: URL, init?: RequestInit) => Response | undefined | Promise<Response | undefined>) {
+export function mockFetch(
+  handler: (url: URL, init?: RequestInit) => Response | undefined | Promise<Response | undefined>,
+) {
   const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     // Relative URLs (as the browser-side code fetches) resolve against a test host.
     const url = new URL(String(input), "http://jellylens.test");

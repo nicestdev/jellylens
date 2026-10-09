@@ -6,8 +6,9 @@ import {
   fileAudio,
   formatChange,
   fromFacet,
-  panelFor,
+  titleHref,
   pickAlternative,
+  nameParts,
   searchRows,
   sortRows,
   startChoices,
@@ -67,29 +68,33 @@ describe("pickAlternative", () => {
   const fun = alt({ group: "FuN", name: "Heat.1995.German.DL.1080p.BluRay.x264-FuN" });
   const u = unit({ alternatives: [alt(), remux, x265, uhd, fun] });
 
-  it("takes the file's quality and codec first, then the newest, and counts the rest", () => {
-    expect(pickAlternative(u, "vector", "same")).toEqual({ alt: remux, others: 2 });
-    expect(pickAlternative(u, "VECTOR", "same", "x265")).toEqual({ alt: x265, others: 0 });
-    expect(pickAlternative(u, "VECTOR", "2160p")).toEqual({ alt: uhd, others: 0 });
-    expect(pickAlternative(u, "FuN", "same")).toEqual({ alt: fun, others: 0 });
+  it("takes the file's quality and codec first, then the newest", () => {
+    expect(pickAlternative(u, "vector", "same")).toEqual(remux);
+    expect(pickAlternative(u, "VECTOR", "same", "x265")).toEqual(x265);
+    const av1 = alt({ group: "WOTT", codec: "AV1", name: "Heat.1995.German.DL.1080p.UHD.BDRip.AV1-WOTT" });
+    expect(pickAlternative(unit({ alternatives: [alt({ group: "WOTT" }), av1] }), "WOTT", "same", "AV1")).toEqual(av1);
+    expect(pickAlternative(u, "VECTOR", "2160p")).toEqual(uhd);
+    expect(pickAlternative(u, "FuN", "same")).toEqual(fun);
     expect(pickAlternative(u, "ZeroTwo", "same")).toBeNull();
   });
 
   it("with any quality, takes the file's if there, else the best", () => {
-    expect(pickAlternative(unit({ tier: "720p", alternatives: [alt(), uhd] }), "VECTOR", "any")).toEqual({ alt: uhd, others: 0 });
+    expect(pickAlternative(unit({ tier: "720p", alternatives: [alt(), uhd] }), "VECTOR", "any")).toEqual(uhd);
     expect(pickAlternative(unit({ tier: "720p", alternatives: [alt(), uhd] }), "VECTOR", "same")).toBeNull();
     // The codec narrows it before the quality is picked.
-    expect(pickAlternative(unit({ tier: "720p", alternatives: [alt(), uhd] }), "VECTOR", "any", "x264")?.alt).toEqual(alt());
+    expect(pickAlternative(unit({ tier: "720p", alternatives: [alt(), uhd] }), "VECTOR", "any", "x264")).toEqual(alt());
   });
 
   it("keeps to the file's codec with same as now", () => {
-    expect(pickAlternative(unit({ codec: "x265", alternatives: [alt(), x265] }), "VECTOR", "same", "same")?.alt).toEqual(x265);
+    expect(pickAlternative(unit({ codec: "x265", alternatives: [alt(), x265] }), "VECTOR", "same", "same")).toEqual(
+      x265,
+    );
   });
 
   it("offers a season's pack before its episodes", () => {
     const pack = alt({ pack: true, publishedAt: 1, episodes: 10 });
     const episodes = alt({ episodes: 10, publishedAt: 999 });
-    expect(pickAlternative(unit({ season: 1, alternatives: [episodes, pack] }), "VECTOR", "same")).toEqual({ alt: pack, others: 1 });
+    expect(pickAlternative(unit({ season: 1, alternatives: [episodes, pack] }), "VECTOR", "same")).toEqual(pack);
   });
 });
 
@@ -149,7 +154,8 @@ describe("switchSummary", () => {
       shareNow: 0.2,
       shareAfter: 0.8,
     });
-    expect(s.rows[0]).toMatchObject({ change: GB, addsAudio: true, others: 0 });
+    expect(s.rows[0]).toMatchObject({ change: GB, addsAudio: true });
+    expect(s.rows[0]).not.toHaveProperty("others");
   });
 
   it("narrows it to some source groups, and to what adds audio", () => {
@@ -162,15 +168,15 @@ describe("switchSummary", () => {
     expect(tiles).toEqual([
       { label: "VECTOR has", value: "3", hint: "of 4 movies from other groups", muted: false },
       { label: "Original audio", value: "2", hint: "German only now, DL or ML then", muted: false },
-      { label: "Storage", value: "−2,00 GB", hint: "1 movie without a size", muted: false, tone: "good" },
-      { label: "VECTOR's share", value: "20 % → 80 %", hint: "of the movie files" },
+      { label: "Storage", value: "−2,00 GB", hint: "1 movie without a size", muted: false },
+      { label: "VECTOR's share", value: "80 %", hint: "of the movie files, 20 % now" },
     ]);
     const costs = switchTiles(switchSummary([unit()], options()), options(), "shows");
-    expect(costs[2]).toMatchObject({ value: "+1,00 GB", hint: "9,00 GB for 8,00 GB", tone: "bad" });
-    expect(costs[3].hint).toBe("of the episode files");
+    expect(costs[2]).toMatchObject({ value: "+1,00 GB", hint: "9,00 GB for 8,00 GB" });
+    expect(costs[3]).toMatchObject({ hint: "of the episode files, 0 % now" });
     const none = switchTiles(switchSummary([unit({ alternatives: [] })], options()), options(), "movies");
     expect(none[0]).toMatchObject({ value: "0", muted: true });
-    expect(none[2]).toMatchObject({ value: "–", muted: true, tone: undefined });
+    expect(none[2]).toMatchObject({ value: "–", muted: true });
   });
 });
 
@@ -181,7 +187,7 @@ describe("the list", () => {
       unit({ key: "b", title: "Brazil", size: 8 * GB, alternatives: [alt({ size: null })] }),
       unit({ key: "c", title: "Cube", size: 8 * GB, alternatives: [alt({ size: 12 * GB })] }),
     ],
-    options()
+    options(),
   ).rows;
   const keys = (r: typeof rows) => r.map((x) => x.unit.key);
 
@@ -221,38 +227,58 @@ describe("the filter", () => {
       quality: "2160p",
       codec: "x265",
     });
-    expect(startChoices(targets, { target: "w00t", quality: "nonsense" })).toEqual({ target: "FuN", quality: "same", codec: "any" });
+    expect(startChoices(targets, { target: "FuN", codec: "AV1" }).codec).toBe("AV1");
+    expect(startChoices(targets, { target: "w00t", quality: "nonsense" })).toEqual({
+      target: "FuN",
+      quality: "same",
+      codec: "any",
+    });
     expect(startChoices(targets, null)).toEqual({ target: "FuN", quality: "same", codec: "any" });
     expect(startChoices([], "garbage").target).toBe("");
   });
 });
 
-describe("panelFor", () => {
-  const r = (name: string, group = "VECTOR", quality = "HD-1080p") => ({ name, group, quality });
-
-  it("opens the title's panel on the target's releases in the picked quality and codec", () => {
-    const p = panelFor(unit(), { target: "VECTOR", quality: "same", codec: "same" }, "movies");
-    expect(p.title).toEqual({
-      key: "movie:949",
-      title: "Heat",
-      year: 1995,
-      posterPath: null,
-      mediaType: "movie",
-      tmdbId: 949,
-      library: { id: "m1", imageTag: "tag" },
-    });
-    expect(p.only.note).toBe("Only VECTOR's 1080p x264 releases");
-    expect(p.only.keep(r("Heat.1995.German.DL.1080p.BluRay.x264-VECTOR", "vector"))).toBe(true);
-    expect(p.only.keep(r("Heat.1995.German.DL.1080p.BluRay.x264-FuN", "FuN"))).toBe(false);
-    expect(p.only.keep(r("Heat.1995.German.DL.2160p.UHD.x264-VECTOR", "VECTOR", "HD-2160p"))).toBe(false);
-    expect(p.only.keep(r("Heat.1995.German.DL.1080p.BluRay.x265-VECTOR"))).toBe(false);
+describe("titleHref", () => {
+  it("opens the title's page on the target's releases in the picked quality and codec", () => {
+    expect(titleHref(unit(), { target: "VECTOR", quality: "same", codec: "same" }, "movies")).toBe(
+      "/title/movie/949?group=VECTOR&tier=1080p&codec=x264",
+    );
   });
 
-  it("with any quality and codec keeps them all; a season's only its own", () => {
-    const p = panelFor(unit({ season: 2 }), { target: "ZeroTwo", quality: "any", codec: "any" }, "shows");
-    expect(p.title).toMatchObject({ key: "tv:949", mediaType: "tv" });
-    expect(p.only.note).toBe("Only ZeroTwo's releases of Season 2");
-    expect(p.only.keep(r("Silo.2023.S02E01.German.DL.2160p.WEB.H265-ZeroTwo", "ZeroTwo", "HD-2160p"))).toBe(true);
-    expect(p.only.keep(r("Silo.2023.S01.German.DL.1080p.WEB.H264-ZeroTwo", "ZeroTwo"))).toBe(false);
+  it("with any quality and codec leaves them out; a season's only its own", () => {
+    expect(titleHref(unit({ season: 2 }), { target: "ZeroTwo", quality: "any", codec: "any" }, "shows")).toBe(
+      "/title/tv/949?group=ZeroTwo&season=2",
+    );
+  });
+});
+
+describe("nameParts", () => {
+  const name = "German.DL.1080p.BluRay.x265-VECTOR";
+  const text = (parts: ReturnType<typeof nameParts>) => parts.map((p) => p.text).join("");
+
+  it("marks what changes in the name, keeping all of it", () => {
+    const parts = nameParts(name, attributes(unit(), alt({ codec: "x265", name })));
+    expect(parts).toEqual([
+      { text: "German." },
+      { text: "DL", key: "audio" },
+      { text: ".1080p.BluRay." },
+      { text: "x265", key: "codec" },
+      { text: "-" },
+      { text: "VECTOR", key: "group" },
+    ]);
+    expect(text(parts)).toBe(name);
+  });
+
+  it("marks German when the original audio is lost, and nothing that stays or the name doesn't say", () => {
+    const de = "German.1080p.BluRay.x264-VECTOR";
+    expect(nameParts(de, attributes(unit({ languages: ["DE", "EN"] }), alt({ audio: null, name: de })))).toEqual([
+      { text: "German", key: "audio" },
+      { text: ".1080p.BluRay.x264-" },
+      { text: "VECTOR", key: "group" },
+    ]);
+    expect(
+      nameParts("German.BluRay-VECTOR", [{ key: "quality", before: "720p", after: "1080p", same: false }]),
+    ).toEqual([{ text: "German.BluRay-VECTOR" }]);
+    expect(nameParts(name, [])).toEqual([{ text: name }]);
   });
 });

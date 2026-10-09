@@ -31,9 +31,7 @@ export function SortMenu<K extends string>({
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
-        <DropdownMenuTrigger
-          className={cn(buttonVariants({ variant: "ghost", className: "text-muted-foreground" }))}
-        >
+        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", className: "text-muted-foreground" }))}>
           <ArrowUpDown />
           {current.label}
         </DropdownMenuTrigger>

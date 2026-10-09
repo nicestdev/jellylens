@@ -12,8 +12,8 @@ const IMAGE_DIR = path.join(DATA_DIR, "tmdb-images");
 
 // The sizes the pages ask for; anything else is refused, so callers can't
 // fill the disk with one-off variants.
-export const TMDB_SIZES = ["w185", "w342"] as const;
-export type TmdbSize = (typeof TMDB_SIZES)[number];
+const TMDB_SIZES = ["w185", "w342"] as const;
+type TmdbSize = (typeof TMDB_SIZES)[number];
 export const isTmdbSize = (size: string): size is TmdbSize => (TMDB_SIZES as readonly string[]).includes(size);
 
 const TYPES: Record<string, string> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };

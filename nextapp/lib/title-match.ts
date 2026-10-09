@@ -7,9 +7,9 @@ import { fold } from "./text";
 // Words in a release name that end its title: languages, editions, season
 // and episode, resolution, source, codecs, audio.
 const TAG =
-  /^(german|english|french|spanish|italian|japanese|dl|ml|dual|multi|subbed|dubbed|uncut|unrated|remastered|extended|imax|theatrical|directors|dc|proper|repack|internal|complete|limited|s\d{1,2}(e\d{1,3})*|e\d{1,3}|\d{3,4}p|uhd|4k|hdr|hdr10|dv|web|webrip|web-dl|bluray|bdrip|hdrip|dvdrip|hdtv|x264|x265|h264|h265|hevc|avc|ac3|ac3d|eac3|dts|dtshd|truehd|atmos|aac|dd|ddp5|dd5|flac)$/i;
+  /^(german|english|french|spanish|italian|japanese|dl|ml|dual|multi|subbed|dubbed|uncut|unrated|remastered|extended|imax|theatrical|directors|dc|proper|repack|internal|complete|limited|s\d{1,2}(e\d{1,3})*|e\d{1,3}|\d{3,4}p|uhd|4k|hdr|hdr10|dv|web|webrip|web-dl|bluray|bdrip|hdrip|dvdrip|hdtv|x264|x265|h264|h265|hevc|avc|av1|ac3|ac3d|eac3|dts|dtshd|truehd|atmos|aac|dd|ddp5|dd5|flac)$/i;
 
-export type ParsedName = { title: string; year: number | null };
+type ParsedName = { title: string; year: number | null };
 
 // "The.OutLaws.2023.German.AC3.DL.1080p.Web.x265-FuN" -> The OutLaws, 2023.
 // The year is the last one before the tags, so "Blade.Runner.2049.2017"
@@ -30,8 +30,22 @@ export function parseReleaseName(name: string): ParsedName {
   };
 }
 
-const ROMAN: Record<string, string> = { ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8", ix: "9", x: "10" };
-const words = (s: string) => fold(s).split(" ").filter(Boolean).map((w) => ROMAN[w] ?? w);
+const ROMAN: Record<string, string> = {
+  ii: "2",
+  iii: "3",
+  iv: "4",
+  v: "5",
+  vi: "6",
+  vii: "7",
+  viii: "8",
+  ix: "9",
+  x: "10",
+};
+const words = (s: string) =>
+  fold(s)
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => ROMAN[w] ?? w);
 
 // Most of the shorter title's words appear in the longer one, so a German
 // subtitle on either side ("Nirvana" / "Nirvana - Die Zukunft ist ein
@@ -46,7 +60,7 @@ export function sameTitle(a: string, b: string): boolean {
   return common / Math.min(new Set(wa).size, wb.size) >= 0.6;
 }
 
-export type Candidate = { title: string; originalTitle: string; year: number | null };
+type Candidate = { title: string; originalTitle: string; year: number | null };
 
 // A candidate fits a release if one of its titles (TMDB's localized or
 // original, or other titles TMDB lists for it) is the release name's title,
@@ -67,7 +81,13 @@ export function fitsRelease(release: ParsedName, candidate: Candidate, otherTitl
 // "Die Bruecke" as TMDB spells it: "Die Brücke". Only for a second search
 // attempt; the result still has to fit the release name.
 export const withUmlauts = (title: string) =>
-  title.replace(/ae/g, "ä").replace(/oe/g, "ö").replace(/ue/g, "ü").replace(/Ae/g, "Ä").replace(/Oe/g, "Ö").replace(/Ue/g, "Ü");
+  title
+    .replace(/ae/g, "ä")
+    .replace(/oe/g, "ö")
+    .replace(/ue/g, "ü")
+    .replace(/Ae/g, "Ä")
+    .replace(/Oe/g, "Ö")
+    .replace(/Ue/g, "Ü");
 
 // The release name's title as a readable fallback: "The OutLaws".
 export const displayTitle = (parsed: ParsedName) => parsed.title.replace(/\s+-\s+/g, " - ").trim();
@@ -90,7 +110,7 @@ export type TitleLookup = {
   search: (kind: "movie" | "tv", query: string, year: number | null) => Promise<MatchEntry[]>;
 };
 
-export type MatchDecision = {
+type MatchDecision = {
   status: "verified" | "searched" | "unverified" | "confirmed" | "rejected";
   entry: MatchEntry | null;
   // Title and year from the release name, for when entry is null.
@@ -99,7 +119,7 @@ export type MatchDecision = {
 
 export async function decideMatch(
   title: { type: string; names: string[]; candidate: MatchEntry | null; verdict: "wrong" | "xrel" | null },
-  lookup: TitleLookup | null
+  lookup: TitleLookup | null,
 ): Promise<MatchDecision> {
   const names = title.names.map(parseReleaseName);
   const fallback = { title: displayTitle(names[0]), year: names[0].year };

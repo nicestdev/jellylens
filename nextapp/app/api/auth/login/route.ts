@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   if (wait) {
     return Response.json(
       { error: `Too many sign-in attempts. Try again in ${Math.ceil(wait / 60)} min.` },
-      { status: 429, headers: { "Retry-After": String(wait) } }
+      { status: 429, headers: { "Retry-After": String(wait) } },
     );
   }
 

@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@/test/dom";
 import { json, mockFetch } from "@/test/http";
-import type { CollectionItem, CollectionPartItem, ReleaseDetail, RequestItem } from "@/lib/api-types";
-import { CollectionList } from "./collections";
+import type { CollectionItem, CollectionPartItem, RequestItem } from "@/lib/api-types";
+import { CollectionList, IgnoredCollections } from "./collections";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const part = (tmdbId: number, title: string, over: Partial<CollectionPartItem> = {}): CollectionPartItem => ({
   tmdbId,
@@ -17,39 +20,37 @@ const part = (tmdbId: number, title: string, over: Partial<CollectionPartItem> =
   ...over,
 });
 
-const heat = part(949, "Heat", { releaseDate: "1995-12-15", owned: true, fileName: "Heat.1995.1080p.x265-FuN.mkv" });
+const heat = part(949, "Heat", { releaseDate: "1995-12-15", owned: true });
 const heat2 = part(2, "Heat 2", { releaseGroups: ["FuN", "VECTOR"] });
 const heat3 = part(3, "Heat 3");
-const collection: CollectionItem = { id: "c1", name: "Heat Collection", posterPath: null, count: 2, parts: [heat, heat2, heat3] };
-
-const detail: ReleaseDetail = {
-  key: "movie:2",
-  titles: [
-    {
-      titleKey: "heat2",
-      label: "Heat 2 (2026)",
-      match: { status: "verified", shown: { title: "Heat 2", year: 2026, posterPath: null, mediaType: "movie", tmdbId: 2 }, verdict: null, candidate: null },
-      Items: [
-        { id: "r1", name: "Heat.2.2026.German.DL.2160p.WEB.x265-FuN", link: "https://www.xrel.to/r1", quality: "HD-2160p", publishedAt: 1790000000, group: "FuN" },
-      ],
-    },
-  ],
+const collection: CollectionItem = {
+  id: "c1",
+  name: "Heat Collection",
+  posterPath: null,
+  count: 2,
+  parts: [heat, heat2, heat3],
 };
 
-// /api/requests (empty until something is requested) and the panel's
-// /api/releases/<key>.
+// /api/requests (empty until something is requested).
 function api() {
   let requests: RequestItem[] = [];
   return mockFetch((url, init) => {
     if (url.pathname === "/api/requests") {
       if (init?.method === "POST") {
         const body = JSON.parse(String(init.body));
-        requests = [{ ...body, requestedAt: "2026-10-01T00:00:00Z", mine: true, library: null, availability: null, releaseGroups: [] }];
+        requests = [
+          {
+            ...body,
+            requestedAt: "2026-10-01T00:00:00Z",
+            mine: true,
+            library: null,
+            availability: null,
+            releaseGroups: [],
+          },
+        ];
       }
       return json({ Items: requests, all: true, admin: true });
     }
-    if (url.pathname === "/api/wcx-search") return json({ url: null });
-    if (url.pathname === "/api/releases/" + encodeURIComponent("movie:2")) return json(detail);
   });
 }
 
@@ -59,40 +60,54 @@ const list = (over: { onIgnore?: () => void; onReleasesChanged?: () => void } = 
       groups={[{ collection, parts: [heat2, heat3] }]}
       onIgnore={over.onIgnore ?? (() => {})}
       onReleasesChanged={over.onReleasesChanged ?? (() => {})}
-    />
+    />,
   );
 
 describe("CollectionList", () => {
-  it("shows a collection with what you own of it and the files you have", () => {
+  it("shows a collection with what you own of it", () => {
     api();
     list();
     // TMDB's "Collection" suffix is dropped.
-    expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute("href", "https://www.themoviedb.org/collection/c1");
-    expect(screen.getByText("1 of 3 owned")).toBeInTheDocument();
-    expect(screen.getByText(/Heat\.1995\.1080p/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Heat" })).toHaveAttribute(
+      "href",
+      "https://www.themoviedb.org/collection/c1",
+    );
+    expect(screen.getByText("1/3")).toBeInTheDocument();
   });
 
-  it("names the groups that released a missing movie in a badge, and opens the sidebar from the poster", async () => {
+  it("shows all its movies, grays out the one you have, and names who released a missing one", async () => {
     api();
     list();
+    expect(screen.getAllByTitle(/^Heat( \d)?$/).map((b) => b.getAttribute("title"))).toEqual([
+      "Heat",
+      "Heat 2",
+      "Heat 3",
+    ]);
+    expect(screen.getByTitle("Heat").closest(".grayscale")).not.toBeNull();
+    expect(screen.getByTitle("Heat 2").closest(".grayscale")).toBeNull();
     expect(screen.getByText("FuN +1")).toHaveAttribute("title", "Released by FuN, VECTOR");
     // Neither the owned movie nor one nobody released has a badge.
     expect(screen.queryAllByTitle(/^Released by/)).toHaveLength(1);
 
-    await userEvent.click(screen.getByTitle(/Heat 2.*missing/));
-    const panel = await screen.findByRole("dialog");
-    expect(within(panel).getByText("Heat 2")).toBeInTheDocument();
-    expect(await within(panel).findByText(/Heat\.2\.2026\.German\.DL/)).toBeInTheDocument();
-    expect(within(panel).getByText("2026 · 1 release")).toBeInTheDocument();
+    // A poster opens the title's page with its releases.
+    await userEvent.click(screen.getByTitle("Heat 2"));
+    expect(push).toHaveBeenCalledWith("/title/movie/2");
   });
 
-  it("requests a missing movie, then marks it requested", async () => {
+  it("puts a missing movie on the wishlist, then marks it so", async () => {
     const fetch = api();
     list();
-    await userEvent.click(await screen.findByRole("button", { name: "Request Heat 2" }));
+    // Only the missing ones have the + (owned Heat has none).
+    expect(screen.getAllByRole("button", { name: "Add to wishlist" })).toHaveLength(2);
+    await userEvent.click(screen.getAllByRole("button", { name: "Add to wishlist" })[0]);
     const post = fetch.mock.calls.find(([, init]) => init?.method === "POST")!;
-    expect(JSON.parse(String(post[1]!.body))).toMatchObject({ mediaType: "movie", tmdbId: 2, title: "Heat 2", year: 2026 });
-    expect(await screen.findByRole("button", { name: "Requested" })).toBeDisabled();
+    expect(JSON.parse(String(post[1]!.body))).toMatchObject({
+      mediaType: "movie",
+      tmdbId: 2,
+      title: "Heat 2",
+      year: 2026,
+    });
+    expect(await screen.findByRole("button", { name: "Remove from wishlist" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("ignores one missing movie or the whole collection", async () => {
@@ -102,10 +117,45 @@ describe("CollectionList", () => {
     await userEvent.click(screen.getByRole("button", { name: "More options for Heat" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore Heat 2" }));
     await userEvent.click(screen.getByRole("button", { name: "More options for Heat" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore entire collection" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore all of Heat" }));
     expect(onIgnore.mock.calls.map(([e]) => e)).toEqual([
       { kind: "collection", collectionId: "c1", movieId: 2 },
       { kind: "collection", collectionId: "c1", movieId: null },
     ]);
+  });
+});
+
+describe("IgnoredCollections", () => {
+  const entries = [
+    { kind: "collection" as const, collectionId: "c1", movieId: 2 },
+    { kind: "collection" as const, collectionId: "c1", movieId: null },
+    { kind: "collection" as const, collectionId: "gone", movieId: null },
+  ];
+  const ignored = (query = "", onUnignore = vi.fn()) =>
+    render(<IgnoredCollections entries={entries} collections={[collection]} query={query} onUnignore={onUnignore} />);
+
+  it("shows an ignored movie with its collection, a whole collection marked All", async () => {
+    const onUnignore = vi.fn();
+    ignored("", onUnignore);
+    // By collection name, the whole one before its movies.
+    expect(screen.getAllByRole("button", { name: /^Unignore/ }).map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Unignore Complete collection",
+      "Unignore Heat",
+      "Unignore Heat 2",
+    ]);
+    expect(screen.getAllByText("All")).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Unignore Heat 2" }));
+    expect(onUnignore).toHaveBeenCalledWith(entries[0]);
+  });
+
+  it("narrows by movie or collection name, and says when nothing is ignored", () => {
+    const { unmount } = ignored("heat 2");
+    expect(screen.getAllByRole("button", { name: /^Unignore/ })).toHaveLength(1);
+    unmount();
+    const { unmount: unmount2 } = ignored("nope");
+    expect(screen.getByText("Nothing found")).toBeInTheDocument();
+    unmount2();
+    render(<IgnoredCollections entries={[]} collections={[]} query="" onUnignore={vi.fn()} />);
+    expect(screen.getByText("Nothing ignored")).toBeInTheDocument();
   });
 });

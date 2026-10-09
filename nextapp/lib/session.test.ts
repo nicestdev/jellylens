@@ -4,8 +4,9 @@ import { resetServerState } from "@/test/state";
 import * as session from "./session";
 
 const bob = { id: "u1", name: "Bob", admin: true };
-const jellyfinUsers = (users: { Id: string; Name: string; Policy?: { IsAdministrator?: boolean; IsDisabled?: boolean } }[]) =>
-  mockFetch((url) => (url.pathname === "/Users" ? json(users) : undefined));
+const jellyfinUsers = (
+  users: { Id: string; Name: string; Policy?: { IsAdministrator?: boolean; IsDisabled?: boolean } }[],
+) => mockFetch((url) => (url.pathname === "/Users" ? json(users) : undefined));
 
 describe("session cookies", () => {
   it("round-trips a user", () => {

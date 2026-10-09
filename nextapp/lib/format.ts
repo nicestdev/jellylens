@@ -8,13 +8,18 @@ export function plural(n: number, word: string): string {
 
 export const formatNumber = (n: number) => n.toLocaleString("de-DE");
 
+// xREL and WCX give sizes in MB (binary).
+export const MB = 1024 * 1024;
+
 // Bytes in binary units, as file managers show them, always with two
 // decimals: "512,00 MB", "45,60 GB", "1,23 TB" (plain bytes have none).
+// The next unit from 1000 on, so it's never four digits ("0,98 GB", not
+// "1.010,00 MB") and columns of sizes stay narrow.
 export function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let value = bytes;
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  while (value >= 1000 && unit < units.length - 1) {
     value /= 1024;
     unit++;
   }
@@ -41,7 +46,8 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
 // "SD"; "" when Jellyfin doesn't know. By width or height, so cropped
 // films still count.
 export function resolutionLabel(width?: number, height?: number): string {
-  const w = width || 0, h = height || 0;
+  const w = width || 0,
+    h = height || 0;
   if (!w && !h) return "";
   if (w >= 3800 || h >= 2100) return "4K";
   if (w >= 1900 || h >= 1060) return "1080p";
@@ -49,10 +55,19 @@ export function resolutionLabel(width?: number, height?: number): string {
   return "SD";
 }
 
+const two = (n: number) => String(n).padStart(2, "0");
+
+// "S01"; "S01–S03" for a range.
+export const seasonCode = (season: number, to = season) =>
+  to === season ? `S${two(season)}` : `S${two(season)}–S${two(to)}`;
+
 // "S01E02", "S01E02-E03"; "" without numbers.
-export function episodeCode(season: number | null | undefined, episode: number | null | undefined, end?: number | null) {
+export function episodeCode(
+  season: number | null | undefined,
+  episode: number | null | undefined,
+  end?: number | null,
+) {
   if (season == null || episode == null) return "";
-  const two = (n: number) => String(n).padStart(2, "0");
   return `S${two(season)}E${two(episode)}` + (end != null && end !== episode ? `-E${two(end)}` : "");
 }
 

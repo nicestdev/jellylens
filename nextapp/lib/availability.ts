@@ -2,8 +2,8 @@ import { fetchMovieReleases, releaseCountries, type MovieReleases } from "./tmdb
 import { mapWithConcurrency } from "./async";
 import { releaseWindow } from "./dates";
 
-// Why something isn't home-watchable yet — shown on the Requests page only
-// when it's an exception. upcoming: nothing released; cinema: in theaters
+// Why something isn't home-watchable yet — shown on Discover and the
+// Wishlist only when it's an exception. upcoming: nothing released; cinema: in theaters
 // but no stream or disc yet; digital: streaming but no disc yet. next is the
 // next relevant date, when TMDB has one. null = fully out (or owned).
 type NextRelease = { kind: "Cinema" | "Digital" | "Blu-ray" | "Out" | "Starts"; date: string };
@@ -22,7 +22,7 @@ export function movieAvailability(
   r: MovieReleases,
   releaseDate: string | null,
   today: string,
-  yearAgo: string
+  yearAgo: string,
 ): Availability {
   const out = (d: string | null) => Boolean(d && d <= today);
   const soon = (d: string | null) => (d && d > today ? d : null);
@@ -35,7 +35,10 @@ export function movieAvailability(
     if (r.theatrical! < yearAgo) return null;
     return {
       status: "cinema",
-      next: earliest([{ kind: "Digital", date: soon(r.digital) }, { kind: "Blu-ray", date: soon(r.physical) }]),
+      next: earliest([
+        { kind: "Digital", date: soon(r.digital) },
+        { kind: "Blu-ray", date: soon(r.physical) },
+      ]),
     };
   }
   if (r.theatrical || r.digital || r.physical) {
@@ -63,7 +66,9 @@ export function showAvailability(firstAirDate: string | null, today: string): Av
 const RELEASES_TTL_MS = 12 * 60 * 60 * 1000;
 // Release dates rarely change, and one search can mean 20 lookups, so keep
 // them in memory for a while (on globalThis, so it survives dev reloads and tests can reset it).
-const globalForReleases = globalThis as unknown as { __movieReleases?: Map<number, { at: number; value: MovieReleases }> };
+const globalForReleases = globalThis as unknown as {
+  __movieReleases?: Map<number, { at: number; value: MovieReleases }>;
+};
 const releasesCache = () => (globalForReleases.__movieReleases ??= new Map());
 
 async function cachedMovieReleases(apiKey: string, tmdbId: number, countries: string[]): Promise<MovieReleases | null> {
@@ -84,7 +89,7 @@ type Rated = { mediaType: "movie" | "tv"; tmdbId: number; releaseDate?: string |
 export async function withAvailability<T extends Rated>(
   items: T[],
   apiKey: string,
-  language: string
+  language: string,
 ): Promise<(T & { availability: Availability })[]> {
   const { today, yearAgo } = releaseWindow();
   const countries = releaseCountries(language);

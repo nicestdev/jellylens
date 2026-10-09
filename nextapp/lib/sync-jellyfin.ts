@@ -6,7 +6,7 @@ import { audioLanguages } from "./languages";
 // An item as Jellyfin's /Items lists it, only the fields we read. The rest
 // (user data, blur hashes, every stream twice) is dropped at the sync.
 type MediaStream = { Type?: string; Language?: string; Codec?: string; Width?: number; Height?: number };
-export type RawItem = {
+type RawItem = {
   Id: string;
   Name: string;
   ServerId?: string;
@@ -149,16 +149,18 @@ export async function syncJellyfin({
   jellyfinUserId: string;
 }) {
   const items = (query: string) =>
-    jfGet<{ Items?: RawItem[] }>(jellyfinUrl, jellyfinApiKey, `/Users/${jellyfinUserId}/Items?Recursive=true&${query}`).then(
-      (res) => res.Items ?? []
-    );
+    jfGet<{ Items?: RawItem[] }>(
+      jellyfinUrl,
+      jellyfinApiKey,
+      `/Users/${jellyfinUserId}/Items?Recursive=true&${query}`,
+    ).then((res) => res.Items ?? []);
 
   const [movies, shows, episodes] = await Promise.all([
     items(
-      "SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=Movie&Fields=ProductionYear,MediaStreams,Width,Height,RunTimeTicks,ProviderIds,Path,Genres,MediaSources"
+      "SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=Movie&Fields=ProductionYear,MediaStreams,Width,Height,RunTimeTicks,ProviderIds,Path,Genres,MediaSources",
     ),
     items(
-      "SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=Series&Fields=ProductionYear,ProviderIds,ChildCount,RecursiveItemCount,Status,Genres"
+      "SortBy=SortName&SortOrder=Ascending&IncludeItemTypes=Series&Fields=ProductionYear,ProviderIds,ChildCount,RecursiveItemCount,Status,Genres",
     ),
     items("IncludeItemTypes=Episode&Fields=IndexNumber,IndexNumberEnd,ParentIndexNumber,SeriesId,MediaSources"),
   ]);

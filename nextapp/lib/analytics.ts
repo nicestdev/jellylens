@@ -9,7 +9,7 @@ import { fold, foldTitle } from "./text";
 // sync.
 
 // Not group tags, though a name can end in them after a dash ("x264-1080p").
-const NOT_A_GROUP = /^(\d+p|\d+|[xh]\.?26[45]|hevc|avc|web|dl)$/i;
+const NOT_A_GROUP = /^(\d+p|\d+|[xh]\.?26[45]|hevc|avc|av1|web|dl)$/i;
 const AFTER_BRACKET = /\]-([a-z0-9][a-z0-9_]*)$/i;
 const AFTER_DASH = /[^-]-([a-z0-9][a-z0-9_]*)$/i;
 
@@ -40,7 +40,13 @@ function groupIn(raw: string, title?: string): string | null {
   const candidates = [
     AFTER_BRACKET.exec(name)?.[1],
     sceneStyle ? AFTER_DASH.exec(tail)?.[1] : undefined,
-    short && name === name.toLowerCase() && !fold(title ?? "").replace(/ /g, "").startsWith(short) ? short : undefined,
+    short &&
+    name === name.toLowerCase() &&
+    !fold(title ?? "")
+      .replace(/ /g, "")
+      .startsWith(short)
+      ? short
+      : undefined,
   ];
   return candidates.find((g): g is string => Boolean(g) && !NOT_A_GROUP.test(g!)) ?? null;
 }
@@ -133,8 +139,10 @@ export function storedFiles(items: MediaItem[]): StoredFile[] {
         resolution: resolutionLabel(f.Width, f.Height) || resolutionLabel(item.width, item.height),
         codec: codecLabel(f.Codec),
         languages: f.Languages ?? [],
-        search: [foldTitle(item.title), fold(item.episodeTitle ?? ""), fold(code), fold(f.Name)].filter(Boolean).join(" "),
+        search: [foldTitle(item.title), fold(item.episodeTitle ?? ""), fold(code), fold(f.Name)]
+          .filter(Boolean)
+          .join(" "),
       };
-    })
+    }),
   );
 }
