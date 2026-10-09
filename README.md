@@ -43,8 +43,14 @@ services:
       JELLYFIN_URL: http://192.168.1.10:8096
       JELLYFIN_API_KEY: your_jellyfin_api_key
       TMDB_API_KEY: your_tmdb_api_key
+      DOWNLOAD_DIR: /downloads
+      # Optional: Downloads (see below)
+      # DDOWNLOAD_LOGIN: your_ddownload_login
+      # DDOWNLOAD_PASSWORD: your_ddownload_password
+      # REALDEBRID_TOKEN: your_realdebrid_token
     volumes:
       - ./data:/app/data
+      - ./downloads:/downloads
     ports:
       - 3000:3000
     restart: unless-stopped
@@ -87,15 +93,7 @@ Both are optional and stay out of the way until configured. Without `WCX_API_URL
 
 A link on a hoster neither covers is reported on its package. DLC containers are decrypted through JDownloader's key service; their links then go the same way.
 
-Downloads land in the data folder by default. To have them next to your media instead, mount a host folder and point `DOWNLOAD_DIR` at it:
-
-```yaml
-    environment:
-      DOWNLOAD_DIR: /downloads
-    volumes:
-      - ./data:/app/data
-      - /srv/media/downloads:/downloads
-```
+Downloads and their extracted files go to the `/downloads` mount; point it at any host folder, e.g. one next to your media. Without `DOWNLOAD_DIR` they land in the data folder.
 
 ### Exposing Jellylens to the internet
 
