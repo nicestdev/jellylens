@@ -80,10 +80,10 @@ Both are optional and stay out of the way until configured. Without `WCX_API_URL
 
 #### Supported hosters
 
-| Hoster | Through | Needs |
+| Hoster | Account | Covers |
 | --- | --- | --- |
-| [ddownload.com](https://ddownload.com) (also `ddl.to`) | its own premium account | `DDOWNLOAD_LOGIN`, `DDOWNLOAD_PASSWORD` |
-| every hoster [Real-Debrid supports](https://real-debrid.com/compare), e.g. Rapidgator | Real-Debrid | `REALDEBRID_TOKEN` |
+| [ddownload.com](https://ddownload.com) | Premium: `DDOWNLOAD_LOGIN`, `DDOWNLOAD_PASSWORD` | ddownload.com, ddl.to |
+| [Real-Debrid](https://real-debrid.com) | API token: `REALDEBRID_TOKEN` | [every hoster it supports](https://real-debrid.com/compare), e.g. Rapidgator |
 
 A link on a hoster neither covers is reported on its package. DLC containers are decrypted through JDownloader's key service; their links then go the same way.
 
