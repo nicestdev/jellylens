@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MatchInfo } from "./api-types";
 import type { TitleRelease } from "./store";
 import {
+  fromRelease,
   groupEpisodes,
   matchActions,
   matchNote,
@@ -182,5 +183,43 @@ describe("withoutTitle", () => {
 
   it("keeps the whole name without a year or season", () => {
     expect(withoutTitle("Heat.German.DL.1080p.BluRay.x264-VECTOR")).toBe("Heat.German.DL.1080p.BluRay.x264-VECTOR");
+  });
+});
+
+describe("fromRelease", () => {
+  const ep = "Outlander.S04E01.Die.neue.Welt.GERMAN.AAC.1080p.BluRay.x265-w00t.mkv";
+
+  it("takes a movie's file by its name, any case and separators, without the extension", () => {
+    expect(
+      fromRelease(
+        "Iron.Man.3.2013.GERMAN.AC3.1080p.BluRay.x265-w00t.mkv",
+        "Iron.Man.3.2013.German.AC3.1080p.BluRay.x265-w00t",
+      ),
+    ).toBe(true);
+    expect(
+      fromRelease(
+        "Iron Man 3 2013 GERMAN AC3 1080p BluRay x265-w00t.mkv",
+        "Iron.Man.3.2013.GERMAN.AC3.1080p.BluRay.x265-w00t",
+      ),
+    ).toBe(true);
+    expect(
+      fromRelease(
+        "Iron.Man.3.2013.GERMAN.AC3.1080p.BluRay.x265-w00t.mkv",
+        "Iron.Man.3.2013.GERMAN.AC3.2160p.BluRay.x265-w00t",
+      ),
+    ).toBe(false);
+  });
+
+  it("takes an episode for its pack, several seasons' or its own release, an episode title in between", () => {
+    expect(fromRelease(ep, "Outlander.S04.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
+    expect(fromRelease(ep, "Outlander.S01-S06.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
+    expect(fromRelease(ep, "Outlander.S04E01.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
+    expect(fromRelease("Show.S01E01E02.GERMAN.1080p-GRP.mkv", "Show.S01.GERMAN.1080p-GRP")).toBe(true);
+  });
+
+  it("doesn't take another release of the same show", () => {
+    expect(fromRelease(ep, "Outlander.S04.GERMAN.AAC.1080p.WEB.x265-w00t")).toBe(false);
+    expect(fromRelease(ep, "Outlander.Blood.of.my.Blood.S04.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(false);
+    expect(fromRelease("plex-heman.s02e30-1080p.mkv", "He-Man.S02.German.1080p")).toBe(false);
   });
 });

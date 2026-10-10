@@ -18,10 +18,13 @@ import {
   type TmdbSeason,
 } from "./store";
 import { mapWithConcurrency } from "./async";
+import { refreshDetails } from "./library-scan";
 import { releaseWindow } from "./dates";
 
-// Pulls, for every show matched to TMDB, its seasons' episode lists, and
-// every TMDB collection an owned movie belongs to. Replaces what's stored,
+// Asks TMDB again about every title in the library (name, genres, poster,
+// a movie's collection, a show's status; lib/library-scan.ts), then pulls,
+// for every show, its seasons' episode lists, and every TMDB collection an
+// owned movie belongs to. Replaces what's stored,
 // except where TMDB couldn't be reached: a show or collection whose request
 // failed keeps what the last sync got, so a hiccup never turns into
 // "missing" (or "mismatched") episodes. Only what TMDB no longer has (404)
@@ -81,12 +84,12 @@ async function toCollection(
 }
 
 export async function syncTmdb({ tmdbApiKey, language }: { tmdbApiKey: string; language: string }) {
-  if (!syncedAt("jellyfin")) throw new Error("Sync Jellyfin first — no series to look up on TMDB yet.");
+  if (!syncedAt("library")) throw new Error("Scan the library first — no titles to look up on TMDB yet.");
+  let failed = await refreshDetails({ apiKey: tmdbApiKey, language });
   const { today } = releaseWindow();
   const countries = releaseCountries(language);
   const previousSeries = getTmdbSeries();
   const previousCollections = getTmdbCollections();
-  let failed = 0;
 
   const series = await mapWithConcurrency(matchedShows(), 5, async ({ id, tmdbId }) => {
     try {

@@ -114,10 +114,10 @@ export const addsAudio = (u: Unit, alt: Alternative) => u.languages.length < 2 &
 // if xREL gave no size.
 const sizeChange = (u: Unit, alt: Alternative) => (alt.size === null ? null : alt.size - u.size);
 
-// "+2,30 GB", "−1,10 GB", "±0 B"; "?" without a size.
+// "+2.30 GB", "−1.10 GB", "±0 B"; "?" without a size.
 export function formatChange(bytes: number | null): string {
   if (bytes === null) return "?";
-  if (bytes === 0) return "±0 B";
+  if (bytes === 0) return "±0\u202fB";
   return (bytes > 0 ? "+" : "−") + formatBytes(Math.abs(bytes));
 }
 
@@ -185,7 +185,7 @@ export function switchSummary(units: Unit[], o: SwitchOptions): SwitchSummary {
 
 type Tile = { label: string; value: string; hint: string; muted?: boolean };
 
-const pct = (share: number) => `${Math.round(share * 100)} %`;
+const pct = (share: number) => `${Math.round(share * 100)}\u202f%`;
 
 export function switchTiles(s: SwitchSummary, o: SwitchOptions, library: Library): Tile[] {
   const unit = UNIT[library].one;

@@ -3,9 +3,11 @@ services:
     image: node:24-alpine
     working_dir: /app
     # 7-Zip for the Downloads page: the official static build, which (unlike
-    # Alpine's package) extracts RAR. Fetched once per container.
+    # Alpine's package) extracts RAR; ffprobe for the library scan. Fetched
+    # once per container.
     command: >-
-      sh -c "command -v 7zz >/dev/null || (apk add --no-cache xz >/dev/null
+      sh -c "command -v ffprobe >/dev/null || apk add --no-cache ffmpeg >/dev/null;
+      command -v 7zz >/dev/null || (apk add --no-cache xz >/dev/null
       && wget -qO- https://github.com/ip7z/7zip/releases/download/26.04/7z2604-linux-x64.tar.xz | xz -dc | tar -x -C /usr/local/bin 7zzs
       && mv /usr/local/bin/7zzs /usr/local/bin/7zz);
       npm install && npm run dev"
@@ -13,7 +15,8 @@ services:
       JELLYFIN_URL: ${JELLYFIN_URL}
       JELLYFIN_API_KEY: ${JELLYFIN_API_KEY}
       TMDB_API_KEY: ${TMDB_API_KEY}
-      JELLYFIN_SYNC_INTERVAL_HOURS: ${JELLYFIN_SYNC_INTERVAL_HOURS:-6}
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      LIBRARY_SCAN_INTERVAL_HOURS: ${LIBRARY_SCAN_INTERVAL_HOURS:-6}
       TMDB_SYNC_INTERVAL_HOURS: ${TMDB_SYNC_INTERVAL_HOURS:-24}
       MISSING_RECHECK_INTERVAL_HOURS: ${MISSING_RECHECK_INTERVAL_HOURS:-24}
       XREL_SYNC_INTERVAL_HOURS: ${XREL_SYNC_INTERVAL_HOURS:-6}
@@ -27,18 +30,21 @@ services:
       DDOWNLOAD_PASSWORD: ${DDOWNLOAD_PASSWORD:-}
       REALDEBRID_TOKEN: ${REALDEBRID_TOKEN:-}
       ARCHIVE_PASSWORDS: ${ARCHIVE_PASSWORDS:-}
-      # Downloads go to /downloads: a volume of their own, or the host folder
-      # DOWNLOADS_PATH names (e.g. next to the media library).
+      # Downloads go to /downloads: ./downloads next to this file, or the host
+      # folder DOWNLOADS_PATH names (e.g. next to the media library).
       DOWNLOAD_DIR: /downloads
+      # The library's disks, one folder per disk with movies/ and shows/:
+      # what the library scan reads and Organize moves into; mount them in a
+      # compose override (see the README).
+      LIBRARY_DIR: ${LIBRARY_DIR:-}
       DATA_DIR: /app/data
     volumes:
       - ./nextapp:/app
       - cache_data:/app/data
-      - ${DOWNLOADS_PATH:-downloads}:/downloads
+      - ${DOWNLOADS_PATH:-./downloads}:/downloads
     ports:
       - "8081:3000"
     restart: unless-stopped
 
 volumes:
   cache_data:
-  downloads:

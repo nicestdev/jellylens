@@ -49,7 +49,7 @@ function toneOf(a: Attribute) {
 // A line under the title: the file you have (greyed; not on a phone,
 // where the release's colors say what changes), then the release.
 const NAME_LINE =
-  "truncate font-mono text-[11px] max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]";
+  "truncate font-mono text-xs max-sm:line-clamp-2 max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]";
 
 // The switch list, like Analytics' files: one row per movie or season,
 // its title with year or season (and a pack, how many episodes or

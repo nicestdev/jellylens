@@ -3,8 +3,8 @@ import type { StoredFile } from "./store";
 import { fold, foldTitle } from "./text";
 
 // What the Analytics page knows about the library's files beyond
-// Jellyfin's own fields: the release group from the name, and the video's
-// resolution and codec as labels. Worked out once per Jellyfin sync, for
+// the probe's own fields: the release group from the name, and the video's
+// resolution and codec as labels. Worked out once per library scan, for
 // media_files (lib/store/files.ts), so a change here shows after the next
 // sync.
 
@@ -59,9 +59,9 @@ export function releaseGroupOf(fileName: string, folder?: string, title?: string
   return groupIn(fileName.replace(/\.[a-z0-9]{2,4}$/i, ""), title) ?? (folder ? groupIn(folder, title) : null);
 }
 
-// Jellyfin's video codecs by the names release names use (x265 for any
+// ffprobe's video codecs by the names release names use (x265 for any
 // H.265, though a WEB-DL's untouched stream wasn't made with x265); others
-// as Jellyfin spells them, uppercased.
+// as ffprobe spells them, uppercased.
 const CODECS: Record<string, string> = {
   hevc: "x265",
   h265: "x265",
@@ -75,13 +75,14 @@ const CODECS: Record<string, string> = {
 };
 export const codecLabel = (codec: string | undefined) => (codec ? (CODECS[codec] ?? codec.toUpperCase()) : "");
 
-// One version's file as the sync reads it from Jellyfin: its name and
-// its folder's (never the rest of the path), bytes, its video stream's
-// codec (lowercased: "hevc", "h264"; "" if none) and size, and its audio
+// One version's file as the scan reads it: its name, its folder's name
+// and its path under LIBRARY_DIR, bytes, its video stream's codec
+// (lowercased: "hevc", "h264"; "" if none) and size, and its audio
 // languages ("DE", "EN"; lib/languages.ts).
 export type MediaFile = {
   Name: string;
   Folder?: string;
+  Path: string;
   Size: number;
   Codec: string;
   Width?: number;
@@ -133,6 +134,7 @@ export function storedFiles(items: MediaItem[]): StoredFile[] {
         episodeEnd: item.episodeEnd ?? null,
         episodeTitle: item.episodeTitle ?? null,
         fileName: f.Name,
+        path: f.Path,
         size: f.Size,
         group: groupKey ? spelling.get(groupKey)! : null,
         groupKey,

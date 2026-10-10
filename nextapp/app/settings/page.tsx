@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { CELL, DataTable, MUTED_CELL, NOT_ON_PHONE, ROW } from "@/components/library-table";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ReleaseGroups } from "./release-groups";
 import { SlotsMenu } from "./download-slots";
@@ -38,7 +39,7 @@ function intervalLabel(hours: number): string {
 
 function EnvRow({ env, value }: { env: string; value: string | undefined }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-3 py-2 text-[13px]">
+    <div className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
       <dt className="min-w-0 font-mono text-xs text-muted-foreground">
         <Breakable text={env} separator="_" />
       </dt>
@@ -61,13 +62,13 @@ function PrefRow({
   return (
     <label className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40">
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium">{title}</span>
+        <span className="block text-sm font-medium">{title}</span>
         <span className="block text-xs text-muted-foreground">{text}</span>
       </span>
       {checked !== undefined ? (
         <Switch checked={checked} onCheckedChange={onChange} aria-label={title} />
       ) : (
-        <Skeleton className="h-[18px] w-8 rounded-full" />
+        <Skeleton className="h-[1.15rem] w-8 rounded-full" />
       )}
     </label>
   );
@@ -77,10 +78,10 @@ function PrefRow({
 // variable behind it on hover), when it last ran, and Sync now.
 const STAGES: { stage: SyncStageName; title: string; env: string; counts: (s: StatusResponse) => string }[] = [
   {
-    stage: "jellyfin",
-    title: "Jellyfin",
-    env: "JELLYFIN_SYNC_INTERVAL_HOURS",
-    counts: (s) => `${plural(s.jellyfin.movies, "movie")} · ${plural(s.jellyfin.shows, "show")}`,
+    stage: "library",
+    title: "Library",
+    env: "LIBRARY_SCAN_INTERVAL_HOURS",
+    counts: (s) => `${plural(s.library.movies, "movie")} · ${plural(s.library.shows, "show")}`,
   },
   {
     stage: "tmdb",
@@ -179,7 +180,7 @@ export default function SettingsPage() {
   const loading = !status || !config;
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">Sync, release groups, downloads and display options.</p>
@@ -236,17 +237,17 @@ export default function SettingsPage() {
                   {schedule}
                 </td>
                 <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{lastSync}</td>
-                <td className={cn(CELL, "text-right")}>
-                  <button
-                    type="button"
+                <td className={cn(CELL, "py-0 text-right")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => trigger(st.stage)}
                     disabled={running}
                     aria-label={`Sync ${st.title} now`}
-                    className="inline-flex items-center gap-1 align-top text-primary transition-colors hover:text-foreground disabled:text-muted-foreground"
                   >
-                    <RefreshCw className={cn("size-3.5", running && "animate-spin")} />
+                    <RefreshCw className={cn(running && "animate-spin")} />
                     Sync now
-                  </button>
+                  </Button>
                 </td>
               </tr>
             );
@@ -281,7 +282,7 @@ export default function SettingsPage() {
           <div className={LIST}>
             <div className="flex items-center gap-3 px-3 py-2.5">
               <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-medium">Parallel downloads</span>
+                <span className="block text-sm font-medium">Parallel downloads</span>
                 <span className="block text-xs text-muted-foreground">
                   How many files come in at once. Fewer takes effect as running ones finish.
                 </span>
@@ -308,6 +309,7 @@ export default function SettingsPage() {
               value={config ? (config.authEnabled ? "Jellyfin accounts" : "Off") : undefined}
             />
             <EnvRow env="TMDB_API_KEY" value={config?.tmdbApiKey} />
+            <EnvRow env="TMDB_LANGUAGE" value={config?.tmdbLanguage} />
             <EnvRow env="DDOWNLOAD_LOGIN" value={config?.ddownloadLogin} />
             <EnvRow env="DDOWNLOAD_PASSWORD" value={config?.ddownloadPassword} />
             <EnvRow env="REALDEBRID_TOKEN" value={config?.realDebridToken} />

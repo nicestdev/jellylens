@@ -1,6 +1,6 @@
 import { TMDB_API_KEY } from "@/lib/env";
 import { setMatchPoster } from "@/lib/store";
-import { ensureMetadataLanguage } from "@/lib/sync-manager";
+import { TMDB_LANGUAGE } from "@/lib/env";
 import { fetchTmdbEntry } from "@/lib/tmdb";
 
 // When each entry was last asked for, so a poster TMDB still lacks costs
@@ -24,7 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ type: s
   const last = tried.get(key);
   if (!TMDB_API_KEY || (last && Date.now() - last < HOUR)) return new Response("No poster", { status: 404 });
   tried.set(key, Date.now());
-  const entry = await fetchTmdbEntry(TMDB_API_KEY, type, Number(id), await ensureMetadataLanguage()).catch(() => null);
+  const entry = await fetchTmdbEntry(TMDB_API_KEY, type, Number(id), TMDB_LANGUAGE).catch(() => null);
   if (!entry?.posterPath) return new Response("No poster", { status: 404 });
   tried.delete(key);
   setMatchPoster(type, Number(id), entry.posterPath, entry.year);

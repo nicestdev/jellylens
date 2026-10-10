@@ -175,7 +175,9 @@ async function realDebridLink(url: string): Promise<string> {
   const data = (await res.json().catch(() => ({}))) as { download?: string; error?: string; error_code?: number };
   if (data.download) return data.download;
   if (res.status === 401 || data.error_code === 8) throw new Error("Real-Debrid: REALDEBRID_TOKEN is wrong or expired");
-  throw new Error(`Real-Debrid: ${data.error ?? `HTTP ${res.status}`}`);
+  // Its codes as a sentence: "hoster_unavailable" → "Hoster unavailable".
+  const reason = data.error ? data.error.charAt(0).toUpperCase() + data.error.slice(1).replaceAll("_", " ") : null;
+  throw new Error(`Real-Debrid: ${reason ?? `HTTP ${res.status}`}`);
 }
 
 // A link's file name before the hoster tells: the last part of its path

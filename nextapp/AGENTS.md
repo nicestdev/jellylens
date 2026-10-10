@@ -10,9 +10,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Jellylens
 
-A dashboard over a Jellyfin library: movies and shows, missing episodes and
-collection movies (checked against TMDB), mismatches, per-user requests, and
-the releases of favorite P2P and scene groups (from xREL).
+A dashboard over a media library on disk, played with Jellyfin: movies and
+shows, missing episodes and collection movies (checked against TMDB),
+mismatches, per-user requests, and the releases of favorite P2P and scene
+groups (from xREL). The library is read from the disks themselves
+(`LIBRARY_DIR`); Jellyfin is only asked for sign-in and to rescan after an
+import.
 
 ## Stack
 
@@ -23,15 +26,17 @@ the releases of favorite P2P and scene groups (from xREL).
   Tailwind v4, dark only (`<html class="dark">`).
 - All state in SQLite: `DATA_DIR/jellylens.db` (default `/app/data`), through
   better-sqlite3. `lib/db.ts` opens it and runs the migrations (one entry per
-  schema version, tracked in `PRAGMA user_version`; never edit one that has
+  schema version, tracked in `PRAGMA user_version`, also run on the open
+  connection when a `next dev` reload brings a new one; never edit one that has
   shipped. The first is a baseline that every earlier version was folded
   into on 2026-10-02). Data access is in `lib/store/`, one module per area
   (library, files, tmdb, missing, ignored, requests, preferences, releases,
-  posters, sync-state, upgrades), all re-exported by `lib/store/index.ts`; SQL helpers in
+  posters, sync-state, upgrades, scan), all re-exported by `lib/store/index.ts`; SQL helpers in
   `lib/store/sql.ts`. Every read goes to the database, so a page always sees
   what the last sync wrote; each sync replaces its data in one transaction.
-  Jellyfin items are stored with only the fields Jellylens reads
-  (`JellyfinMovie`, `JellyfinShow` in `lib/store/library.ts`).
+  Library items are stored with only the fields Jellylens reads
+  (`LibraryMovie`, `LibraryShow` in `lib/store/library.ts`; Jellyfin's
+  field names, from when they came from there).
 - Route responses are typed in `lib/api-types.ts`, shared by the routes
   (`satisfies`) and the pages.
 - Config is env vars only (`lib/env.ts`, read-only on the Settings page),
@@ -48,24 +53,40 @@ interval env var (`0` = off). `POST /api/sync/<stage>` starts one in the
 background and answers 202 right away (a sync can outlast a proxy's
 timeout); `GET /api/status` has each stage's last sync, `running` and
 `error`, and `runSync()` in `lib/api-client.ts` starts a stage and polls
-until it's done. `instrumentation.ts` opens the database at boot, runs
-Jellyfin → TMDB (→ missing) and the releases sync, then installs the
-intervals.
+until it's done. A stage started that way (`startByHand`) leaves a note
+once it's done (the scan's says what the library gained: "+2 movies"), and
+any failed run, scheduled or not, one of its own (see Notes).
+`instrumentation.ts` opens the database at boot, runs library scan → TMDB
+(→ missing) and the releases sync, then installs the intervals.
 
-1. **Jellyfin** (`lib/sync-jellyfin.ts`, stage `jellyfin`,
-   `JELLYFIN_SYNC_INTERVAL_HOURS`, default 6): movies, shows and episodes of
-   the first admin user (resolved at boot). Movies keep their file's name
-   (for matching the release group) but not its path; `/api/movies` leaves
-   it out. Every movie's and episode's file goes to `media_files` for
-   Analytics (its name and size, audio languages, and the group, resolution
-   and codec `storedFiles` in `lib/analytics.ts` reads), in the same
-   transaction. Chains a missing
-   recheck once TMDB has synced.
+1. **Library scan** (`lib/library-scan.ts`, stage `library`,
+   `LIBRARY_SCAN_INTERVAL_HOURS`, default 6): `LIBRARY_DIR`'s disks, each
+   with `movies/` and `shows/`, a folder per title named "Name (Year)
+   [tmdbid-N]" (as Organize names them). A movie's and a show's id is its
+   TMDB id; a title on several disks is one (`Disks`), a folder without a
+   video or without a TMDB id is left out (the latter logged). A show's
+   episodes come from `SxxEyy` / `SxxEyy-Ezz` in their names, one episode
+   (`<show>:<season>:<episode>`) per number with every file of it a
+   version; extras (Jellyfin's folder names and suffixes, samples) don't
+   count. Every video is probed with ffprobe (`lib/ffprobe.ts`: length,
+   video codec and size, audio languages), kept in `probes` until its size
+   or mtime changes, so only the first scan takes long (about 0.1 s a file
+   over sshfs). TMDB's details (name, genres, poster, a movie's collection,
+   a show's status; `fetchTmdbDetails`) are asked for once per new title and
+   kept in `tmdb_details`; without a TMDB key titles go by their folder.
+   Movies keep their file's name (for matching the release group);
+   `/api/movies` leaves it out. Every movie's and episode's file goes to
+   `media_files` for Analytics (its name, path under `LIBRARY_DIR` and size,
+   audio languages, and the group, resolution and codec `storedFiles` in
+   `lib/analytics.ts` reads), in the same transaction. `scanProgress()` says
+   how far it is (`/api/organize/scan`). Chains a missing recheck once
+   TMDB has synced.
 2. **TMDB** (`lib/sync-tmdb.ts`, stage `tmdb`,
-   `TMDB_SYNC_INTERVAL_HOURS`, default 24): season/episode lists of every
-   show matched to TMDB, and every TMDB collection an owned movie belongs to
-   (Jellyfin sets `ProviderIds.TmdbCollection`), in Jellyfin's metadata
-   language. A show or collection whose request fails keeps the last sync's
+   `TMDB_SYNC_INTERVAL_HOURS`, default 24): every library title's details
+   again (`refreshDetails`, written into the stored titles: a show ends, a
+   poster changes), then season/episode lists of every show, and every TMDB
+   collection an owned movie belongs to, all in `TMDB_LANGUAGE` (also what
+   every other TMDB request uses). A show or collection whose request fails keeps the last sync's
    data (a hiccup must not turn into missing episodes or false mismatches);
    only a 404 drops it. Chains a missing recheck.
 3. **Missing recheck** (`lib/compute-missing.ts`, stage `missing`,
@@ -102,7 +123,10 @@ from the name (`sceneQuality`), in the P2P categories' terms.
 
 Releases belong to xREL titles (`title_key`); a movie's are split further
 by the year in their names (`e1~1995`, `toRelease` in `lib/xrel.ts`), since
-xREL now and then files a remake under the original. xREL also sometimes links a release to the
+xREL now and then files a remake under the original; on a tile (where its
+parts matched the same entry anyway, often only a group's year a year off)
+the title page shows them as one again, without a year, a decision going
+for all of them. xREL also sometimes links a release to the
 wrong movie, so its IMDb id's TMDB entry (`imdb_lookups`) is
 only a candidate: `decideMatch` in `lib/title-match.ts` checks it against the
 release names (title by TMDB's localized, original or other titles, year ±1,
@@ -160,48 +184,148 @@ per hoster (DD, RG), the same widths in every row; of a mirror WCX lists
 more than once, the live copy with the most links. On a phone the grid
 goes under the name. `useMirrors` holds their state. With several xREL titles, a list above
 the table gives each its match note and ⋯ menu.
+After a release's name an icon says what the library has of it, its
+tooltip which copies (`libraryNote` in `lib/title-rows.ts`, Downloads'
+`libraryOf` alike, both drawn by `components/in-library-icon.tsx`): peach
+when a file is from this very release, muted when it's only the same
+title or season in another one. `fromRelease` (`lib/release-labels.ts`)
+decides by the file's name: the release's, any case and separators; for
+an episode, the release's name before its `S01` and after it, the
+episode's title in between.
 
 ## Downloads
 
 Admins only (`app/downloads/`, `/api/downloads`). Packages come from DLC
 containers (decrypted through JDownloader's key service, `lib/dlc.ts`),
-pasted links, or a title page's WCX mirrors. ddownload.com goes
+pasted links, or a title page's WCX mirrors; a link of a hoster there's
+no account for stays in its package as a failed file ("No account for its
+hoster"), and a package with nothing to fetch isn't added. `POST` answers
+with the list as `GET` has it. ddownload.com goes
 through its premium account (`DDOWNLOAD_LOGIN`/`PASSWORD`), every other
 hoster through Real-Debrid (`REALDEBRID_TOKEN`; `routeOf` in
 `lib/hosters.ts`). A new package is looked over before it's started: its
 TMDB entry from its name (`matchName` in `lib/download-match.ts`, searched
 again with umlauts for a German name that spells them out, "Auserwaehlten";
 once per package, and once more for one found nothing for before
-`MATCHING_CHANGED`, moved on whenever the matching gets better), and its
-files' names and sizes from the hoster (a file it didn't answer for asked
-again after 5 minutes). Downloads go to `DOWNLOAD_DIR`, `/downloads` in
-the container: a volume of its own, or the host folder `DOWNLOADS_PATH`
-names in compose. The queue (`lib/downloader.ts`) runs 1–10 files at a
-time and extracts each archive set with 7-Zip as soon as its parts are in,
-trying the archive passwords set on Settings in turn, then
-`ARCHIVE_PASSWORDS`. A file that fails fails its package at once, with
+`MATCHING_CHANGED`, moved on whenever the matching gets better), and every
+file is asked about at the hoster once, its size known or not, like
+JDownloader's LinkGrabber (`checkPendingFiles`: online, names and sizes
+filled in where missing, or failed as offline; one it didn't answer for
+asked again after 5 minutes; `onlineOf`, in memory, so a restart asks
+again). Downloads go to `DOWNLOAD_DIR`, `/downloads` in
+the container: `./downloads` next to the compose file (a bind mount), or
+the host folder `DOWNLOADS_PATH` names. The queue (`lib/downloader.ts`)
+runs 1–10 files at a time and extracts each archive set with 7-Zip as soon
+as its parts are in, trying the archive passwords set on Settings in turn,
+then `ARCHIVE_PASSWORDS`. A file that fails fails its package at once, with
 each failed file's name and error (no more of its files start; Retry
 fetches just those). Reset deletes what's downloaded and puts the package
 back in New. The page lists packages as New, Running and Finished, a
 table each with the same fixed column widths so they line up
 (`PackageRow` in `app/downloads/package-row.tsx`): title over the release
-name, state, a bar with the share done over speed and time left (a failed
-one's error, or a new one's part problems, `partProblem`: parts offline,
-gaps in a `.partN.rar` set), size; on a phone those three are a line
-under the title. Parts aren't listed. The state is the main action
-(`StatusButton`: Ready starts, Loading or Waiting pauses, Paused
-resumes, Failed retries, showing that on hover); the rest is in the ⋯ menu
-(`RowMenu`: Download, Reset, Remove or Delete; Reset, Remove and Delete
-ask "Sure? Click again" first, `ConfirmItem`). How many files come in at
-once and the archive passwords are set on Settings (Downloads, Archive
-passwords, `app/settings/archive-passwords.tsx`); Download all (New), Pause all and
-Resume all (Running) sit on their section's heading.
+name (the library icon after the title, always peach here), Status, size;
+on a phone Status and size are a line under the title. Parts aren't
+listed. Status (`components/row-status.tsx`, shared with Organize) is
+muted text, nothing to click: a new one's parts (`partCheck`: "Checking ·
+3/8" while the hoster is asked, then "Online · 3/3", gaps in a
+`.partN.rar` set counting as parts; red when one is missing, peach when
+the hoster didn't answer for one; when some failed, why instead, red, and
+how many, "No account for its hoster · 2 parts", "+1" for another reason,
+each one's name and reason on hover); while it moves a bar (peach
+waiting, green coming in, sky extracting, muted paused) over the state
+and speed and time left or how much is here ("Loading · 45.00 MB/s · 2
+min"), the share done on the right; a failed one's error (red,
+`errorLine`: without the file's name, as a sentence starts, the whole on
+hover); "—" when finished. What to do about it comes
+first in the row's ⋯ menu (`RowMenu`: Start, or with episodes the library
+has only the missing ones or all; Pause, Resume or Retry), then Reset,
+Remove or Delete (only red ones are what deletes; Reset, Remove and
+Delete ask "Sure? Click again" first, `ConfirmItem`). How many files come
+in at once and the archive passwords are set on Settings (Downloads,
+Archive passwords, `app/settings/archive-passwords.tsx`). The page's ⋯
+at the top right (`PageMenu` in `components/page-menu.tsx`) has Upload
+DLC and Add links (a box under the heading), then Download all (New),
+then Pause all and Resume all (Running); DLC files can be dropped anywhere
+on the page too. A row's ⋯ is in a column of its own from sm up, centered,
+and on a phone at the end of the title's line (`MENU_CELL`, `PHONE_MENU`
+in `components/library-table.tsx`). A finished package moved into the library leaves Finished for
+Organize's list.
+
+## Organize
+
+Admins only (`app/organize/`, `/api/organize`; `/import` redirects there):
+finished downloads into the
+library, by hand. `LIBRARY_DIR` holds one folder per disk, each with
+`movies/` and `shows/` (`/library/nvme01/movies`); a single disk is just
+one such folder. Each package goes to its title's folder, "Name (Year)
+[tmdbid-N]" with TMDB's German title as TMDB writes it (`libraryFolderName`
+in `lib/library-names.ts`: ":" becomes " -", a censored "F***" the word,
+what a file name can't have left out, cut to 255 bytes), a show's episodes
+into `Season NN`; a disk that has the title already (its `[tmdbid-N]`
+folder, whatever it's called) gets them in that folder. Its videos and
+subtitles go, not samples or the rest; a movie whose one video is named
+with spaces (as VECTOR names them) gets the release's name instead
+(`releaseFileNames`; the release name is the folder the archive made, else
+the package's). The disk defaults to the one that has the title, else the
+first it fits on (`defaultTarget` in `app/organize/logic.ts`; not the
+roomiest, which may be one left out of the backup), counting what's
+queued for it already.
+
+A move (`lib/library-move.ts`, one at a time, the rest wait) copies every
+file as "<name>.part", hashed on the way and flushed to the disk (fsync),
+then reads each back and hashes it again, and renames them only if every
+hash and size matches; then it marks the package moved (`moved_to`,
+`moved_at`, `moved_files`: which file went where), and only then deletes
+its download folder. Undo does the same the other way and takes the files
+(and the folders left empty) out of the library afterwards.
+
+A title the library has already (`ownedFiles`: a movie's videos in its
+`[tmdbid-N]` folder on any disk, or a show's that are one of the episodes
+the package brings by `SxxEyy`, each with its subtitles) isn't moved as
+it is: Move and Move all leave it out, and its ⋯ offers Add as version
+(both stay), Replace (the old files go once the new ones are in, and the
+folders they leave empty; `moved_replaced`, so there's no Undo) or Delete
+(the download, files and all). A Retry keeps what was picked.
+
+The page has the disks' free space as tiles, then New, Running and
+Finished, one table each with the Downloads page's column widths
+(`OrganizeRow`, `MovedRow` in `app/organize/organize-row.tsx`): the title
+(the library icon after it when the library has it, always peach) over
+where it goes as a little tree (the title's folder, a show's season
+folders, every file; what the library has already red above the new
+files green, like a diff), the disk (a menu with each disk's free space;
+on a phone the tree's root, with the size in the line under it),
+Status (`components/row-status.tsx`: "—"; while it's moved a bar per phase,
+peach waiting, green copying, sky verifying, with "Moving · speed · time
+left"; red why it failed or can't be moved, a grey folder icon before
+its release name then; when it was moved or replaced), size, and the ⋯
+(Move; Add as version, Replace, Delete; Retry; Undo; only Delete for one
+that can't be moved), placed as on Downloads. The page's ⋯ (`PageMenu`)
+has Rescan library, then Move all (New) and Clear finished (forgets the
+moved ones, their files stay). Once the move queue is through, the
+library is scanned again (`rescan` in `lib/rescan.ts`) and Jellyfin asked
+to scan its libraries too (`POST /Library/Refresh`, not waited for), so
+what came in counts as owned right away; Rescan library
+(`/api/organize/scan`) does the same by hand, "Scanning…" and disabled
+while a scan runs (asked for on load and every 10 s), its note once it's
+done.
+
+## Notes
+
+What happens in the background that an admin wants to hear about is kept
+as events (`notify` in `lib/events.ts`, the last 50, on globalThis): a
+download done or failed, a move or Undo done or failed, a sync started by
+hand done, any sync failed. `GET /api/events?after=<id>` hands out what
+came after; `components/event-toasts.tsx` (in the layout, admins only)
+asks every 5 s and shows each as a toast (`error` tone for failures), only
+what happened after the page opened, and fires `COUNTS_STALE` so the
+sidebar asks for its counts again (the Organize page fires it too when its
+count changes).
 
 ## Images
 
-The browser never talks to Jellyfin or TMDB directly. Jellyfin posters go
-through `GET /api/image/<id>` (`lib/image-cache.ts`, `DATA_DIR/images`, pruned
-after each Jellyfin sync); TMDB posters through `GET /api/tmdb-image/<size>/<file>`
+The browser never talks to TMDB directly. Every poster, the library's
+too (`PosterPath`), is TMDB's, through `GET /api/tmdb-image/<size>/<file>`
 (`lib/tmdb-image-cache.ts`, `DATA_DIR/tmdb-images`; build URLs with
 `tmdbImage()` in `lib/api-client.ts`). Unreferenced TMDB posters are pruned
 after a month (`tmdbPosterPaths()` in `lib/store/posters.ts` lists the
@@ -219,7 +343,7 @@ out right away); Jellylens keeps its own HMAC-signed cookie (`lib/session.ts`,
 user list (cached a minute) on every request. Failed sign-ins are limited per
 IP and per username (`lib/rate-limit.ts`, 5 per 15 min). `proxy.ts` also
 rejects state changes with a cross-site `Sec-Fetch-Site`; `next.config.ts`
-sets the security headers. Jellyfin admins get Missing, Releases, Downloads, Analytics,
+sets the security headers. Jellyfin admins get Missing, Releases, Downloads, Organize, Analytics,
 Upgrades, Settings and the sync/ignore/config APIs (`ADMIN_ONLY`); everyone gets Movies, TV
 Shows, Discover and their own Wishlist. Server code reads the user with `currentUser()`
 (`lib/auth.ts`). `AUTH_ENABLED=false` turns it all off: everyone is
@@ -259,8 +383,9 @@ works out from that data (filtering, sorting, counts, tile texts) is plain funct
 `lib/facets.ts` (filter and sort, `rankIn` for an ordered list, `libraryView`
 for Movies and TV Shows), `lib/text.ts` (`matchesWords`: every search box,
 every word, umlauts folded), `lib/libraries.ts` (the Movies | TV Shows
-switch) and `lib/format.ts` (plurals, numbers and dates German-style,
-relative times, `seasonCode`). JSON bodies go through `jsonRequest`
+switch) and `lib/format.ts` (plurals; numbers with a decimal point and
+no thousands separator, "11281", "4.21 GB"; dates German-style,
+"30.09.2026"; relative times, `seasonCode`). JSON bodies go through `jsonRequest`
 (`lib/api-client.ts`), the app's window events through `useWindowEvent`
 (`hooks/`). The look ("Konsole"): dense, the "Lillac"
 palette (dark plum grey, lilac as the one accent; `app/themes.css`, a few
@@ -270,14 +395,23 @@ Geist Mono (both self-hosted by next/font), green for better and red for worse
 (a gap, a lower quality, storage taken), tables where a list reads better
 than a grid (`DataTable` in `components/library-table.tsx`: one stretched
 column, the rest as wide as they need or fixed by `width`; a second line
-under a title in 11px Mono for a file or release name; a `phone: false`
+under a title in `text-xs` Mono for a file or release name; a `phone: false`
 column is left out below sm, its value folded into the title cell, so
 the table fits a phone instead of scrolling). Discover, the
 Wishlist and Releases are poster grids only. Sizes switch units from
-1000 on (`formatBytes`), so they're never four digits. Shared
+1000 on (`formatBytes`), so they're never four digits. A narrow no-break
+space (U+202F) goes between a number and its unit ("4.21 GB", "58.3 %",
+"12 min"): in Geist Mono a plain one is as wide as a digit. Every size is
+in rem (Tailwind's scale, or `[…rem]`), never px, so the page follows the
+browser's font size; only hairlines and tiny radii stay in px. Menus
+(`components/ui/dropdown-menu.tsx`) are the card's color with a ring, 13px
+items, their icons muted. Buttons are outline or ghost; the accent's
+filled one only for Sign in. Shared
 UI: `poster-card` (grid tile with corner badges, link or button),
-`section-title` (a section's heading: name, count badge, hint, and an
-action on the right; Missing, Settings, Downloads),
+`section-title` (a section's heading: name, hint, and an action on the
+right, no count; Missing, Settings, Downloads, Organize), `page-menu`
+(the ⋯ at a page's top right, groups of items with a line between:
+Downloads, Organize),
 `filter-menu` (`FacetMenu`: one toolbar button per facet, multi-select or
 `single` with one always picked, which the button then names;
 `FilterChips` for what's picked), `segmented` (joined buttons, one picked:
@@ -289,9 +423,9 @@ Movies | TV Shows), `sort-menu`, `search-input`,
 and Analytics' files; `test/intersection.ts` scrolls in tests). `nav` is
 the sidebar from md up (`Sidebar`: Library (Movies, TV Shows),
 Explore (Discover, Wishlist) and Administration (Analytics, Downloads,
-Missing, Releases, Settings, Upgrades, A–Z), an icon before each, sections a user has nothing in left out;
-counts from `/api/status`, the wishlist and (new and running) the downloads, the version next to the
-logo, Sign out at the bottom) and below md a slim bar whose menu opens a
+Missing, Organize, Releases, Settings, Upgrades, A–Z), an icon before each, sections a user has nothing in left out;
+counts from `/api/status`, the wishlist, (new and running) the downloads and (finished, not moved) what's to organize, the version next to the
+logo, Sign out at the bottom, there with sign-in off too, doing nothing) and below md a slim bar whose menu opens a
 full-screen panel with every page (`MobileBar`). `app/not-found.tsx` is
 the 404, over the whole window without the nav (the sign-in page's bare
 header, a big 404 in the middle). Missing has a Movies and a TV Shows switch
@@ -330,7 +464,7 @@ releases, a season's pack or all of its owned episodes one by one
 to offer), per quality and codec, with xREL's size (`releases.size_mb`,
 filled in for releases stored before by every group walking its list once
 more) and DL/ML, quality and codec from the name. Nothing is stored: each
-request works it out anew, so a Jellyfin sync that sees a swapped file
+request works it out anew, so a library scan that sees a swapped file
 takes it off the list. The page adds it up itself (`app/upgrades/logic.ts`),
 so the filter needs no request: source groups (what you have now), a
 target group (the one to switch to, always one), and a Format menu with
@@ -358,7 +492,11 @@ lint and tests run in the container (`docker compose -f
 docker-compose.dev.yml exec media-overview npm run typecheck`, `… npm run
 lint`, `… npm test`). Prettier formats the code (`.prettierrc.json`, width
 120, Tailwind classes sorted by its plugin; `components/ui/` stays as shadcn
-wrote it): run `… npm run format` after an edit.
+wrote it): run `… npm run format` after an edit. The library's disks are
+mounted by a gitignored `docker-compose.dev.local.yml` at `/library/<disk>`
+(start with both files, `-f docker-compose.dev.yml -f
+docker-compose.dev.local.yml`); the dev container installs ffmpeg for
+ffprobe on start, like the image.
 
 ## Tests
 

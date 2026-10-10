@@ -39,7 +39,7 @@ const unit = (over: Partial<Unit> = {}): Unit => ({
   title: "Heat",
   year: 1995,
   tmdbId: 949,
-  imageTag: "tag",
+  posterPath: "/heat.jpg",
   season: null,
   fileName: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv",
   files: 1,
@@ -126,9 +126,9 @@ describe("what changes", () => {
   });
 
   it("writes the change with its sign", () => {
-    expect(formatChange(1.1 * GB)).toBe("+1,10 GB");
-    expect(formatChange(-512 * 1024 * 1024)).toBe("−512,00 MB");
-    expect(formatChange(0)).toBe("±0 B");
+    expect(formatChange(1.1 * GB)).toBe("+1.10\u202fGB");
+    expect(formatChange(-512 * 1024 * 1024)).toBe("−512.00\u202fMB");
+    expect(formatChange(0)).toBe("±0\u202fB");
     expect(formatChange(null)).toBe("?");
   });
 });
@@ -168,12 +168,12 @@ describe("switchSummary", () => {
     expect(tiles).toEqual([
       { label: "VECTOR has", value: "3", hint: "of 4 movies from other groups", muted: false },
       { label: "Original audio", value: "2", hint: "German only now, DL or ML then", muted: false },
-      { label: "Storage", value: "−2,00 GB", hint: "1 movie without a size", muted: false },
-      { label: "VECTOR's share", value: "80 %", hint: "of the movie files, 20 % now" },
+      { label: "Storage", value: "−2.00\u202fGB", hint: "1 movie without a size", muted: false },
+      { label: "VECTOR's share", value: "80\u202f%", hint: "of the movie files, 20\u202f% now" },
     ]);
     const costs = switchTiles(switchSummary([unit()], options()), options(), "shows");
-    expect(costs[2]).toMatchObject({ value: "+1,00 GB", hint: "9,00 GB for 8,00 GB" });
-    expect(costs[3]).toMatchObject({ hint: "of the episode files, 0 % now" });
+    expect(costs[2]).toMatchObject({ value: "+1.00\u202fGB", hint: "9.00\u202fGB for 8.00\u202fGB" });
+    expect(costs[3]).toMatchObject({ hint: "of the episode files, 0\u202f% now" });
     const none = switchTiles(switchSummary([unit({ alternatives: [] })], options()), options(), "movies");
     expect(none[0]).toMatchObject({ value: "0", muted: true });
     expect(none[2]).toMatchObject({ value: "–", muted: true });

@@ -1,5 +1,5 @@
 import { TMDB_API_KEY } from "./env";
-import { ensureMetadataLanguage } from "./sync-manager";
+import { TMDB_LANGUAGE } from "./env";
 import { searchTmdbTitle } from "./tmdb";
 import { parseReleaseName, sameTitle, withUmlauts } from "./title-match";
 import { linkInfo } from "./hosters";
@@ -32,7 +32,7 @@ export async function matchName(name: string): Promise<DownloadMedia | null> {
   const parsed = parseReleaseName(release);
   if (!parsed.title) return null;
   const type = isShowName(release) ? "tv" : "movie";
-  const language = await ensureMetadataLanguage();
+  const language = TMDB_LANGUAGE;
   // A show's year in a release name is rare and often the season's, not
   // the first air date: search without it if nothing fits with it.
   const years = parsed.year && type === "tv" ? [parsed.year, null] : [parsed.year];
@@ -60,6 +60,7 @@ const g = globalThis as unknown as {
   __downloadMatching?: Promise<void> | null;
   __downloadChecking?: Promise<void> | null;
   __downloadChecked?: Map<number, number>;
+  __downloadOnline?: Set<number>;
 };
 
 export function matchPendingPackages() {
@@ -75,18 +76,27 @@ export function matchPendingPackages() {
   });
 }
 
-// Files not started yet whose size isn't known (pasted links, a container
-// without sizes): their name and size from the hoster, or marked offline,
-// so a new package shows what it holds before it's started. In the
-// background; a file the hoster didn't answer for is asked again after
-// RECHECK_MS (see test/state.ts).
+// Every file not started yet is asked about at the hoster once, like
+// JDownloader's LinkGrabber: online (its name and size filled in where
+// they're missing: pasted links, a container without sizes) or marked
+// offline, so a new package shows what it holds and whether it can be
+// had before it's started. In the background; a file the hoster didn't
+// answer for is asked again after RECHECK_MS (see test/state.ts).
 export const RECHECK_MS = 5 * 60 * 1000;
+
+// What the hoster said about a file: online, or (asked, no answer yet)
+// unknown; null if it hasn't been asked.
+export function onlineOf(fileId: number): "online" | "unknown" | null {
+  if (g.__downloadOnline?.has(fileId)) return "online";
+  return g.__downloadChecked?.has(fileId) ? "unknown" : null;
+}
 
 const looksLikeLink = (name: string) => /^https?:\/\//i.test(name) || !/\.\w{2,4}$/.test(name);
 
 export function checkPendingFiles() {
   if (g.__downloadChecking) return;
   const checked = (g.__downloadChecked ??= new Map());
+  const online = (g.__downloadOnline ??= new Set());
   const now = Date.now();
   const open = new Set(
     listPackages()
@@ -98,7 +108,7 @@ export function checkPendingFiles() {
       open.has(f.packageId) &&
       f.status === "queued" &&
       f.received === 0 &&
-      f.size === null &&
+      !online.has(f.id) &&
       now - (checked.get(f.id) ?? -Infinity) >= RECHECK_MS,
   );
   if (!todo.length) return;
@@ -107,8 +117,15 @@ export function checkPendingFiles() {
       checked.set(f.id, Date.now());
       const info = await linkInfo(f.url).catch(() => null);
       if (!info) continue;
-      if (!info.online) updateFile(f.id, { status: "failed", error: "Offline: the hoster doesn't have it anymore" });
-      else updateFile(f.id, { size: info.size, ...(info.name && looksLikeLink(f.name) ? { name: info.name } : {}) });
+      if (!info.online) {
+        updateFile(f.id, { status: "failed", error: "The hoster doesn't have it anymore" });
+        continue;
+      }
+      online.add(f.id);
+      updateFile(f.id, {
+        size: f.size ?? info.size,
+        ...(info.name && looksLikeLink(f.name) ? { name: info.name } : {}),
+      });
     }
   })().finally(() => {
     g.__downloadChecking = null;

@@ -12,3 +12,4 @@ export * from "./posters";
 export * from "./releases";
 export * from "./upgrades";
 export * from "./downloads";
+export * from "./scan";

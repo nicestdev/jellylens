@@ -6,13 +6,13 @@ import {
   archiveSets,
   kickDownloads,
   packageDir,
-  packageFile,
   packageOutputs,
   packagePath,
   safeName,
   settlePackage,
 } from "./downloader";
 import { DOWNLOAD_DIR } from "./env";
+import { eventsAfter } from "./events";
 import { addPackage, getPackage, listFiles, startPackage, updateFile } from "./store";
 
 // Downloads go to a throwaway folder of this file's own, and links are
@@ -62,6 +62,13 @@ describe("settlePackage", () => {
     settlePackage(id);
     expect(getPackage(id)).toMatchObject({ status: "failed", error: "a.mkv: File not found\nc.mkv: Failed" });
     expect(getPackage(id)?.finishedAt).not.toBeNull();
+    expect(eventsAfter(0).events).toEqual([
+      expect.objectContaining({
+        title: "Download failed",
+        description: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR: a.mkv: File not found",
+        tone: "error",
+      }),
+    ]);
   });
 
   it("waits while files come in, and is done when they all did", () => {
@@ -72,6 +79,7 @@ describe("settlePackage", () => {
     updateFile(files[1].id, { status: "done", received: 100 });
     settlePackage(id);
     expect(getPackage(id)).toMatchObject({ status: "done", error: null });
+    expect(eventsAfter(0).events).toEqual([expect.objectContaining({ title: "Downloaded", tone: "success" })]);
   });
 
   it("leaves a new package alone, even with a part the hoster has no more", () => {
@@ -136,43 +144,6 @@ describe("packageOutputs", () => {
 
   it("is empty when the folder is gone", () => {
     expect(packageOutputs({ dir: "Gone" })).toEqual([]);
-  });
-});
-
-describe("packageFile", () => {
-  it("finds a file in the package's folder, nested ones too", () => {
-    writeFiles("Pkg", { "a.mkv": "1", "Subs/de.srt": "2" });
-    expect(packageFile({ dir: "Pkg" }, "a.mkv")).toBe(path.join(DOWNLOAD_DIR, "Pkg", "a.mkv"));
-    expect(packageFile({ dir: "Pkg" }, "Subs/de.srt")).toBe(path.join(DOWNLOAD_DIR, "Pkg", "Subs", "de.srt"));
-  });
-
-  it("is null for a folder, a missing file or the package's folder itself", () => {
-    writeFiles("Pkg", { "Subs/de.srt": "2" });
-    expect(packageFile({ dir: "Pkg" }, "Subs")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, "missing.mkv")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, "")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, ".")).toBeNull();
-  });
-
-  it("never leads outside the package's folder", () => {
-    writeFiles("Pkg", { "a.mkv": "1" });
-    // A sibling whose name starts with the package's.
-    writeFiles("Pkg2", { "secret.txt": "x" });
-    fs.writeFileSync(path.join(DOWNLOAD_DIR, "top.txt"), "x");
-    expect(packageFile({ dir: "Pkg" }, "../top.txt")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, "../Pkg2/secret.txt")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, "Subs/../../top.txt")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, path.join(DOWNLOAD_DIR, "top.txt"))).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, "/etc/hostname")).toBeNull();
-  });
-
-  it("doesn't follow a symlink out of the folder, only one inside it", () => {
-    writeFiles("Pkg", { "a.mkv": "1" });
-    fs.writeFileSync(path.join(DOWNLOAD_DIR, "top.txt"), "x");
-    fs.symlinkSync(path.join(DOWNLOAD_DIR, "top.txt"), path.join(DOWNLOAD_DIR, "Pkg", "out.txt"));
-    fs.symlinkSync("a.mkv", path.join(DOWNLOAD_DIR, "Pkg", "in.mkv"));
-    expect(packageFile({ dir: "Pkg" }, "out.txt")).toBeNull();
-    expect(packageFile({ dir: "Pkg" }, "in.mkv")).toBe(path.join(DOWNLOAD_DIR, "Pkg", "in.mkv"));
   });
 });
 

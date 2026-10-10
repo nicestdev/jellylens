@@ -44,8 +44,8 @@ export const formatSpeed = (bytesPerSecond: number) => `${formatBytes(bytesPerSe
 export function timeLeft(remaining: number, speed: number): string | null {
   if (speed <= 0 || remaining <= 0) return null;
   const minutes = Math.ceil(remaining / speed / 60);
-  if (minutes < 60) return `${minutes} min`;
-  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  if (minutes < 60) return `${minutes}\u202fmin`;
+  return `${Math.floor(minutes / 60)}\u202fh ${minutes % 60}\u202fmin`;
 }
 
 // A package's Status cell (the share done is in Progress beside it).
@@ -131,20 +131,6 @@ export const canResumeAll = (packages: DownloadPackageItem[]) => packages.some((
 export const isActive = (packages: DownloadPackageItem[]) =>
   packages.some((p) => p.status === "queued" || p.status === "downloading" || p.status === "extracting");
 
-// The page's subtitle.
-export function headline(packages: DownloadPackageItem[]): string {
-  const count = (status: DownloadPackageItem["status"]) => packages.filter((p) => p.status === status).length;
-  const parts = [
-    count("pending") ? `${count("pending")} new` : null,
-    count("downloading") ? `${count("downloading")} downloading` : null,
-    count("queued") ? `${count("queued")} waiting` : null,
-    count("paused") ? `${count("paused")} paused` : null,
-    count("extracting") ? `${count("extracting")} extracting` : null,
-    count("failed") ? `${count("failed")} failed` : null,
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Fetches DLC containers' files from ddownload and extracts them.";
-}
-
 // The list in parts, empty ones left out: New (waiting for a start, in the
 // order they came), Running (failed ones first, they need a hand; then in
 // queue order, by when they were started) and Finished (newest first).
@@ -158,7 +144,8 @@ export function groups(packages: DownloadPackageItem[]): { title: string; packag
         (a.startedAt ?? a.createdAt).localeCompare(b.startedAt ?? b.createdAt) ||
         a.id - b.id,
     );
-  const finished = packages.filter((p) => p.status === "done");
+  // Once moved into the library, it's on Organize's list instead.
+  const finished = packages.filter((p) => p.status === "done" && !p.movedTo);
   return [
     { title: "New", packages: pending },
     { title: "Running", packages: running },
@@ -166,44 +153,67 @@ export function groups(packages: DownloadPackageItem[]): { title: string; packag
   ].filter((g) => g.packages.length);
 }
 
-// The badge for what the library already has of a package, and its
-// tooltip; null if nothing.
-export function libraryBadge(pkg: DownloadPackageItem): { label: string; hint: string } | null {
+// The icon for what the library already has of a package, and its
+// tooltip; exact: some of it is from this very release. null if nothing.
+export function libraryBadge(pkg: DownloadPackageItem): { label: string; hint: string; exact: boolean } | null {
   const lib = pkg.library;
   if (!lib) return null;
-  const hint = lib.have.length ? `You have: ${lib.have.join(", ")}` : "";
-  if (pkg.media?.type === "movie") return { label: "In library", hint };
+  const hint = lib.have.join(", ");
+  const exact = lib.exact > 0;
+  // ", 3 of this release" after a show's count; all of it: ", all of this release".
+  const ofThis = (n: number) =>
+    exact ? (lib.exact >= n ? ", all of this release" : `, ${lib.exact} of this release`) : "";
+  if (pkg.media?.type === "movie") return { label: exact ? "This release in library" : "In library", hint, exact };
   if (lib.parts) {
     const label = lib.partsOwned === lib.parts ? "All in library" : `${lib.partsOwned} of ${lib.parts} in library`;
-    return lib.partsOwned ? { label, hint } : null;
+    return lib.partsOwned ? { label: label + ofThis(lib.partsOwned), hint, exact } : null;
   }
   if (lib.season?.episodes)
     return {
-      label: `${seasonCode(lib.season.number)}: ${plural(lib.season.episodes, "episode")} in library`,
+      label:
+        `${seasonCode(lib.season.number)}: ${plural(lib.season.episodes, "episode")} in library` +
+        ofThis(lib.season.episodes),
       hint,
+      exact,
     };
   return null;
 }
 
-// A failed package's error for its row: the first line's reason without
-// its file name (a failed file's or the archive's, "name: reason"), "+N"
-// for any more; the whole of it, names and all, goes in the tooltip.
+// A failure for its row (Downloads, Organize): the first line's reason
+// without its file name (a failed file's or the archive's, "name:
+// reason"), as a sentence starts and without its closing period, "+N" for
+// any more; the whole of it, names and all, goes in the tooltip.
 export function errorLine(error: string | null): string {
   const lines = (error ?? "").split("\n").filter(Boolean);
   if (!lines.length) return "Failed";
-  const first = lines[0].replace(/^[^:]*: /, "");
+  const reason = lines[0].replace(/^[^:]*: /, "").replace(/\.$/, "");
+  const first = reason.charAt(0).toUpperCase() + reason.slice(1);
   return lines.length > 1 ? `${first} +${lines.length - 1}` : first;
 }
 
-// What's wrong with a new package's parts before it's started: parts the
-// hoster has no more (the check marks them failed), gaps in a multi-part
-// RAR's numbering (it can't be extracted then). line for its row, detail
-// (the file names) for the tooltip; null when nothing is.
-export function partProblem(pkg: DownloadPackageItem): { line: string; detail: string } | null {
-  if (pkg.status !== "pending") return null;
-  const offline = pkg.files.filter((f) => f.status === "failed");
+// A new package's parts before it's started, for its Status: Checking
+// while the hoster is asked about them (lib/download-match.ts); then how
+// many are online of how many there should be (gaps in a multi-part RAR's
+// numbering count; it can't be extracted then); red when one is missing,
+// peach when the hoster didn't answer for one. One that failed (offline, or
+// no account for its hoster) says why instead, red, and how many ("No
+// account for its hoster · 2 parts"; "+1" for another reason), each one's
+// name and reason on hover.
+export function partCheck(pkg: DownloadPackageItem): { line: string; hint?: string; tone?: "error" | "warning" } {
+  const parts = pkg.files.filter((f) => f.status !== "skipped");
+  const open = parts.filter((f) => f.status === "queued");
+  const asked = open.filter((f) => f.checked !== null).length;
+  if (asked < open.length) return { line: `Checking · ${asked}/${open.length}` };
+  const offline = parts.filter((f) => f.status === "failed");
+  if (offline.length) {
+    const hint = offline.map((f) => `${f.name}: ${f.error ?? "Failed"}`).join("\n");
+    const reasons = [...new Set(offline.map((f) => errorLine(f.error)))];
+    const more = reasons.length > 1 ? ` +${reasons.length - 1}` : "";
+    return { line: `${reasons[0]}${more} · ${plural(offline.length, "part")}`, hint, tone: "error" };
+  }
+  const unknown = open.filter((f) => f.checked !== "online");
   const sets = new Map<string, Set<number>>();
-  for (const f of pkg.files) {
+  for (const f of parts) {
     const m = /^(.*)\.part(\d+)\.rar$/i.exec(f.name);
     if (!m) continue;
     const key = m[1].toLowerCase();
@@ -212,15 +222,8 @@ export function partProblem(pkg: DownloadPackageItem): { line: string; detail: s
   const missing: string[] = [];
   for (const nums of sets.values())
     for (let n = 1; n <= Math.max(...nums); n++) if (!nums.has(n)) missing.push(`part${n}`);
-  const lines = [
-    offline.length ? `${plural(offline.length, "part")} offline` : null,
-    missing.length ? `${missing.length > 2 ? plural(missing.length, "part") : missing.join(", ")} missing` : null,
-  ].filter(Boolean);
-  if (!lines.length) return null;
-  return {
-    line: lines.join(" · "),
-    detail: [...offline.map((f) => `${f.name}: ${f.error ?? "Offline"}`), ...missing.map((p) => `${p} missing`)].join(
-      "\n",
-    ),
-  };
+  // Missing parts count as parts too, so a gap shows in the numbers.
+  const line = `Online · ${open.length - unknown.length}/${parts.length + missing.length}`;
+  const tone = missing.length ? "error" : unknown.length ? "warning" : undefined;
+  return { line, tone };
 }

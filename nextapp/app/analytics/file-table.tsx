@@ -109,7 +109,7 @@ export function FileTable({ library, version }: { library: Library; version?: st
         aria-busy={loading}
         className={cn("mt-3 overflow-hidden rounded-lg border transition-opacity", loading && data && "opacity-60")}
       >
-        <table className="w-full border-collapse text-[13px]">
+        <table className="w-full border-collapse text-sm">
           {/* Not on a phone, like the other tables: the rows say it all. */}
           <thead className="max-sm:hidden">
             <tr className="bg-card text-left text-xs text-muted-foreground">
@@ -151,7 +151,7 @@ export function FileTable({ library, version }: { library: Library; version?: st
                       ) : null}
                     </div>
                     <div
-                      className="font-mono text-[11px] [overflow-wrap:anywhere] text-muted-foreground sm:truncate"
+                      className="font-mono text-xs [overflow-wrap:anywhere] text-muted-foreground sm:truncate"
                       title={f.fileName}
                     >
                       <Breakable text={f.fileName} />

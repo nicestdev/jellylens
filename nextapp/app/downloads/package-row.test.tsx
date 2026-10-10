@@ -16,6 +16,7 @@ const file = (id: number, over: Partial<DownloadFileItem> = {}): DownloadFileIte
   error: null,
   speed: null,
   inLibrary: false,
+  checked: "online",
   ...over,
 });
 
@@ -30,6 +31,10 @@ const pkg: DownloadPackageItem = {
   finishedAt: null,
   media: null,
   matched: true,
+  movedTo: null,
+  movedAt: null,
+  movedFiles: null,
+  replaced: false,
   library: null,
   sources: ["ddownload"],
   outputs: [],
@@ -46,57 +51,67 @@ const renderRow = (p: DownloadPackageItem, onRemove = vi.fn(), onAction = vi.fn(
     </table>,
   );
 
-const more = () => screen.getByRole("button", { name: `More for ${pkg.name}` });
-// The state is there twice: in its column, and under the title for phones.
-const status = (name: string) => screen.getAllByRole("button", { name })[0];
+// The ⋯ is there twice, on a phone in the title's line and from sm up in a
+// column of its own (CSS shows one); the column's comes last.
+const more = () => screen.getAllByRole("button", { name: `More for ${pkg.name}` }).at(-1)!;
 
 describe("PackageRow", () => {
-  it("shows the title over the release name, its state and size", () => {
+  it("shows the title over the release name, how many parts are online and its size", () => {
     renderRow({ ...pkg, files: [file(1), file(2)] });
     expect(screen.getByText("Heat")).toBeInTheDocument();
     expect(screen.getByText("1995")).toBeInTheDocument();
     expect(screen.getByText("Heat.1995.German.DL.1080p.BluRay.x264-WAYNE")).toBeInTheDocument();
-    expect(screen.getAllByText("Ready")).toHaveLength(2);
-    expect(screen.getAllByText("1,00 GB")).toHaveLength(2);
+    // In its column and under the title for phones.
+    expect(screen.getAllByText("Online · 2/2")).toHaveLength(2);
+    expect(screen.getAllByText("1.00 GB")).toHaveLength(2);
     // No parts to open.
     expect(screen.queryByText("Heat.1995.part1.rar")).toBeNull();
   });
 
-  it("while downloading, puts the share done and the speed under the bar", () => {
+  it("while downloading, puts its state, speed and the share done under the bar", () => {
     renderRow({
       ...pkg,
       status: "downloading",
       files: [file(1, { status: "downloading", received: 256 * 1024 ** 2, speed: 12 * 1024 ** 2 }), file(2)],
     });
     expect(screen.getAllByText("25%")).toHaveLength(2);
-    expect(screen.getAllByText(/^12,00 MB\/s · \d+ min$/)).toHaveLength(2);
+    expect(screen.getAllByText(/^Loading · 12.00 MB\/s · \d+ min$/)).toHaveLength(2);
   });
 
-  it("starts, pauses, resumes or retries on a click on its state, showing that action on hover", async () => {
-    const cases: [DownloadPackageItem["status"], string, string][] = [
-      ["pending", "Ready", "Start"],
-      ["queued", "Waiting", "Pause"],
-      ["downloading", "Loading", "Pause"],
-      ["paused", "Paused", "Resume"],
-      ["failed", "Failed", "Retry"],
+  it("shows its state as plain text, what to do about it first in its menu", async () => {
+    const cases: [DownloadPackageItem["status"], RegExp, string][] = [
+      ["pending", /^Online · 1\/1$/, "Start"],
+      ["queued", /^Waiting · /, "Pause"],
+      ["downloading", /^Loading · /, "Pause"],
+      ["paused", /^Paused · /, "Resume"],
+      ["failed", /^Failed$/, "Retry"],
     ];
     const actions = { Start: "start", Pause: "pause", Resume: "resume", Retry: "retry" };
     for (const [state, label, action] of cases) {
       const onAction = vi.fn();
       const { unmount } = renderRow({ ...pkg, status: state, files: [file(1)] }, vi.fn(), onAction);
-      const button = status(action);
-      expect(button).toHaveTextContent(label);
-      expect(button).toHaveTextContent(action);
-      expect(button).toHaveAttribute("title", action);
-      await userEvent.click(button);
+      // In its column and under the title for phones (a failed one without
+      // an error says Failed); nothing to click.
+      expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(2);
+      // Only the ⋯, once for phones and once in its column.
+      expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+        `More for ${pkg.name}`,
+        `More for ${pkg.name}`,
+      ]);
+      await userEvent.click(more());
+      const items = await screen.findAllByRole("menuitem");
+      expect(items[0]).toHaveTextContent(action);
+      await userEvent.click(items[0]);
       expect(onAction).toHaveBeenCalledWith(actions[action as keyof typeof actions]);
       unmount();
     }
   });
 
-  it("has nothing to click while extracting or done", () => {
+  it("offers nothing to start or pause while extracting", async () => {
     renderRow({ ...pkg, status: "extracting", extractPercent: 40, files: [file(1, { status: "done" })] });
-    expect(screen.queryByRole("button", { name: /Start|Pause|Resume|Retry/ })).toBeNull();
+    await userEvent.click(more());
+    await screen.findByRole("menuitem", { name: "Delete" });
+    expect(screen.queryByRole("menuitem", { name: /Start|Pause|Resume|Retry/ })).toBeNull();
   });
 
   it("asks whether to start only the missing episodes when the library has some", async () => {
@@ -104,14 +119,13 @@ describe("PackageRow", () => {
     renderRow(
       {
         ...pkg,
-        library: { have: [], parts: 3, partsOwned: 1, season: null },
+        library: { have: [], exact: 0, parts: 3, partsOwned: 1, season: null },
         files: [file(1, { inLibrary: true }), file(2), file(3)],
       },
       vi.fn(),
       onAction,
     );
-    await userEvent.click(status("Start"));
-    expect(onAction).not.toHaveBeenCalled();
+    await userEvent.click(more());
     expect(await screen.findByRole("menuitem", { name: "Start all 3" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("menuitem", { name: "Start only the 2 missing" }));
     expect(onAction).toHaveBeenCalledWith("start", { only: "missing" });
@@ -125,10 +139,22 @@ describe("PackageRow", () => {
     expect(lines[1]).toHaveAttribute("title", error);
   });
 
-  it("warns of a new package's offline or missing parts", () => {
-    renderRow({ ...pkg, files: [file(1, { status: "failed", error: "File not found" }), file(3)] });
-    const lines = screen.getAllByText("1 part offline · part2 missing");
-    expect(lines[1]).toHaveAttribute("title", "Heat.1995.part1.rar: File not found\npart2 missing");
+  it("counts a new package's parts online while the hoster is asked, red when one is missing, why when one failed", () => {
+    const { unmount } = renderRow({ ...pkg, files: [file(1), file(2, { checked: null })] });
+    expect(screen.getAllByText("Checking · 1/2")).toHaveLength(2);
+    unmount();
+    // part2 missing: 2 of 3 online.
+    const missing = renderRow({ ...pkg, files: [file(1), file(3)] });
+    for (const line of screen.getAllByText("Online · 2/3")) expect(line).toHaveClass("text-destructive");
+    missing.unmount();
+    // part1 offline: why, rather than how many are online.
+    renderRow({ ...pkg, files: [file(1, { status: "failed", error: "File not found" }), file(2), file(3)] });
+    for (const line of screen.getAllByText("File not found · 1 part")) expect(line).toHaveClass("text-destructive");
+  });
+
+  it("is peach for parts the hoster didn't answer for", () => {
+    renderRow({ ...pkg, files: [file(1), file(2, { checked: "unknown" })] });
+    for (const line of screen.getAllByText("Online · 1/2")) expect(line).toHaveClass("text-warning");
   });
 
   it("removes a new package from its menu on a second click, the first one only arming it", async () => {
@@ -157,7 +183,7 @@ describe("PackageRow", () => {
     expect(onRemove).not.toHaveBeenCalled();
   });
 
-  it("offers a finished package's files to download, one item each, and Delete", async () => {
+  it("offers only Delete for a finished package, files and all", async () => {
     const onRemove = vi.fn();
     renderRow(
       {
@@ -170,24 +196,13 @@ describe("PackageRow", () => {
       },
       onRemove,
     );
-    expect(screen.getAllByText("9,00 GB")).toHaveLength(2);
+    expect(screen.getAllByText("9.00 GB")).toHaveLength(2);
     await userEvent.click(more());
-    const first = await screen.findByRole("menuitem", { name: "Download 1" });
-    expect(first).toHaveAttribute("href", "/api/downloads/1/file?path=Heat.1995.mkv");
-    expect(screen.getByRole("menuitem", { name: "Download 2" })).toHaveAttribute(
-      "href",
-      "/api/downloads/1/file?path=Extras%2FMaking%20of.mkv",
-    );
-    expect(screen.queryByRole("menuitem", { name: "Reset" })).toBeNull();
+    await screen.findByRole("menuitem", { name: "Delete" });
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
     await userEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sure? Click again" }));
     expect(onRemove).toHaveBeenCalledOnce();
-  });
-
-  it("calls a single file just Download", async () => {
-    renderRow({ ...pkg, status: "done", outputs: [{ path: "Heat.1995.mkv", size: 1 }] });
-    await userEvent.click(more());
-    expect(await screen.findByRole("menuitem", { name: "Download" })).toBeInTheDocument();
   });
 
   it("disarms after a few seconds", async () => {

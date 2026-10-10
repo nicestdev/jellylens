@@ -29,6 +29,12 @@ export const MUTED_CELL = cn(CELL, "text-muted-foreground");
 export const NUMBER_CELL = cn(CELL, "text-right font-num text-muted-foreground tabular-nums");
 // The stretched first cell: max-w-0 lets it truncate instead of growing.
 export const TITLE_CELL = cn(CELL, "max-w-0 truncate");
+// A row's ⋯ menu: from sm up in a column of its own at the row's end,
+// centered like the other cells (MENU_CELL, a phone: false column); on a
+// phone at the right end of the title's first line (PHONE_MENU around it),
+// so the lines under the title take the whole width.
+export const MENU_CELL = cn(CELL, "py-0 text-right", NOT_ON_PHONE);
+export const PHONE_MENU = "-my-1 shrink-0 self-center sm:hidden";
 // h-9: every table's rows the same height, buttons or not.
 export const ROW = "h-9 border-t border-border/70 transition-colors hover:bg-muted/40";
 
@@ -47,9 +53,9 @@ export function DataTable({ columns, children, flat }: { columns: Column[]; chil
     <div className={cn("relative overflow-x-auto", flat ? "-mx-3" : "rounded-lg border bg-table")}>
       <table
         className={cn(
-          "w-full border-collapse text-[13px]",
+          "w-full border-collapse text-sm",
           fixed ? "table-fixed" : "",
-          fixed ? (fits ? "sm:min-w-[48rem]" : "min-w-[48rem]") : fits ? "sm:min-w-[640px]" : "min-w-[640px]",
+          fixed ? (fits ? "sm:min-w-[48rem]" : "min-w-[48rem]") : fits ? "sm:min-w-[40rem]" : "min-w-[40rem]",
         )}
       >
         {/* Not on a phone: there each row folds its values under the title,

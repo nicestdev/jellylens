@@ -84,7 +84,7 @@ describe("GET /api/config", () => {
       passwords: ["example.com"],
     });
     expect(JSON.stringify(body)).not.toContain("env-one");
-    expect(body.intervals).toEqual({ jellyfin: 6, tmdb: 24, missing: 24, releases: 6 });
+    expect(body.intervals).toEqual({ library: 6, tmdb: 24, missing: 24, releases: 6 });
   });
 
   it("is kept from users who aren't admins (proxy.ts)", async () => {
@@ -106,7 +106,7 @@ describe("GET /api/config", () => {
           },
         }),
       );
-    for (const path of ["/api/config", "/api/downloads", "/api/downloads/1/file?path=a.mkv"]) {
+    for (const path of ["/api/config", "/api/downloads", "/api/organize", "/api/events"]) {
       expect((await call(path, false)).status, path).toBe(403);
       expect((await call(path, true)).headers.get("x-middleware-next"), path).toBe("1");
     }

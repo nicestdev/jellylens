@@ -18,19 +18,20 @@ to add next.
 
 ## Features
 
-- 🎬 **Library overview**: your movies and shows as a poster grid, with the resolution on each movie and the airing status on each show. Search, sort, and filter by genre or audio language.
-- 🧩 **Missing episodes**: gaps, whole missing seasons and seasons that are still airing, all checked against TMDB. Ignore anything you don't care about.
-- 🎞️ **Movie collections**: for every TMDB collection you own part of (*The Lord of the Rings*, *Bourne*, …), the movies you don't have yet. Only those out on disc or digital count, and each one goes on your wishlist with a click on its poster. A badge shows which of your favorite release groups have released a missing movie; click it to see the releases.
-- 🔍 **Mismatch detection**: episodes and seasons TMDB doesn't know about, usually a wrong match or a duplicate file.
-- 🗣️ **Language coverage**: flags shows where only some seasons have your audio language.
-- 📝 **Discover and Wishlist**: search TMDB or browse what's trending and put what you want on your Wishlist. Titles you own are marked, and wishlist entries switch to *In library* when they show up in Jellyfin, with the next digital or Blu-ray date for what isn't out yet. Everyone has their own Wishlist; admins see all of them, most wanted first, with a badge for the favorite release groups that have released each one, which opens its releases.
-- 📦 **Releases**: pick your favorite P2P and scene groups in Settings, and Jellylens keeps their release lists from [xREL](https://www.xrel.to) in sync. The Releases page shows each title as a poster with the qualities it comes in; search and filter by group or quality to see whether something is out from a group you like, and open a title for its page with every release of it, plus what [WCX](#wcx-and-downloads) lists for it with its download mirrors. Releases below 720p (XviD, SD, DVD) are hidden unless you turn them on in Settings. Each title is checked against its release names, so a release xREL linked to the wrong movie doesn't show that movie's poster or title.
-- 📊 **Analytics**: what your movies' and episodes' files are made of: totals, and charts of files and storage by release group, audio language, resolution and codec. Click a piece of a chart to list its files, or search, filter and sort every file below.
-- ⬆️ **Upgrades**: pick one of your favorite release groups and see which of your movies, or seasons of your shows, it has released too, in the quality and codec you want: what changes for each (group, quality, codec, original audio), how much storage it frees or takes, and how the group's share of your library would grow. Narrow it to the groups you have now, or to releases that add the original audio to a German-only file.
-- 📥 **Downloads**: drop in DLC containers, paste hoster links or pick a WCX mirror on a title page. Each package is matched to its movie or show on TMDB and checked against your library, so you can leave out the episodes you already have, and only starts when you say so. ddownload.com goes through your premium account, every other hoster through Real-Debrid. A queue of 1–10 files at a time with pause, resume and retry; archives are extracted with 7-Zip as soon as their parts are in, with the passwords you set.
-- 🔐 **Jellyfin sign-in**: log in with your Jellyfin account. Missing, Releases, Downloads, Analytics, Upgrades and Settings are for Jellyfin admins only.
-- 🔄 **Automatic sync**: Jellyfin, TMDB and xREL refresh on a schedule you set with environment variables; the Settings page shows it and lets you sync or recheck what's missing right away.
-- 📱 **Works on any device**: responsive, dark UI with a sidebar on desktop and a full-screen menu on phones.
+- 🎬 **Library**: your movies and shows as posters, read straight from your disks; search, sort, filter by genre or audio language.
+- 🧩 **Missing**: missing episodes and seasons, checked against TMDB.
+- 🎞️ **Collections**: the movies you lack from collections you own part of.
+- 🔍 **Mismatches**: episodes and seasons TMDB doesn't know, usually a bad match.
+- 📝 **Discover and Wishlist**: search TMDB, keep a wishlist per user.
+- 📦 **Releases**: your favorite release groups' releases from [xREL](https://www.xrel.to), with [WCX](#wcx-and-downloads) mirrors.
+- 📊 **Analytics**: your files by group, language, resolution and codec.
+- ⬆️ **Upgrades**: what a favorite group has in better quality than yours.
+- 📥 **Downloads**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip.
+- 📂 **Organize**: move finished downloads into your library, checked, with Undo; replace what you have or keep both; then a rescan, Jellyfin's too.
+- 🔔 **Notes**: a heads-up when a download, a move or a sync is done or failed.
+- 🔐 **Jellyfin sign-in**: admin pages for Jellyfin admins only.
+- 🔄 **Automatic sync** of your disks, TMDB and xREL, on a schedule you set.
+- 📱 **Any device**: dark, responsive UI.
 
 ## Installation
 
@@ -43,6 +44,8 @@ services:
       JELLYFIN_URL: http://192.168.1.10:8096
       JELLYFIN_API_KEY: your_jellyfin_api_key
       TMDB_API_KEY: your_tmdb_api_key
+      TMDB_LANGUAGE: en-US
+      LIBRARY_DIR: /library
       DOWNLOAD_DIR: /downloads
       # Optional: Downloads (see WCX and Downloads)
       # DDOWNLOAD_LOGIN: your_ddownload_login
@@ -51,6 +54,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./downloads:/downloads
+      - /srv/media:/library/disk1
     ports:
       - 3000:3000
     restart: unless-stopped
@@ -62,10 +66,12 @@ Available for `linux/amd64` and `linux/arm64`.
 
 | Variable | Required | Default | Description |
 | --- | :---: | :---: | --- |
-| `JELLYFIN_URL` | ✅ | | Address of your Jellyfin server, as seen from the container |
+| `LIBRARY_DIR` | ✅ | | Your library's disks inside the container (see [Library](#library)) |
+| `JELLYFIN_URL` | ✅ | | Address of your Jellyfin server, as seen from the container, for sign-in and rescans |
 | `JELLYFIN_API_KEY` | ✅ | | Jellyfin API key (*Dashboard → API Keys*) |
 | `TMDB_API_KEY` | ✅ | | [TMDB API key](https://www.themoviedb.org/settings/api) (v3) |
-| `JELLYFIN_SYNC_INTERVAL_HOURS` | | `6` | Hours between Jellyfin library syncs, `0` = off |
+| `TMDB_LANGUAGE` | | `en-US` | Language of titles, genres and posters, e.g. `de-DE` |
+| `LIBRARY_SCAN_INTERVAL_HOURS` | | `6` | Hours between library scans, `0` = off |
 | `TMDB_SYNC_INTERVAL_HOURS` | | `24` | Hours between TMDB metadata refreshes, `0` = off |
 | `MISSING_RECHECK_INTERVAL_HOURS` | | `24` | Hours between rechecks for missing episodes and movies, `0` = off |
 | `XREL_SYNC_INTERVAL_HOURS` | | `6` | Hours between syncs of your release groups' lists from xREL, `0` = off |
@@ -78,7 +84,7 @@ Available for `linux/amd64` and `linux/arm64`.
 | `ARCHIVE_PASSWORDS` | | | Comma-separated passwords tried on archives, after the ones set on Settings |
 | `DOWNLOAD_DIR` | | `/app/data/downloads` | Where downloads are saved and extracted inside the container |
 
-All data is kept in `/app/data`: the SQLite database `jellylens.db` (library, requests, settings, releases) and the poster caches. The server runs as the unprivileged `node` user and takes ownership of that folder when the container starts, so a bind mount like `./data` works whoever owns it.
+All data is kept in `/app/data`: the SQLite database `jellylens.db` (library, file probes, requests, settings, releases) and the poster cache. The server runs as the unprivileged `node` user and takes ownership of that folder when the container starts, so a bind mount like `./data` works whoever owns it.
 
 ### WCX and Downloads
 
@@ -91,9 +97,37 @@ Both are optional and stay out of the way until configured. Without `WCX_API_URL
 | [ddownload.com](https://ddownload.com) | Premium: `DDOWNLOAD_LOGIN`, `DDOWNLOAD_PASSWORD` | ddownload.com, ddl.to |
 | [Real-Debrid](https://real-debrid.com) | API token: `REALDEBRID_TOKEN` | [every hoster it supports](https://real-debrid.com/compare), e.g. Rapidgator |
 
-A link on a hoster neither covers is reported on its package. DLC containers are decrypted through JDownloader's key service; their links then go the same way.
+A link on a hoster neither covers stays in its package, marked *No account for its hoster*. DLC containers are decrypted through JDownloader's key service; their links then go the same way.
 
 Downloads and their extracted files go to the `/downloads` mount; point it at any host folder, e.g. one next to your media. Without `DOWNLOAD_DIR` they land in the data folder.
+
+### Library
+
+Jellylens reads your library from its disks, not from Jellyfin. `LIBRARY_DIR` holds **one folder per disk, each with a `movies` and a `shows` folder** in it:
+
+```
+/library
+├── disk1
+│   ├── movies
+│   └── shows
+└── disk2
+    ├── movies
+    └── shows
+```
+
+Mount each disk on its own (`- /mnt/disk1:/library/disk1`, `- /mnt/disk2:/library/disk2`), so Jellylens sees each one's free space. With a single disk, mount just that one.
+
+Every title needs its own folder named `Name (Year) [tmdbid-N]`, and every episode file an `S01E02` in its name; folders without a TMDB id are skipped. The first scan reads every video with ffprobe, which takes a while; later scans only read new or changed files.
+
+### Organize
+
+The Organize page moves finished downloads into your library. It lists the disks with their free space, and for each download picks the disk that already has the title, else the first one it fits on; you can pick another.
+
+A movie goes to `movies/Name (Year) [tmdbid-N]/`, a show's episodes to `shows/Name (Year) [tmdbid-N]/Season NN/`, named with TMDB's title as TMDB writes it. A disk with a folder for that TMDB id already, whatever it's called, gets the files in that folder. Only videos and subtitles go, not samples, `.nfo` or other extras; a movie's video named with spaces gets the release's name instead.
+
+If the library has the title already, you choose: **Replace** takes the old files out once the new ones are in (no Undo then), **Add as version** keeps both, or **Delete** the download.
+
+After a move, Jellylens scans the library again and asks Jellyfin to do the same, so point your Jellyfin libraries at the same folders (or a pool over them). **Rescan library** in the Organize page's ⋯ menu does it by hand.
 
 ### Exposing Jellylens to the internet
 
@@ -119,6 +153,8 @@ services:
       JELLYFIN_URL: http://192.168.1.10:8096
       JELLYFIN_API_KEY: your_jellyfin_api_key
       TMDB_API_KEY: your_tmdb_api_key
+      TMDB_LANGUAGE: en-US
+      LIBRARY_DIR: /library
       DOWNLOAD_DIR: /downloads
       # Optional: Downloads (see WCX and Downloads)
       # DDOWNLOAD_LOGIN: your_ddownload_login
@@ -127,6 +163,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./downloads:/downloads
+      - /srv/media:/library/disk1
     restart: unless-stopped
 
   cloudflared:

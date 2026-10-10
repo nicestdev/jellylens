@@ -10,7 +10,7 @@ import { SearchInput } from "@/components/search-input";
 import { FacetMenu, FilterChips, type Facet } from "@/components/filter-menu";
 import { SortMenu } from "@/components/sort-menu";
 import { RequestAction, itemKey, useRequests } from "@/components/request-tiles";
-import { apiFetch, tmdbPoster } from "@/lib/api-client";
+import { apiFetch, tmdbImage, tmdbPoster } from "@/lib/api-client";
 import type { ReleasesResponse, ReleaseTitle as Title } from "@/lib/api-types";
 import { toggled, type SortDir } from "@/lib/facets";
 import { FACETS, SORTS, facetValues, noFilters, releasesUrl, subtitle, type FacetKey, type SortKey } from "./logic";
@@ -19,12 +19,10 @@ import { useReleasesChanged } from "@/hooks/use-releases-changed";
 import { titlePath } from "@/lib/title-path";
 import { titleMeta } from "@/lib/release-labels";
 
-// Jellyfin's own poster for an owned title (the one the Movies page shows),
-// else TMDB's, both through Jellylens' caches.
-const poster = (t: Title) =>
-  t.library?.imageTag
-    ? { itemId: t.library.id, imageTag: t.library.imageTag }
-    : { imageSrc: tmdbPoster(t.posterPath, t.mediaType, t.tmdbId) };
+// An owned title's poster (the one the Movies page shows), else the match's.
+const poster = (t: Title) => ({
+  imageSrc: t.library?.posterPath ? tmdbImage(t.library.posterPath) : tmdbPoster(t.posterPath, t.mediaType, t.tmdbId),
+});
 
 export default function ReleasesPage() {
   const [data, setData] = useState<ReleasesResponse | null>(null);
@@ -111,7 +109,7 @@ export default function ReleasesPage() {
   const narrowed = Boolean(query.trim()) || chips.length > 0;
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div>
         <h1 className="text-xl font-semibold">Releases</h1>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">

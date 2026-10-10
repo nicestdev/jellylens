@@ -31,6 +31,11 @@ export const REQUESTS_CHANGED = "jellylens:requests-changed";
 // DownloadsResponse as detail), so the sidebar's count follows along.
 export const DOWNLOADS_CHANGED = "jellylens:downloads-changed";
 
+// Fired on window when the sidebar's counts may be off: a background event
+// came in (a download, a move, a sync; components/event-toasts.tsx) or the
+// Organize page changed; the sidebar asks for them again.
+export const COUNTS_STALE = "jellylens:counts-stale";
+
 // Fired on window after a match was fixed on a title page, so the list it
 // was opened over (still mounted under it) loads again.
 export const RELEASES_CHANGED = "jellylens:releases-changed";

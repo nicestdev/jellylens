@@ -68,8 +68,6 @@ function wcx() {
           : '<div class="dk-dl-name" title="Heat.part1.rar"></div>',
       );
     }
-    if (url.pathname === "/System/Configuration")
-      return json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" });
     if (url.pathname === "/3/movie/949") {
       return json({
         id: 949,
@@ -242,8 +240,6 @@ function hideCx() {
         });
       }
     }
-    if (url.pathname === "/System/Configuration")
-      return json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" });
     if (url.pathname === "/3/movie/949") return json({ id: 949, title: "Heat", release_date: "1995-12-15" });
   });
 }

@@ -1,9 +1,9 @@
 import type { LanguageCoverage, ShowsResponse } from "@/lib/api-types";
-import { getEpisodes, getMismatches, getMissingSeries, getShows, type JellyfinEpisode } from "@/lib/store";
+import { getEpisodes, getMismatches, getMissingSeries, getShows, type LibraryEpisode } from "@/lib/store";
 
 // How many owned episodes carry each audio language, overall and per season,
 // so the Shows page can flag series that aren't fully in a language.
-function languageCoverage(episodes: JellyfinEpisode[]): Map<string, LanguageCoverage> {
+function languageCoverage(episodes: LibraryEpisode[]): Map<string, LanguageCoverage> {
   const bySeries = new Map<string, LanguageCoverage>();
   for (const ep of episodes) {
     if (!ep.SeriesId) continue;

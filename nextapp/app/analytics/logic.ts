@@ -49,7 +49,7 @@ export function overviewTiles(m: Stats, library: Library = "movies"): Tile[] {
     {
       label: "Release groups",
       value: formatNumber(m.groups.filter((g) => g.value !== null).length),
-      hint: `named in ${percent} % of files`,
+      hint: `named in ${percent}\u202f% of files`,
     },
   ];
 }
@@ -154,14 +154,15 @@ export function languageSegments(m: Stats): Segment[] {
   });
 }
 
-// Always one decimal ("58,3 %"); a sliver is at least 0,1 % and all but
-// a sliver at most 99,9 %, so neither reads as none or all.
+// Always one decimal ("58.3 %"); a sliver is at least 0.1 % and all but
+// a sliver at most 99.9 %, so neither reads as none or all. A narrow space
+// before the sign, as before a size's unit.
 export function percent(part: number, total: number): string {
   const share = total && part ? (part / total) * 100 : 0;
   let p = Math.round(share * 10) / 10;
   if (part > 0 && p === 0) p = 0.1;
   if (part < total && p === 100) p = 99.9;
-  return `${p.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+  return `${formatNumber(p, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}\u202f%`;
 }
 
 // ---- The file list

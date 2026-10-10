@@ -1,3 +1,5 @@
+import { notify } from "./events";
+
 // A sync stage's run, shared by every caller: overlapping calls (a manual
 // "Sync now" racing a scheduled tick) join the one in flight instead of
 // starting another. It logs start, end and failure, and remembers whether a
@@ -15,6 +17,14 @@ export type Trigger<T> = {
 type TriggerState = { inFlight: Promise<unknown> | null; lastError: string | null };
 const globalForTriggers = globalThis as unknown as { __jellylensTriggers?: Record<string, TriggerState> };
 
+// How a run is named in a note when it fails (lib/events.ts).
+const SYNC_LABEL: Record<string, string> = {
+  "library-scan": "Library scan",
+  "tmdb-sync": "TMDB sync",
+  "missing-recheck": "Missing recheck",
+  "releases-sync": "Releases sync",
+};
+
 export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {
   const state = () => ((globalForTriggers.__jellylensTriggers ??= {})[name] ??= { inFlight: null, lastError: null });
   const trigger = () => {
@@ -30,6 +40,7 @@ export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {
         .catch((e) => {
           console.error("[" + name + "] failed:", (e as Error).message);
           s.lastError = (e as Error).message;
+          notify(`${SYNC_LABEL[name] ?? name} failed`, { description: s.lastError, tone: "error" });
           throw e;
         })
         .finally(() => {

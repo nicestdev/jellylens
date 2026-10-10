@@ -1,7 +1,7 @@
 import type { DiscoverResponse } from "@/lib/api-types";
 import { TMDB_API_KEY } from "@/lib/env";
 import { fetchTmdbTrending, searchTmdb } from "@/lib/tmdb";
-import { ensureMetadataLanguage } from "@/lib/sync-manager";
+import { TMDB_LANGUAGE } from "@/lib/env";
 import { libraryIndex, libraryRef } from "@/lib/store";
 import { withAvailability } from "@/lib/availability";
 
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   if (!TMDB_API_KEY) return Response.json({ error: "TMDB_API_KEY is not configured on the backend." }, { status: 500 });
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
   try {
-    const language = await ensureMetadataLanguage();
+    const language = TMDB_LANGUAGE;
     const index = libraryIndex();
     const withLibrary = <T extends { mediaType: string; tmdbId: number }>(r: T) => ({
       ...r,

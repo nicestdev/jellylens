@@ -22,6 +22,7 @@ export default defineConfig({
       JELLYFIN_URL: "http://jellyfin.test",
       JELLYFIN_API_KEY: "jellyfin-key",
       TMDB_API_KEY: "tmdb-key",
+      TMDB_LANGUAGE: "de-DE",
       WCX_URL: "https://wcx.test",
       WCX_API_URL: "https://api.wcx.test",
     },

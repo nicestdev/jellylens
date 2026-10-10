@@ -1,20 +1,23 @@
-// Text the pages show. UI copy is English; numbers and dates are formatted
-// German-style (11.281, 30.09.2026).
+// Text the pages show. UI copy is English; numbers have a decimal point and
+// no thousands separator (11281, 4.21), dates are German-style (30.09.2026).
 
 // "1 show", "3 shows", "2 mismatches".
 export function plural(n: number, word: string): string {
   return `${formatNumber(n)} ${word}${n === 1 ? "" : /(s|sh|ch|x|z)$/.test(word) ? "es" : "s"}`;
 }
 
-export const formatNumber = (n: number) => n.toLocaleString("de-DE");
+// Every number the pages show: "11281", "4.21".
+export const formatNumber = (n: number, options?: Intl.NumberFormatOptions) =>
+  n.toLocaleString("en-US", { useGrouping: false, ...options });
 
 // xREL and WCX give sizes in MB (binary).
 export const MB = 1024 * 1024;
 
 // Bytes in binary units, as file managers show them, always with two
-// decimals: "512,00 MB", "45,60 GB", "1,23 TB" (plain bytes have none).
-// The next unit from 1000 on, so it's never four digits ("0,98 GB", not
-// "1.010,00 MB") and columns of sizes stay narrow.
+// decimals: "512.00 MB", "45.60 GB", "1.23 TB" (plain bytes have none).
+// The next unit from 1000 on, so it's never four digits ("0.98 GB", not
+// "1010.00 MB") and columns of sizes stay narrow. A narrow no-break space
+// before the unit: in Geist Mono a plain one is as wide as a digit.
 export function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let value = bytes;
@@ -24,7 +27,7 @@ export function formatBytes(bytes: number): string {
     unit++;
   }
   const digits = unit === 0 ? 0 : 2;
-  return `${value.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${units[unit]}`;
+  return `${formatNumber(value, { minimumFractionDigits: digits, maximumFractionDigits: digits })}\u202f${units[unit]}`;
 }
 
 // A unix timestamp (seconds) as "30.09.2026".

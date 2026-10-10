@@ -205,16 +205,14 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
     : titles.length > 1
       ? `Grouped from ${titles.length} xREL titles, each matched on its own.`
       : null;
-  const poster = head?.library?.imageTag
-    ? { itemId: head.library.id, tag: head.library.imageTag }
-    : { imageSrc: tmdbImage(head?.posterPath) };
+  const poster = { imageSrc: tmdbImage(head?.library?.posterPath ?? head?.posterPath) };
   const tmdb = head?.tmdbId && head.mediaType ? tmdbUrl(head.mediaType, head.tmdbId) : undefined;
   const links = [tmdb ? { label: "TMDB", href: tmdb } : null, wcxUrl ? { label: "WCX", href: wcxUrl } : null].filter(
     (l): l is { label: string; href: string } => l !== null,
   );
 
   const page = (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <button
         type="button"
         onClick={back}
@@ -226,7 +224,7 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
 
       <header className="mt-4 flex gap-5">
         {head ? (
-          <Poster {...poster} alt="" height={480} className="w-28 rounded-lg sm:w-36" />
+          <Poster {...poster} alt="" className="w-28 rounded-lg sm:w-36" />
         ) : (
           <Skeleton className="aspect-2/3 w-28 shrink-0 rounded-lg sm:w-36" />
         )}
@@ -350,7 +348,7 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
               <div className="mb-3 flex flex-col gap-1">
                 {xrel.map((t) => (
                   <div key={t.titleKey} className="flex items-center gap-2">
-                    <p className="min-w-0 flex-1 text-[13px]">
+                    <p className="min-w-0 flex-1 text-sm">
                       <span className="font-medium">{t.label}</span>
                       <span className="text-muted-foreground">
                         {" · "}

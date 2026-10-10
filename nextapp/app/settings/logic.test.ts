@@ -4,7 +4,7 @@ import { FAST_POLL_MS, pollDelay, SLOW_POLL_MS } from "./logic";
 
 const stage = { syncedAt: "2026-10-01T00:00:00Z", running: false, error: null };
 const status = (running: Partial<Record<keyof StatusResponse, boolean>> = {}): StatusResponse => ({
-  jellyfin: { ...stage, running: Boolean(running.jellyfin), movies: 1, shows: 1 },
+  library: { ...stage, running: Boolean(running.library), movies: 1, shows: 1 },
   tmdb: { ...stage, running: Boolean(running.tmdb), shows: 1, collections: 1 },
   missing: {
     ...stage,
@@ -35,7 +35,7 @@ describe("pollDelay", () => {
 
   it("follows along while a sync runs, wherever it started", () => {
     expect(pollDelay({ ...idle, busy: true })).toBe(FAST_POLL_MS);
-    for (const s of ["jellyfin", "tmdb", "missing", "releases"] as const) {
+    for (const s of ["library", "tmdb", "missing", "releases"] as const) {
       expect(pollDelay({ ...idle, status: status({ [s]: true }) }), s).toBe(FAST_POLL_MS);
     }
   });

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, render, screen, within } from "@testing-library/react";
 import "@/test/dom";
 import { json, mockFetch } from "@/test/http";
-import { DOWNLOADS_CHANGED, REQUESTS_CHANGED } from "@/lib/api-client";
+import { COUNTS_STALE, DOWNLOADS_CHANGED, REQUESTS_CHANGED } from "@/lib/api-client";
 import type { DownloadsResponse, RequestItem, RequestsResponse, StatusResponse } from "@/lib/api-types";
 import { MobileBar, Sidebar } from "./nav";
 
@@ -14,7 +14,7 @@ const user = { id: "2", name: "Ben", admin: false };
 
 const stage = { syncedAt: null, running: false, error: null };
 const status: StatusResponse = {
-  jellyfin: { ...stage, movies: 649, shows: 88 },
+  library: { ...stage, movies: 649, shows: 88 },
   tmdb: { ...stage, shows: 80, collections: 40 },
   missing: { ...stage, incompleteCount: 12, incompleteCollectionCount: 3, mismatchCount: 1 },
   releases: { ...stage, groups: 4, releases: 900 },
@@ -35,7 +35,7 @@ const request = (tmdbId: number, over: Partial<RequestItem> = {}): RequestItem =
 });
 // An admin's overview: two open (one someone else's), one arrived.
 const requests: RequestsResponse = {
-  Items: [request(1), request(2, { mine: false }), request(3, { library: { id: "j3", serverId: "s" } })],
+  Items: [request(1), request(2, { mine: false }), request(3, { library: { id: "j3" } })],
   all: true,
   admin: true,
 };
@@ -53,7 +53,8 @@ describe("Sidebar", () => {
     serveStatus();
     render(<Sidebar user={admin} canSignOut={false} />);
     expect(screen.getByRole("link", { name: /^Jellylens/ })).toHaveAttribute("href", "/");
-    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+    // Sign out is there with sign-in off too, and does nothing.
+    expect(screen.getByRole("button", { name: "Sign out" })).toHaveAttribute("title", "Sign-in is off");
     expect(texts(sidebar().getAllByRole("link")).map((t) => t?.replace(/\d+$/, ""))).toEqual([
       "Movies",
       "TV Shows",
@@ -62,6 +63,7 @@ describe("Sidebar", () => {
       "Analytics",
       "Downloads",
       "Missing",
+      "Organize",
       "Releases",
       "Settings",
       "Upgrades",
@@ -109,6 +111,30 @@ describe("Sidebar", () => {
     expect(sidebar().getByRole("link", { name: "Downloads 1" })).toBeInTheDocument();
   });
 
+  it("counts the finished downloads not moved yet for Organize, and asks again when told", async () => {
+    let packages = [
+      { id: 1, status: "done", movedTo: null },
+      { id: 2, status: "done", movedTo: null },
+      { id: 3, status: "done", movedTo: "nvme01/movies/Heat (1995) [tmdbid-949]" },
+    ];
+    mockFetch((url) =>
+      url.pathname === "/api/status"
+        ? json(status)
+        : url.pathname === "/api/requests"
+          ? json(requests)
+          : url.pathname === "/api/downloads"
+            ? json({ packages })
+            : undefined,
+    );
+    render(<Sidebar user={admin} canSignOut={false} />);
+    expect(await sidebar().findByRole("link", { name: "Organize 2" })).toBeInTheDocument();
+    packages = packages.map((p) => ({ ...p, movedTo: p.movedTo ?? "nvme01/movies/x" }));
+    act(() => {
+      window.dispatchEvent(new Event(COUNTS_STALE));
+    });
+    expect(await sidebar().findByRole("link", { name: "Organize 0" })).toBeInTheDocument();
+  });
+
   it("shows users only their pages, and Sign out with who's signed in", async () => {
     serveStatus();
     render(<Sidebar user={user} canSignOut />);
@@ -135,6 +161,7 @@ describe("MobileBar", () => {
       "Analytics",
       "Downloads",
       "Missing",
+      "Organize",
       "Releases",
       "Settings",
       "Upgrades",

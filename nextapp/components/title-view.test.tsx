@@ -357,7 +357,7 @@ describe("TitleView", () => {
       expect(screen.getByText("WAYNE · 1080p · x264 · DL")).toBeInTheDocument();
       // Its mirrors, a line per source.
       expect(within(row(/x264-WAYNE/)).getByText("wcx")).toBeInTheDocument();
-      expect(screen.getByText("8,00 GB")).toBeInTheDocument();
+      expect(screen.getByText("8.00 GB")).toBeInTheDocument();
       expect(screen.getByText("07.08.2026")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: release(/x264-WAYNE/) })).toHaveAttribute(
         "href",
@@ -455,7 +455,7 @@ describe("TitleView", () => {
         "href",
         "https://xrel.example/heat~19950",
       );
-      expect(within(both).getByText("8,00 GB")).toBeInTheDocument();
+      expect(within(both).getByText("8.00 GB")).toBeInTheDocument();
       // DD (the live copy's; the dead one left out), then RG.
       expect(
         within(both)

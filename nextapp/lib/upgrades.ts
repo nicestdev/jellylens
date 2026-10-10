@@ -54,14 +54,14 @@ export function episodesOf(name: string): { season: number; episodes: number[] |
   return pack ? { season: Number(pack[1]), episodes: null } : null;
 }
 
-// One of the library's files, as media_files has it. imageTag: the movie's
-// or show's poster in Jellyfin.
+// One of the library's files, as media_files has it. posterPath: the
+// movie's or show's (TMDB's).
 export type OwnedFile = {
   parentId: string;
   title: string;
   year: number | null;
   tmdbId: string | null;
-  imageTag: string | null;
+  posterPath: string | null;
   season: number | null;
   episode: number | null;
   episodeEnd: number | null;
@@ -113,7 +113,7 @@ export type Unit = {
   title: string;
   year: number | null;
   tmdbId: number | null;
-  imageTag: string | null;
+  posterPath: string | null;
   season: number | null;
   fileName: string;
   files: number;
@@ -152,7 +152,7 @@ function unitOf(key: string, files: OwnedFile[], season: number | null, alternat
     title: f.title,
     year: f.year,
     tmdbId: Number.isFinite(tmdbId) ? tmdbId : null,
-    imageTag: f.imageTag,
+    posterPath: f.posterPath,
     season,
     fileName: f.fileName,
     files: files.length,

@@ -51,6 +51,57 @@ export type TmdbCollectionData = {
 };
 
 export const fetchTmdbShow = (apiKey: string, tmdbId: string) => getOrNull<TmdbShow>(apiKey, "/tv/" + tmdbId);
+
+// ---- A library title's details (tmdb_details): what the library shows
+// beyond its files. status: "Continuing" or "Ended", as the TV Shows page
+// badges it; collectionId: a movie's collection. seasons: a show's numbers,
+// for the TMDB sync (not stored).
+
+export type TmdbDetails = {
+  name: string;
+  year: number | null;
+  genres: string[];
+  posterPath: string | null;
+  collectionId?: string | null;
+  status?: "Continuing" | "Ended";
+};
+type RawDetails = {
+  title?: string;
+  name?: string;
+  release_date?: string;
+  first_air_date?: string;
+  genres?: { name: string }[];
+  poster_path?: string | null;
+  belongs_to_collection?: { id: number } | null;
+  status?: string;
+  seasons?: { season_number: number }[];
+};
+// TMDB's show states still going: "Returning Series", "In Production", "Planned", "Pilot".
+const ENDED = new Set(["Ended", "Canceled"]);
+
+export async function fetchTmdbDetails(
+  apiKey: string,
+  mediaType: "movie" | "tv",
+  tmdbId: string,
+  language: string,
+): Promise<(TmdbDetails & { seasons?: number[] }) | null> {
+  const raw = await getOrNull<RawDetails>(apiKey, `/${mediaType}/${tmdbId}`, { language });
+  if (!raw) return null;
+  const date = raw.release_date || raw.first_air_date;
+  const base = {
+    name: raw.title || raw.name || "",
+    year: date ? Number(date.slice(0, 4)) : null,
+    genres: (raw.genres ?? []).map((g) => g.name),
+    posterPath: raw.poster_path || null,
+  };
+  return mediaType === "movie"
+    ? { ...base, collectionId: raw.belongs_to_collection ? String(raw.belongs_to_collection.id) : null }
+    : {
+        ...base,
+        status: raw.status && ENDED.has(raw.status) ? "Ended" : "Continuing",
+        seasons: (raw.seasons ?? []).map((s) => s.season_number),
+      };
+}
 export const fetchTmdbSeason = (apiKey: string, tmdbId: string, season: number) =>
   getOrNull<TmdbSeasonData>(apiKey, "/tv/" + tmdbId + "/season/" + season);
 export const fetchTmdbCollection = (apiKey: string, collectionId: string, language: string) =>

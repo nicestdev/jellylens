@@ -1,4 +1,5 @@
 import type { DownloadLibrary } from "./api-types";
+import { copyLabel, fromRelease } from "./release-labels";
 import { libraryCopies, type DownloadFile, type DownloadPackage, type LibraryCopy } from "./store";
 
 // What the Jellyfin library already has of a download package, by the
@@ -26,13 +27,16 @@ export function libraryOf(
 ): { library: DownloadLibrary | null; owned: Set<number> } {
   const owned = new Set<number>();
   if (!pkg.media) return { library: null, owned };
-  const label = (c: LibraryCopy) => [c.resolution, c.codec, c.group].filter(Boolean).join(" · ") || "unknown quality";
+  // Your copies from this very release ("Name - uploader" without the uploader).
+  const release = pkg.name.replace(/\s+-\s+[^.]+$/, "").trim();
+  const exact = (list: LibraryCopy[]) => list.filter((c) => fromRelease(c.fileName, release)).length;
   if (pkg.media.type === "movie") {
     const copies = libraryCopies("movie", pkg.media.tmdbId);
     return {
       library: copies.length
         ? {
-            have: [...new Set(copies.map(label))],
+            have: [...new Set(copies.map(copyLabel))],
+            exact: exact(copies),
             parts: 0,
             partsOwned: 0,
             season: null,
@@ -74,7 +78,8 @@ export function libraryOf(
   if (!owned.size && !seasonCopies.length) return { library: null, owned };
   return {
     library: {
-      have: [...new Set(relevant.map(label))],
+      have: [...new Set(relevant.map(copyLabel))],
+      exact: exact(relevant),
       parts,
       partsOwned: owned.size,
       season: packSeason ? { number: Number(packSeason), episodes: seasonCopies.length } : null,

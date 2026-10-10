@@ -4,7 +4,7 @@ import { TMDB_API_KEY, WCX_API_URL } from "@/lib/env";
 import { linkInfo, nameFromUrl, routeOf } from "@/lib/hosters";
 import { resolutionOf, seasonsOf } from "@/lib/release-labels";
 import { addPackage, setPackageMedia, wcxUid, type DownloadMedia } from "@/lib/store";
-import { ensureMetadataLanguage } from "@/lib/sync-manager";
+import { TMDB_LANGUAGE } from "@/lib/env";
 import { fetchTmdbEntry } from "@/lib/tmdb";
 
 // A release as WCX's detail answer has it. links: per hoster, plain hoster
@@ -224,7 +224,7 @@ async function hosterUrls({ container, links }: HideLinks): Promise<string[]> {
 async function mediaOf(tmdbId: string): Promise<DownloadMedia | null> {
   if (!TMDB_API_KEY) return null;
   const [type, id] = tmdbId.split(":") as ["movie" | "tv", string];
-  const entry = await fetchTmdbEntry(TMDB_API_KEY, type, Number(id), await ensureMetadataLanguage()).catch(() => null);
+  const entry = await fetchTmdbEntry(TMDB_API_KEY, type, Number(id), TMDB_LANGUAGE).catch(() => null);
   return entry && { type, tmdbId: entry.tmdbId, title: entry.title, year: entry.year, posterPath: entry.posterPath };
 }
 

@@ -12,7 +12,7 @@ import {
 import { AUTH_ENABLED, TMDB_API_KEY } from "@/lib/env";
 import { currentUser } from "@/lib/auth";
 import type { SessionUser } from "@/lib/session";
-import { ensureMetadataLanguage } from "@/lib/sync-manager";
+import { TMDB_LANGUAGE } from "@/lib/env";
 import { groupsByTile, libraryIndex, libraryRef } from "@/lib/store";
 import { withAvailability } from "@/lib/availability";
 
@@ -41,7 +41,7 @@ async function listResponse(user: SessionUser) {
     ];
   });
   const withAvail = TMDB_API_KEY
-    ? await withAvailability(items, TMDB_API_KEY, await ensureMetadataLanguage())
+    ? await withAvailability(items, TMDB_API_KEY, TMDB_LANGUAGE)
     : items.map((r) => ({ ...r, availability: null }));
   return Response.json({ Items: withAvail, all: overview, admin: user.admin } satisfies RequestsResponse);
 }

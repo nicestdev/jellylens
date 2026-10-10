@@ -100,7 +100,7 @@ describe("resolveLink", () => {
     [json({ error: "bad_token", error_code: 8 }, { status: 401 }), "Real-Debrid: REALDEBRID_TOKEN is wrong or expired"],
     [json({ error: "bad_token", error_code: 8 }), "Real-Debrid: REALDEBRID_TOKEN is wrong or expired"],
     [new Response("Unauthorized", { status: 401 }), "Real-Debrid: REALDEBRID_TOKEN is wrong or expired"],
-    [json({ error: "hoster_unavailable", error_code: 19 }, { status: 503 }), "Real-Debrid: hoster_unavailable"],
+    [json({ error: "hoster_unavailable", error_code: 19 }, { status: 503 }), "Real-Debrid: Hoster unavailable"],
     [new Response("oops", { status: 500 }), "Real-Debrid: HTTP 500"],
   ])("explains Real-Debrid's errors (%#)", async (answer, error) => {
     realDebrid((url) => (url.href === `${RD}/unrestrict/link` ? answer : undefined));

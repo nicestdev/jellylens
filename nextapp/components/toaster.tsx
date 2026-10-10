@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
-import { CheckCircle2, Info, MinusCircle, X, type LucideIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, MinusCircle, X, type LucideIcon } from "lucide-react";
 import {
   SHOWN_MS,
   dismissToast,
@@ -18,10 +18,11 @@ import { cn } from "@/lib/utils";
 const none: Toast[] = [];
 
 // Each tone's color, only on its icon badge and countdown: green for
-// added, red for removed, grey for plain ones. The card itself is a menu's.
+// added (or done), red for removed or failed, grey for plain ones. The card itself is a menu's.
 const LOOK: Record<ToastTone, { icon: LucideIcon; badge: string; bar: string }> = {
   success: { icon: CheckCircle2, badge: "bg-success/15 text-success", bar: "bg-success" },
   removed: { icon: MinusCircle, badge: "bg-destructive/15 text-destructive", bar: "bg-destructive" },
+  error: { icon: AlertCircle, badge: "bg-destructive/15 text-destructive", bar: "bg-destructive" },
   plain: { icon: Info, badge: "bg-muted text-muted-foreground", bar: "bg-muted-foreground" },
 };
 
@@ -50,7 +51,7 @@ export function Toaster() {
             role="status"
             onMouseEnter={() => pauseToast(t.id)}
             onMouseLeave={() => resumeToast(t.id)}
-            className="group pointer-events-auto relative flex w-full animate-in items-center gap-2.5 overflow-hidden rounded-lg border bg-popover py-2.5 pr-2 pl-2.5 text-[13px] text-popover-foreground shadow-lg duration-200 fade-in-0 slide-in-from-top-2 sm:w-[22rem]"
+            className="group pointer-events-auto relative flex w-full animate-in items-center gap-2.5 overflow-hidden rounded-lg border bg-popover py-2.5 pr-2 pl-2.5 text-sm text-popover-foreground shadow-lg duration-200 fade-in-0 slide-in-from-top-2 sm:w-[22rem]"
           >
             <span className={cn("grid size-7 shrink-0 place-items-center rounded-md", look.badge)}>
               <Icon className="size-4" />

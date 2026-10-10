@@ -49,7 +49,7 @@ function metaLine(item: Result): string {
 // A poster's corner badge, like its own (S01·E9–10, 1080p): the wishlist
 // toggle and the In library mark.
 const CORNER_BADGE =
-  "flex h-5 items-center rounded-md bg-background/75 px-1.5 text-[10px] font-semibold whitespace-nowrap text-foreground ring-1 ring-white/15 backdrop-blur-md ring-inset";
+  "flex h-5 items-center rounded-md bg-background/75 px-1.5 text-xs font-semibold whitespace-nowrap text-foreground ring-1 ring-white/15 backdrop-blur-md ring-inset";
 
 // A poster's In library mark: a corner badge with nothing to click.
 function LibraryMark({ className = "absolute right-2 bottom-2" }: { className?: string }) {

@@ -58,7 +58,13 @@ describe("codecLabel", () => {
 });
 
 describe("storedFiles", () => {
-  const file = (Name: string, over: Partial<MediaFile> = {}): MediaFile => ({ Name, Size: 1, Codec: "hevc", ...over });
+  const file = (Name: string, over: Partial<MediaFile> = {}): MediaFile => ({
+    Name,
+    Path: Name,
+    Size: 1,
+    Codec: "hevc",
+    ...over,
+  });
   const item = (over: Partial<MediaItem> & { id: string }): MediaItem => ({
     kind: "movie",
     parentId: over.id,
@@ -97,6 +103,7 @@ describe("storedFiles", () => {
         episodeEnd: null,
         episodeTitle: null,
         fileName: "Die.Bruecke.1959.2160p.x265-FuN.mkv",
+        path: "Die.Bruecke.1959.2160p.x265-FuN.mkv",
         size: 9,
         group: "FuN",
         groupKey: "fun",

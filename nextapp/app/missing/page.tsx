@@ -8,7 +8,7 @@ import { SearchInput } from "@/components/search-input";
 import { Segmented } from "@/components/segmented";
 import { SectionTitle } from "@/components/section-title";
 import { PosterGridSkeleton } from "@/components/poster-card";
-import { apiFetch, jsonRequest } from "@/lib/api-client";
+import { apiFetch, jsonRequest, tmdbImage } from "@/lib/api-client";
 import { relativeTime } from "@/lib/format";
 import { matchesWords } from "@/lib/text";
 import { LIBRARIES, type Library } from "@/lib/libraries";
@@ -120,8 +120,7 @@ function IgnoredList({
           // Missing is the norm; a mismatch says so after the year.
           meta:
             [show?.ProductionYear, e.kind === "mismatch" ? "Mismatch" : null].filter(Boolean).join(" · ") || undefined,
-          itemId: show?.Id,
-          imageTag: show?.ImageTags?.Primary,
+          imageSrc: tmdbImage(show?.PosterPath),
           badge: e.season === null ? undefined : { label: `S${e.season}` },
           onUnignore: () => onUnignore(e),
         };
@@ -205,7 +204,7 @@ export default function MissingPage() {
   const nothingMissing = categories.every((c) => counts[c.key].groups === 0);
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Missing</h1>
@@ -249,13 +248,13 @@ export default function MissingPage() {
               aria-pressed={showIgnoredList}
               onClick={() => setView(showIgnoredList ? "missing" : "ignored")}
               className={cn(
-                "flex items-center gap-1.5 text-[13px] whitespace-nowrap transition-colors",
+                "flex items-center gap-1.5 text-sm whitespace-nowrap transition-colors",
                 showIgnoredList ? "text-primary hover:text-foreground" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <EyeOff className="size-3.5" />
               {showIgnoredList ? "Back to missing" : "Ignored"}
-              {showIgnoredList ? null : <span className="font-num text-[11px] tabular-nums">{ignoredCount}</span>}
+              {showIgnoredList ? null : <span className="font-num text-xs tabular-nums">{ignoredCount}</span>}
             </button>
           ) : null}
         </div>
@@ -291,9 +290,7 @@ export default function MissingPage() {
           {sections.map(({ category: c, groups }) => (
             // Framed like a collection on the Movies side, the heading inside.
             <section key={c.key} className="rounded-lg border bg-card p-3">
-              <SectionTitle count={counts[c.key].count} hint={c.hint}>
-                {c.label}
-              </SectionTitle>
+              <SectionTitle hint={c.hint}>{c.label}</SectionTitle>
               <ShowList groups={groups} kind={c.key === "mismatch" ? "mismatch" : "missing"} onIgnore={ignore} />
             </section>
           ))}

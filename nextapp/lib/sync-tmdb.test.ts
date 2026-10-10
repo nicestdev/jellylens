@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { syncTmdb } from "./sync-tmdb";
-import { getTmdbCollections, getTmdbSeries, replaceJellyfin, replaceTmdb } from "./store";
+import { getMovies, getShows, getTmdbCollections, getTmdbSeries, replaceLibrary, replaceTmdb } from "./store";
 import { openDatabase, useDatabase } from "./db";
 import { json, mockFetch } from "@/test/http";
 import { movie, show } from "@/test/fixtures";
@@ -10,10 +10,10 @@ const sync = () => syncTmdb({ tmdbApiKey: "key", language: "de-DE" });
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-06-15T12:00:00Z"));
-  replaceJellyfin(
+  replaceLibrary(
     {
-      movies: [movie({ Id: "m1", ProviderIds: { Tmdb: "1", TmdbCollection: "c" } })],
-      shows: [show({ Id: "s", ProviderIds: { Tmdb: "10" } })],
+      movies: [movie({ Id: "1", ProviderIds: { Tmdb: "1", TmdbCollection: "c" } })],
+      shows: [show({ Id: "10", ProviderIds: { Tmdb: "10" } })],
       episodes: [],
     },
     "2026-06-15T00:00:00Z",
@@ -21,14 +21,30 @@ beforeEach(() => {
   return () => vi.useRealTimers();
 });
 
-// A TMDB with one show (two seasons plus specials) and one collection.
+// A TMDB with one show (two seasons plus specials) and one movie in one
+// collection.
 function tmdb(overrides: Record<string, () => Response> = {}) {
   return mockFetch((url) => {
     const override = overrides[url.pathname];
     if (override) return override();
     switch (url.pathname) {
       case "/3/tv/10":
-        return json({ seasons: [{ season_number: 0 }, { season_number: 1 }, { season_number: 2 }] });
+        return json({
+          name: "Silo",
+          first_air_date: "2023-05-04",
+          genres: [{ name: "Drama" }],
+          poster_path: "/silo.jpg",
+          status: "Ended",
+          seasons: [{ season_number: 0 }, { season_number: 1 }, { season_number: 2 }],
+        });
+      case "/3/movie/1":
+        return json({
+          title: "Teil 1",
+          release_date: "2001-01-01",
+          genres: [{ name: "Krimi" }],
+          poster_path: "/1.jpg",
+          belongs_to_collection: { id: "c" },
+        });
       case "/3/tv/10/season/1":
         return json({
           episodes: [
@@ -63,16 +79,34 @@ function tmdb(overrides: Record<string, () => Response> = {}) {
 }
 
 describe("syncTmdb", () => {
-  it("needs a Jellyfin sync first", async () => {
+  it("needs a library scan first", async () => {
     useDatabase(openDatabase(":memory:"));
-    await expect(sync()).rejects.toThrow(/Sync Jellyfin first/);
+    await expect(sync()).rejects.toThrow(/Scan the library first/);
+  });
+
+  it("asks TMDB again about every title and writes what changed into the library", async () => {
+    const fetch = tmdb();
+    await sync();
+    expect(getMovies()[0]).toMatchObject({
+      Name: "Teil 1",
+      Genres: ["Krimi"],
+      PosterPath: "/1.jpg",
+      ProviderIds: { Tmdb: "1", TmdbCollection: "c" },
+    });
+    expect(getShows()[0]).toMatchObject({ Name: "Silo", Genres: ["Drama"], PosterPath: "/silo.jpg", Status: "Ended" });
+    // In the library's language.
+    expect(
+      new URL(String(fetch.mock.calls.find(([u]) => String(u).includes("/3/movie/1?"))![0])).searchParams.get(
+        "language",
+      ),
+    ).toBe("de-DE");
   });
 
   it("stores each show's seasons without specials, and aired episodes separately", async () => {
     tmdb();
     const result = await sync();
     expect(result).toMatchObject({ shows: 1, collections: 1, failed: 0 });
-    expect(getTmdbSeries().s).toEqual({
+    expect(getTmdbSeries()["10"]).toEqual({
       tmdbId: "10",
       seasons: [
         { season: 1, airedEpisodeNumbers: [1, 2], episodeNumbers: [1, 2] },
@@ -96,13 +130,13 @@ describe("syncTmdb", () => {
   it("keeps the last sync's show when TMDB fails, instead of losing its seasons", async () => {
     tmdb();
     await sync();
-    const before = getTmdbSeries().s;
+    const before = getTmdbSeries()["10"];
 
     tmdb({ "/3/tv/10/season/2": () => new Response("", { status: 500 }) });
     const result = await sync();
 
     expect(result.failed).toBe(1);
-    expect(getTmdbSeries().s).toEqual(before);
+    expect(getTmdbSeries()["10"]).toEqual(before);
   });
 
   it("keeps the last sync's collection when TMDB fails", async () => {
@@ -128,7 +162,7 @@ describe("syncTmdb", () => {
   });
 
   it("drops what TMDB no longer has", async () => {
-    replaceTmdb({ s: { tmdbId: "10", seasons: [] } }, {}, "2026-06-01T00:00:00Z");
+    replaceTmdb({ "10": { tmdbId: "10", seasons: [] } }, {}, "2026-06-01T00:00:00Z");
     tmdb({
       "/3/tv/10": () => new Response("", { status: 404 }),
       "/3/collection/c": () => new Response("", { status: 404 }),

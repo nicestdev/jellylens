@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 // The translucent badge gets a hairline edge; without it it melts into
 // dark posters and reads smaller than it is.
 const BADGE =
-  "absolute flex h-5 items-center rounded-md bg-background/75 px-1.5 text-[10px] font-semibold whitespace-nowrap text-foreground ring-1 ring-white/15 backdrop-blur-md ring-inset";
+  "absolute flex h-5 items-center rounded-md bg-background/75 px-1.5 text-xs font-semibold whitespace-nowrap text-foreground ring-1 ring-white/15 backdrop-blur-md ring-inset";
 
 // hint shows on hovering the badge itself (the tile's own title is the name).
 export type PosterBadge = { label: string; hint?: string };
@@ -29,8 +29,6 @@ function CornerBadge({ badge, className }: { badge: PosterBadge; className: stri
 export function PosterCard({
   href,
   onClick,
-  itemId,
-  imageTag,
   imageSrc,
   title,
   meta,
@@ -41,8 +39,6 @@ export function PosterCard({
 }: {
   href?: string;
   onClick?: () => void;
-  itemId?: string;
-  imageTag?: string;
   imageSrc?: string | null;
   title: string;
   meta?: string;
@@ -67,11 +63,8 @@ export function PosterCard({
       >
         <div className="relative">
           <Poster
-            itemId={itemId}
-            tag={imageTag}
             imageSrc={imageSrc}
             alt=""
-            height={480}
             className="w-full rounded-lg transition-shadow group-hover:ring-2 group-hover:ring-foreground/40 group-focus-visible:ring-3 group-focus-visible:ring-ring"
           />
           {leftBadge ? (

@@ -3,7 +3,7 @@ import { json, mockFetch } from "@/test/http";
 import type { SessionUser } from "@/lib/session";
 import { NextRequest } from "next/server";
 import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
-import { addGroup, insertReleases, replaceJellyfin, saveImdbLookup, saveTitleMatch } from "@/lib/store";
+import { addGroup, insertReleases, replaceLibrary, saveImdbLookup, saveTitleMatch } from "@/lib/store";
 import { movie, show } from "@/test/fixtures";
 
 // Route handlers, called directly with a Request. Who's signed in comes
@@ -102,10 +102,8 @@ describe("POST /api/auth/login", () => {
 
 describe("/api/requests", () => {
   beforeEach(() => {
-    // The library's metadata language, and no release dates for anything.
+    // No release dates for anything.
     mockFetch((url) => {
-      if (url.pathname === "/System/Configuration")
-        return json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" });
       if (url.pathname.endsWith("/release_dates")) return json({ results: [] });
     });
   });
@@ -310,7 +308,7 @@ describe("GET /api/movies and /api/analytics", () => {
       episode: kind === "movie" ? null : 1,
       files,
     });
-    replaceJellyfin(
+    replaceLibrary(
       {
         movies: [
           movie({ Id: "m1", Name: "Heat", FileName: "Heat.1995.1080p.x264-GRP.mkv" }),
@@ -320,10 +318,24 @@ describe("GET /api/movies and /api/analytics", () => {
         episodes: [],
         files: storedFiles([
           item("movie", "m1", "Heat", [
-            { Name: "Heat.1995.1080p.x264-GRP.mkv", Size: 42, Codec: "h264", Width: 1920, Height: 800 },
+            {
+              Name: "Heat.1995.1080p.x264-GRP.mkv",
+              Path: "Heat.1995.1080p.x264-GRP.mkv",
+              Size: 42,
+              Codec: "h264",
+              Width: 1920,
+              Height: 800,
+            },
           ]),
-          item("movie", "m2", "Alien", [{ Name: "Alien.mkv", Size: 8, Codec: "" }]),
-          item("episode", "e1", "Silo", [{ Name: "Silo.S01E01.1080p.WEB.h264-cnhd.mkv", Size: 3, Codec: "h264" }]),
+          item("movie", "m2", "Alien", [{ Name: "Alien.mkv", Path: "Alien.mkv", Size: 8, Codec: "" }]),
+          item("episode", "e1", "Silo", [
+            {
+              Name: "Silo.S01E01.1080p.WEB.h264-cnhd.mkv",
+              Path: "Silo.S01E01.1080p.WEB.h264-cnhd.mkv",
+              Size: 3,
+              Codec: "h264",
+            },
+          ]),
         ]),
       },
       "2026-10-01T00:00:00.000Z",
@@ -407,7 +419,7 @@ describe("GET /api/upgrades", () => {
   };
 
   it("has each owned movie with the favorites' releases of it, and the library's groups", async () => {
-    replaceJellyfin(
+    replaceLibrary(
       {
         movies: [movie({ Id: "m1", Name: "Heat" })],
         shows: [],
@@ -420,7 +432,15 @@ describe("GET /api/upgrades", () => {
             title: "Heat",
             year: 1995,
             tmdbId: "949",
-            files: [{ Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv", Size: 8, Codec: "h264", Width: 1920 }],
+            files: [
+              {
+                Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv",
+                Path: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv",
+                Size: 8,
+                Codec: "h264",
+                Width: 1920,
+              },
+            ],
           },
         ]),
       },
@@ -486,7 +506,6 @@ describe("/api/release-groups", () => {
       }
       if (url.pathname === "/v2/p2p/releases.json")
         return json({ total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 0 }, list: [] });
-      if (url.pathname === "/System/Configuration") return json({});
     });
   // Searches are spaced 2.5 s apart; skip the waits.
   async function withoutWaits<T>(fn: () => Promise<T>): Promise<T> {
@@ -602,6 +621,29 @@ describe("/api/releases/<key>", () => {
     ]);
   });
 
+  it("lists a movie's xREL title split by its releases' years as one, without a year", async () => {
+    const store = await import("@/lib/store");
+    store.addGroup("g1", "VECTOR");
+    store.insertReleases("g1", [
+      release("1", "e1~1995", "Heat.1995.German.DL.1080p.BluRay.x265-VECTOR", 100),
+      release("2", "e1~1996", "Heat.1996.German.DL.2160p.UHD.BluRay.x265-VECTOR", 200),
+    ]);
+    store.saveTitleMatch("e1~1995", "verified", heat, { title: "Heat", year: 1995 });
+    store.saveTitleMatch("e1~1996", "verified", heat, { title: "Heat", year: 1996 });
+    const { GET, POST } = await import("./releases/[key]/route");
+    const body = await (await GET(new Request("http://jellylens.test"), params("movie:949"))).json();
+    expect(body.titles).toHaveLength(1);
+    expect(body.titles[0]).toMatchObject({ titleKey: expect.stringMatching(/^e1~/), label: "Heat" });
+    // Newest first, from both.
+    expect(body.titles[0].Items.map((r: { id: string }) => r.id)).toEqual(["2", "1"]);
+
+    // A decision goes for both.
+    mockFetch(() => new Response("", { status: 404 }));
+    const res = await POST(post("/x", { titleKey: body.titles[0].titleKey, verdict: "wrong" }), params("movie:949"));
+    expect((await res.json()).key).not.toBe("movie:949");
+    expect(store.tileTitleKeys("movie:949")).toEqual([]);
+  });
+
   it("takes a decision about one of them, and follows a title off its tile", async () => {
     mockFetch(() => new Response("", { status: 404 }));
     await seed();
@@ -647,11 +689,11 @@ describe("POST /api/sync/<stage>", () => {
     const { GET } = await import("./status/route");
 
     const res = await POST(new Request("http://x", { method: "POST" }), {
-      params: Promise.resolve({ stage: "jellyfin" }),
+      params: Promise.resolve({ stage: "library" }),
     });
     expect(res.status).toBe(202);
     const status = await (await GET()).json();
-    expect(status.jellyfin).toMatchObject({ running: true, error: null });
+    expect(status.library).toMatchObject({ running: true, error: null });
     expect(status.tmdb.running).toBe(false);
   });
 

@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmptyState } from "@/components/empty-state";
 import { LibraryToolbar, useLibraryFilters } from "@/components/library-toolbar";
 import { POSTER_GRID, PosterCard, PosterGridSkeleton } from "@/components/poster-card";
-import { apiFetch, tmdbUrl } from "@/lib/api-client";
+import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
 import type { ShowsResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { formatNumber, plural } from "@/lib/format";
@@ -28,7 +28,7 @@ export default function ShowsPage() {
   );
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div>
         <h1 className="text-xl font-semibold">TV Shows</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -66,8 +66,7 @@ export default function ShowsPage() {
               <PosterCard
                 key={item.Id}
                 href={tmdbUrl("tv", item.ProviderIds?.Tmdb)}
-                itemId={item.Id}
-                imageTag={item.ImageTags?.Primary}
+                imageSrc={tmdbImage(item.PosterPath)}
                 title={item.Name}
                 meta={showMeta(item, lib.sortKey)}
                 // Only a running show is worth a badge; ended is the usual case.

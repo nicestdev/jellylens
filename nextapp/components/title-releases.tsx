@@ -4,7 +4,6 @@ import { Fragment, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Check,
   CircleArrowDown,
-  Library,
   Link2,
   Loader2,
   MoreHorizontal,
@@ -13,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Breakable } from "@/components/breakable";
+import { InLibraryIcon } from "@/components/in-library-icon";
 import { DataTable, MUTED_CELL, NOT_ON_PHONE, NUMBER_CELL, ROW } from "@/components/library-table";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -27,7 +27,7 @@ import { formatBytes, formatDate, plural } from "@/lib/format";
 import { matchActions, NO_GROUP, withoutTitle } from "@/lib/release-labels";
 import { toast } from "@/lib/toast";
 import { rankIn } from "@/lib/facets";
-import { formatFacet, type ReleaseRow } from "@/lib/title-rows";
+import { formatFacet, type LibraryMark, type ReleaseRow } from "@/lib/title-rows";
 import { cn } from "@/lib/utils";
 
 // The title page's tables (components/title-view.tsx): xREL's releases and
@@ -91,7 +91,7 @@ const attributeLine = (r: ReleaseRow) =>
 // quality, codec and audio, with action's buttons at the right of the same
 // cell; then size and date, at fixed widths so xREL's and WCX's tables line
 // up. library: what the library has of it (libraryNote), shown as
-// Downloads does, a peach icon in front of the name. On a phone size and
+// Downloads does, an icon after the name (InLibraryIcon). On a phone size and
 // date join the line under the name; both may wrap to two lines there.
 // Where a release is listed (xREL, WCX), a tag each.
 // A release's name: one line, but two (broken anywhere) on a phone.
@@ -106,7 +106,7 @@ export function ReleaseTable<R extends ReleaseRow>({
   rows: R[];
   href: (r: R) => string | undefined;
   action?: (r: R) => ReactNode;
-  library: (r: R) => string | null;
+  library: (r: R) => LibraryMark | null;
 }) {
   return (
     <DataTable
@@ -142,11 +142,7 @@ export function ReleaseTable<R extends ReleaseRow>({
                       </span>
                     )}
                     {/* After the name, like on Downloads: you may have it already. */}
-                    {owned ? (
-                      <span title={owned} className="shrink-0 text-warning">
-                        <Library className="size-3.5" aria-label={owned.split("\n")[0]} />
-                      </span>
-                    ) : null}
+                    {owned ? <InLibraryIcon {...owned} /> : null}
                   </div>
                   <div className="truncate text-xs text-muted-foreground max-sm:whitespace-normal">
                     {attributeLine(r)}

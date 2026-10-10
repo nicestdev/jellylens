@@ -43,8 +43,8 @@ describe("subtitle", () => {
   it("explains an empty setup, counts titles, and how many match a search", () => {
     expect(subtitle(null, false)).toBe("Loading…");
     expect(subtitle(data({ groups: 0 }), false)).toBe("P2P releases of your favorite groups, from xREL.");
-    expect(subtitle(data({}), false)).toBe("11.337 titles from 3 groups");
-    expect(subtitle(data({ groups: 1 }), false)).toBe("11.337 titles from 1 group");
-    expect(subtitle(data({}), true)).toBe("42 of 11.337 titles");
+    expect(subtitle(data({}), false)).toBe("11337 titles from 3 groups");
+    expect(subtitle(data({ groups: 1 }), false)).toBe("11337 titles from 1 group");
+    expect(subtitle(data({}), true)).toBe("42 of 11337 titles");
   });
 });

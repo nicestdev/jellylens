@@ -48,7 +48,7 @@ describe("RequestAction", () => {
 
   it("says In library once owned, and waits while pending", () => {
     const { rerender } = render(
-      <RequestAction item={{ ...heat, library: { id: "j1", serverId: "s" } }} requested={false} ctx={ctx()} />,
+      <RequestAction item={{ ...heat, library: { id: "j1" } }} requested={false} ctx={ctx()} />,
     );
     expect(screen.getByText("In library")).toBeInTheDocument();
     expect(screen.queryByRole("button")).toBeNull();
@@ -93,7 +93,7 @@ describe("WishlistTile", () => {
     render(
       <WishlistTile
         item={request({
-          library: { id: "j1", serverId: "s" },
+          library: { id: "j1" },
           releaseGroups: ["FuN"],
           availability: { status: "digital", next: null },
         })}

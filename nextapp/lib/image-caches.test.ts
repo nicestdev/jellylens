@@ -1,67 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getImage, pruneImages } from "./image-cache";
 import { getTmdbImage, isTmdbImageFile, pruneTmdbImages } from "./tmdb-image-cache";
 import { imageResponse } from "./file-cache";
 import { mockFetch } from "@/test/http";
 
 // DATA_DIR is a throwaway directory for the whole run (vitest.config.mts);
-// each test starts with both caches empty.
+// each test starts with the cache empty.
 const dataDir = process.env.DATA_DIR!;
-const jellyfinDir = path.join(dataDir, "images");
 const tmdbDir = path.join(dataDir, "tmdb-images");
 beforeEach(() => {
-  fs.rmSync(jellyfinDir, { recursive: true, force: true });
   fs.rmSync(tmdbDir, { recursive: true, force: true });
 });
 
 const image = (bytes: string, type = "image/jpeg") => new Response(bytes, { headers: { "Content-Type": type } });
-
-describe("Jellyfin image cache", () => {
-  const id = "a".repeat(32);
-
-  it("fetches an image once, then serves it from disk", async () => {
-    const fetch = mockFetch(() => image("poster"));
-    const first = await getImage(id, "tag1", 480);
-    const second = await getImage(id, "tag1", 480);
-    expect(first?.body.toString()).toBe("poster");
-    expect(second).toEqual(first);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fs.readdirSync(path.join(jellyfinDir, id))).toEqual(["tag1-480.jpg"]);
-    // With the API key, at the requested height.
-    expect(String(fetch.mock.calls[0][0])).toContain(`/Items/${id}/Images/Primary?fillHeight=480`);
-  });
-
-  it("shares one fetch between concurrent requests", async () => {
-    const fetch = mockFetch(() => image("poster"));
-    await Promise.all([getImage(id, "tag1", 480), getImage(id, "tag1", 480)]);
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it("replaces the files of an older tag", async () => {
-    mockFetch(() => image("old"));
-    await getImage(id, "tag1", 480);
-    mockFetch(() => image("new"));
-    await getImage(id, "tag2", 480);
-    expect(fs.readdirSync(path.join(jellyfinDir, id))).toEqual(["tag2-480.jpg"]);
-  });
-
-  it("returns null for errors and non-images", async () => {
-    mockFetch(() => new Response("", { status: 404 }));
-    expect(await getImage(id, "tag1", 480)).toBeNull();
-    mockFetch(() => image("<html>", "text/html"));
-    expect(await getImage(id, "tag1", 480)).toBeNull();
-  });
-
-  it("prunes images of items that left the library", async () => {
-    mockFetch(() => image("x"));
-    await getImage(id, "t", 240);
-    await getImage("b".repeat(32), "t", 240);
-    expect(await pruneImages(new Set([id]))).toBe(1);
-    expect(fs.readdirSync(jellyfinDir)).toEqual([id]);
-  });
-});
 
 describe("TMDB image cache", () => {
   it("fetches a poster once per size, then serves it from disk", async () => {

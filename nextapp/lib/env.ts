@@ -1,6 +1,9 @@
 export const JELLYFIN_URL = (process.env.JELLYFIN_URL || "").replace(/\/+$/, "");
 export const JELLYFIN_API_KEY = process.env.JELLYFIN_API_KEY || "";
 export const TMDB_API_KEY = process.env.TMDB_API_KEY || "";
+// The language TMDB's titles, genres and posters come in, as a TMDB locale
+// ("de-DE"); its country also picks the release dates that count.
+export const TMDB_LANGUAGE = process.env.TMDB_LANGUAGE?.trim() || "en-US";
 
 // Hours between automatic runs of each sync stage; 0 turns that schedule off
 // (manual "Sync now" only). Unset, empty or invalid values use the default.
@@ -9,7 +12,7 @@ function hours(name: string, fallback: number): number {
   const n = Number(raw);
   return raw && Number.isFinite(n) && n >= 0 ? n : fallback;
 }
-export const JELLYFIN_SYNC_INTERVAL_HOURS = hours("JELLYFIN_SYNC_INTERVAL_HOURS", 6);
+export const LIBRARY_SCAN_INTERVAL_HOURS = hours("LIBRARY_SCAN_INTERVAL_HOURS", 6);
 export const TMDB_SYNC_INTERVAL_HOURS = hours("TMDB_SYNC_INTERVAL_HOURS", 24);
 export const MISSING_RECHECK_INTERVAL_HOURS = hours("MISSING_RECHECK_INTERVAL_HOURS", 24);
 export const XREL_SYNC_INTERVAL_HOURS = hours("XREL_SYNC_INTERVAL_HOURS", 6);
@@ -36,3 +39,7 @@ export const ARCHIVE_PASSWORDS = (process.env.ARCHIVE_PASSWORDS || "")
   .map((p) => p.trim())
   .filter(Boolean);
 export const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || `${DATA_DIR}/downloads`;
+// The media library's disks: one folder per disk, each with movies/ and
+// shows/ (e.g. /library/nvme01/movies). The library scan reads them, and
+// Organize moves finished downloads into them.
+export const LIBRARY_DIR = (process.env.LIBRARY_DIR || "").trim().replace(/\/+$/, "");

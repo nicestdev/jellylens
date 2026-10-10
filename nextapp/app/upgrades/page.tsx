@@ -10,7 +10,7 @@ import { LIBRARIES, type Library } from "@/lib/libraries";
 export default function UpgradesPage() {
   const [library, setLibrary] = useState<Library>("movies");
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Upgrades</h1>

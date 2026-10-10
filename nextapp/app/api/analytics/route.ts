@@ -25,6 +25,6 @@ export async function GET() {
   return Response.json({
     movies: totals("movies"),
     shows: totals("shows"),
-    syncedAt: syncedAt("jellyfin"),
+    syncedAt: syncedAt("library"),
   } satisfies AnalyticsResponse);
 }

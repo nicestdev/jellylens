@@ -11,7 +11,7 @@ import {
 } from "@/lib/store";
 import { groupEpisodes } from "@/lib/release-labels";
 import { resolveTitles } from "@/lib/sync-releases";
-import { ensureMetadataLanguage } from "@/lib/sync-manager";
+import { TMDB_LANGUAGE } from "@/lib/env";
 import { TMDB_API_KEY } from "@/lib/env";
 import { parseReleaseName } from "@/lib/title-match";
 import { fetchTmdbEntry } from "@/lib/tmdb";
@@ -29,12 +29,9 @@ async function headOf(key: string, titles: ReleaseDetail["titles"]): Promise<Rel
   const shown = titles[0]?.match.shown;
   let base: Omit<ReleaseHead, "library" | "copies"> | null = shown?.title ? shown : null;
   if (!base && tmdb && TMDB_API_KEY) {
-    const entry = await fetchTmdbEntry(
-      TMDB_API_KEY,
-      tmdb[1] as "movie" | "tv",
-      Number(tmdb[2]),
-      await ensureMetadataLanguage(),
-    ).catch(() => null);
+    const entry = await fetchTmdbEntry(TMDB_API_KEY, tmdb[1] as "movie" | "tv", Number(tmdb[2]), TMDB_LANGUAGE).catch(
+      () => null,
+    );
     if (entry)
       base = {
         title: entry.title,
@@ -53,14 +50,24 @@ async function headOf(key: string, titles: ReleaseDetail["titles"]): Promise<Rel
   const ref = libraryRef(entry);
   const copies =
     base.tmdbId && base.mediaType ? libraryCopies(base.mediaType === "movie" ? "movie" : "episode", base.tmdbId) : [];
-  return { ...base, library: ref ? { ...ref, imageTag: entry?.imageTag ?? null } : null, copies };
+  return { ...base, library: ref ? { ...ref, posterPath: entry?.posterPath ?? null } : null, copies };
 }
 
+// A movie's xREL title split by the year in its releases' names ("e1~2025",
+// lib/xrel.ts) is one title again here: on one tile its parts matched the
+// same entry anyway, often only a group's year a year off.
+const xrelTitle = (titleKey: string) => titleKey.split("~")[0];
+const partsOf = (key: string, titleKey: string) =>
+  tileTitleKeys(key).filter((k) => xrelTitle(k) === xrelTitle(titleKey));
+
 async function detail(key: string): Promise<ReleaseDetail> {
-  const titles = tileTitleKeys(key).map((titleKey) => {
-    const Items = groupEpisodes(titleReleases(titleKey));
+  const byTitle = Map.groupBy(tileTitleKeys(key), xrelTitle);
+  const titles = [...byTitle.values()].map((keys) => {
+    const releases = keys.flatMap(titleReleases).sort((a, b) => b.publishedAt - a.publishedAt);
+    const Items = groupEpisodes(releases);
     const { title, year } = parseReleaseName(Items[0]?.name ?? "");
-    return { titleKey, label: year ? `${title} (${year})` : title, match: matchInfo(titleKey), Items };
+    const label = year && keys.length === 1 ? `${title} (${year})` : title;
+    return { titleKey: keys[0], label, match: matchInfo(keys[0]), Items };
   });
   return { key, head: await headOf(key, titles), titles };
 }
@@ -74,9 +81,10 @@ export async function GET(_req: Request, { params }: Params) {
 }
 
 // POST { titleKey, verdict: "wrong" | "xrel" | null } — a decision about one
-// of the tile's titles from the page's menu: nothing from TMDB, xREL's link
-// after all, or back to the automatic check. Applied right away. Answers
-// with the tile, or the title's new one if it was the tile's last.
+// of the tile's titles from the page's menu (for all its parts on the
+// tile): nothing from TMDB, xREL's link after all, or back to the automatic
+// check. Applied right away. Answers with the tile, or the title's new one
+// if it was the tile's last.
 export async function POST(req: Request, { params }: Params) {
   const { key } = await params;
   const body = await req.json().catch(() => ({}));
@@ -85,8 +93,10 @@ export async function POST(req: Request, { params }: Params) {
     return Response.json({ error: 'Expected { titleKey, verdict: "wrong" | "xrel" | null }.' }, { status: 400 });
   }
   if (!tileTitleKeys(key).includes(titleKey)) return Response.json({ error: "No such title." }, { status: 404 });
-  setVerdict(titleKey, verdict);
-  await resolveTitles(TMDB_API_KEY, await ensureMetadataLanguage(), titleKey);
+  for (const part of partsOf(key, titleKey)) {
+    setVerdict(part, verdict);
+    await resolveTitles(TMDB_API_KEY, TMDB_LANGUAGE, part);
+  }
   const tile = await detail(key);
   return Response.json((tile.titles.length ? tile : await detail(tileOf(titleKey))) satisfies ReleaseDetail);
 }

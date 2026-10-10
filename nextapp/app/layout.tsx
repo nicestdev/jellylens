@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Footer } from "@/components/footer";
 import { Toaster } from "@/components/toaster";
+import { EventToasts } from "@/components/event-toasts";
 import { Logo } from "@/components/logo";
 import { MobileBar, Sidebar } from "@/components/nav";
 import { currentUser } from "@/lib/auth";
@@ -45,6 +46,7 @@ export default async function RootLayout({ children, modal }: { children: React.
             </div>
             {modal}
             <Toaster />
+            {user.admin ? <EventToasts /> : null}
           </div>
         ) : (
           <div className="flex min-h-svh flex-col">

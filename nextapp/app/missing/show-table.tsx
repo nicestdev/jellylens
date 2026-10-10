@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PosterCard, type PosterBadge } from "@/components/poster-card";
 import type { IgnoreKind, ShowIgnore, ShowItem } from "@/lib/api-types";
+import { tmdbImage } from "@/lib/api-client";
 import { seasonCode } from "@/lib/format";
 import { titlePath } from "@/lib/title-path";
 import { episodeRanges, type Group, type Line } from "./logic";
@@ -91,8 +92,7 @@ export function ShowList({
             <div key={`${item.Id}-${line.season}-${line.episodes}`} className="min-w-0 sm:w-28 sm:shrink-0">
               <PosterCard
                 onClick={tmdb ? () => router.push(titlePath(`tv:${tmdb}`)) : undefined}
-                itemId={item.Id}
-                imageTag={item.ImageTags?.Primary}
+                imageSrc={tmdbImage(item.PosterPath)}
                 title={item.Name}
                 meta={item.ProductionYear ? String(item.ProductionYear) : undefined}
                 leftBadge={gap}

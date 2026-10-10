@@ -19,7 +19,7 @@ const PAGE_SIZE = 60;
 // Movies and TV Shows pages) rather than TMDB's.
 function libraryItem(entry: LibraryEntry | undefined) {
   const ref = libraryRef(entry);
-  return ref ? { ...ref, imageTag: entry?.imageTag ?? null } : null;
+  return ref ? { ...ref, posterPath: entry?.posterPath ?? null } : null;
 }
 
 // GET /api/releases?q=&group=&quality=&sort=date|title&dir=&offset=

@@ -101,7 +101,7 @@ describe("FileTable", () => {
         .getAllByRole("cell")
         .map((c) => c.textContent),
     );
-    expect(cells).toEqual(["SiloS01E02 · HolstonMovie.1.1080p-FuN.mkv", "—", "1080p", "x265", "DE", "1,00 GB"]);
+    expect(cells).toEqual(["SiloS01E02 · HolstonMovie.1.1080p-FuN.mkv", "—", "1080p", "x265", "DE", "1.00\u202fGB"]);
     expect(screen.getByPlaceholderText("Search shows, episodes and files…")).toBeInTheDocument();
   });
 

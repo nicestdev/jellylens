@@ -126,9 +126,7 @@ function GroupList({
 
   return (
     <section aria-label={title} className={cn("min-w-0", SECTION)}>
-      <SectionTitle count={groups?.length} hint={hint}>
-        {title}
-      </SectionTitle>
+      <SectionTitle hint={hint}>{title}</SectionTitle>
       {groups === null ? (
         <Skeleton className="h-9 w-full" />
       ) : (

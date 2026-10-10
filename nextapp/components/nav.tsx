@@ -9,6 +9,7 @@ import {
   CircleArrowUp,
   Compass,
   Film,
+  FolderInput,
   Heart,
   Lock,
   Puzzle,
@@ -20,7 +21,7 @@ import {
 import { usePathname } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { DOWNLOADS_CHANGED, REQUESTS_CHANGED, apiFetch } from "@/lib/api-client";
+import { COUNTS_STALE, DOWNLOADS_CHANGED, REQUESTS_CHANGED, apiFetch } from "@/lib/api-client";
 import type { DownloadsResponse, RequestsResponse, StatusResponse } from "@/lib/api-types";
 import type { SessionUser } from "@/lib/session";
 import { useLoad } from "@/hooks/use-load";
@@ -37,7 +38,7 @@ type NavLink = {
   href: string;
   label: string;
   icon: LucideIcon;
-  count?: "movies" | "shows" | "missing" | "requests" | "downloads";
+  count?: "movies" | "shows" | "missing" | "requests" | "downloads" | "organize";
   admin?: boolean;
 };
 type NavSection = { label: string; links: NavLink[] };
@@ -66,6 +67,7 @@ const sections: NavSection[] = [
       { href: "/analytics", label: "Analytics", icon: ChartPie, admin: true },
       { href: "/downloads", label: "Downloads", icon: CircleArrowDown, count: "downloads", admin: true },
       { href: "/missing", label: "Missing", icon: Puzzle, count: "missing", admin: true },
+      { href: "/organize", label: "Organize", icon: FolderInput, count: "organize", admin: true },
       { href: "/releases", label: "Releases", icon: Rss, admin: true },
       { href: "/settings", label: "Settings", icon: Settings, admin: true },
       { href: "/upgrades", label: "Upgrades", icon: CircleArrowUp, admin: true },
@@ -92,6 +94,9 @@ function openRequests(list: RequestsResponse): number {
 // Downloads' count: the packages in New and Running, not the finished ones.
 const openDownloads = (list: DownloadsResponse) => list.packages.filter((p) => p.status !== "done").length;
 
+// Organize's count: finished packages not moved into the library yet.
+const toOrganize = (list: DownloadsResponse) => list.packages.filter((p) => p.status === "done" && !p.movedTo).length;
+
 function countOf(
   status: StatusResponse | null,
   requests: RequestsResponse | null,
@@ -100,9 +105,10 @@ function countOf(
 ): number | null {
   if (key === "requests") return requests && openRequests(requests);
   if (key === "downloads") return downloads && openDownloads(downloads);
+  if (key === "organize") return downloads && toOrganize(downloads);
   if (!status || !key) return null;
-  if (key === "movies") return status.jellyfin.movies;
-  if (key === "shows") return status.jellyfin.shows;
+  if (key === "movies") return status.library.movies;
+  if (key === "shows") return status.library.shows;
   return status.missing.incompleteCount + status.missing.incompleteCollectionCount;
 }
 
@@ -122,14 +128,14 @@ const linkClass = (active: boolean) =>
       : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
   );
 
-// Sign out at the bottom of the sidebar, like a link. Only with sign-in on
-// (canSignOut).
-function SignOutButton({ user }: { user: SessionUser }) {
+// Sign out at the bottom of the sidebar, like a link. Always there, so the
+// sidebar looks the same; with sign-in off (not canSignOut) it does nothing.
+function SignOutButton({ user, canSignOut }: { user: SessionUser; canSignOut: boolean }) {
   return (
     <button
       type="button"
-      onClick={signOut}
-      title={`Signed in as ${user.name}`}
+      onClick={canSignOut ? signOut : undefined}
+      title={canSignOut ? `Signed in as ${user.name}` : "Sign-in is off"}
       className={cn(linkClass(false), "w-full justify-start gap-2.5 text-left")}
     >
       <Lock className={NAV_ICON} />
@@ -142,7 +148,7 @@ function SignOutButton({ user }: { user: SessionUser }) {
 // where there is one (all muted), and at the bottom Sign out. Sticks while the page scrolls.
 export function Sidebar({ user, canSignOut }: { user: SessionUser; canSignOut: boolean }) {
   const pathname = usePathname();
-  const { data: status } = useLoad(loadStatus);
+  const { data: status, reload: reloadStatus } = useLoad(loadStatus);
   const { data: requests, setData: setRequests } = useLoad(loadRequests);
   const downloads = useLoad(user.admin ? loadDownloads : noDownloads);
   const { setData: setDownloads, reload: reloadDownloads } = downloads;
@@ -151,19 +157,24 @@ export function Sidebar({ user, canSignOut }: { user: SessionUser; canSignOut: b
     void reloadDownloads();
   }, [pathname, reloadDownloads]);
   useWindowEvent<DownloadsResponse>(DOWNLOADS_CHANGED, setDownloads);
+  // A download, move or sync done, or Organize changed: the counts again.
+  useWindowEvent(COUNTS_STALE, () => {
+    void reloadStatus();
+    void reloadDownloads();
+  });
   // Discover and the Wishlist tell when the list changes.
   useWindowEvent<RequestsResponse>(REQUESTS_CHANGED, setRequests);
   return (
-    <aside className="sticky top-0 hidden h-svh w-52 shrink-0 flex-col gap-5 overflow-y-auto border-r bg-sidebar px-2.5 py-3.5 text-[13px] md:flex">
+    <aside className="sticky top-0 hidden h-svh w-52 shrink-0 flex-col gap-5 overflow-y-auto border-r bg-sidebar px-2.5 py-3.5 text-sm md:flex">
       <Link href="/" className="flex items-center gap-2 px-2 py-1 font-semibold">
         <Logo className="size-5" />
         Jellylens
-        <span className="ml-auto font-mono text-[11px] font-normal text-muted-foreground">{pkg.version}</span>
+        <span className="ml-auto font-mono text-xs font-normal text-muted-foreground">{pkg.version}</span>
       </Link>
       <nav aria-label="Main" className="flex flex-col gap-5">
         {sectionsFor(user).map((section) => (
           <div key={section.label} className="flex flex-col gap-px">
-            <span className="px-2 pb-1 text-[11px] text-muted-foreground">{section.label}</span>
+            <span className="px-2 pb-1 text-xs text-muted-foreground">{section.label}</span>
             {section.links.map((l) => {
               const count = countOf(status, requests, downloads.data, l.count);
               return (
@@ -181,11 +192,9 @@ export function Sidebar({ user, canSignOut }: { user: SessionUser; canSignOut: b
           </div>
         ))}
       </nav>
-      {canSignOut ? (
-        <div className="mt-auto border-t pt-3">
-          <SignOutButton user={user} />
-        </div>
-      ) : null}
+      <div className="mt-auto border-t pt-3">
+        <SignOutButton user={user} canSignOut={canSignOut} />
+      </div>
     </aside>
   );
 }
@@ -245,7 +254,7 @@ export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut:
             // Staggered on the way in; all at once on the way out.
             style={{ transitionDelay: open ? `${60 + i * 40}ms` : "0ms" }}
             className={cn(
-              "py-2 text-[28px] leading-tight font-semibold tracking-tight transition-[opacity,transform] duration-300 ease-out",
+              "py-2 text-[1.75rem] leading-tight font-semibold tracking-tight transition-[opacity,transform] duration-300 ease-out",
               open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
               pathname === l.href ? "text-foreground" : "text-muted-foreground",
             )}
@@ -253,24 +262,22 @@ export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut:
             {l.label}
           </Link>
         ))}
-        {canSignOut ? (
-          <div
-            style={{ transitionDelay: open ? `${60 + links.length * 40}ms` : "0ms" }}
-            className={cn(
-              "mt-8 border-t pt-6 transition-[opacity,transform] duration-300 ease-out",
-              open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
-            )}
+        <div
+          style={{ transitionDelay: open ? `${60 + links.length * 40}ms` : "0ms" }}
+          className={cn(
+            "mt-8 border-t pt-6 transition-[opacity,transform] duration-300 ease-out",
+            open ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0",
+          )}
+        >
+          {/* Reads like the links above, one size down. */}
+          <button
+            type="button"
+            onClick={canSignOut ? signOut : undefined}
+            className="-my-2 py-2 text-xl font-semibold tracking-tight text-muted-foreground transition-colors hover:text-foreground"
           >
-            {/* Reads like the links above, one size down. */}
-            <button
-              type="button"
-              onClick={signOut}
-              className="-my-2 py-2 text-xl font-semibold tracking-tight text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Sign out
-            </button>
-          </div>
-        ) : null}
+            Sign out
+          </button>
+        </div>
       </nav>
     </div>
   );

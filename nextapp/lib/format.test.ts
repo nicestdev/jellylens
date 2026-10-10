@@ -20,14 +20,14 @@ describe("plural", () => {
     expect(plural(2, "box")).toBe("2 boxes");
   });
 
-  it("formats the number German-style", () => {
-    expect(plural(11281, "title")).toBe("11.281 titles");
+  it("writes the number without thousands separators", () => {
+    expect(plural(11281, "title")).toBe("11281 titles");
   });
 });
 
 describe("formatNumber and formatDate", () => {
-  it("use German separators", () => {
-    expect(formatNumber(1234567)).toBe("1.234.567");
+  it("have a decimal point and no thousands separators", () => {
+    expect(formatNumber(1234567)).toBe("1234567");
     expect(formatDate(Date.UTC(2026, 8, 30, 12) / 1000)).toBe("30.09.2026");
   });
 });
@@ -54,18 +54,18 @@ describe("seasonLabel", () => {
 
 describe("formatBytes", () => {
   it("picks a binary unit, always with two decimals", () => {
-    expect(formatBytes(0)).toBe("0 B");
-    expect(formatBytes(900)).toBe("900 B");
-    expect(formatBytes(512 * 1024 ** 2)).toBe("512,00 MB");
-    expect(formatBytes(45.6 * 1024 ** 3)).toBe("45,60 GB");
-    expect(formatBytes(1.234 * 1024 ** 4)).toBe("1,23 TB");
-    expect(formatBytes(1.999 * 1024 ** 3)).toBe("2,00 GB");
+    expect(formatBytes(0)).toBe("0\u202fB");
+    expect(formatBytes(900)).toBe("900\u202fB");
+    expect(formatBytes(512 * 1024 ** 2)).toBe("512.00\u202fMB");
+    expect(formatBytes(45.6 * 1024 ** 3)).toBe("45.60\u202fGB");
+    expect(formatBytes(1.234 * 1024 ** 4)).toBe("1.23\u202fTB");
+    expect(formatBytes(1.999 * 1024 ** 3)).toBe("2.00\u202fGB");
   });
 
   it("takes the next unit from 1000 on, so it's never four digits", () => {
-    expect(formatBytes(999 * 1024 ** 2)).toBe("999,00 MB");
-    expect(formatBytes(1010 * 1024 ** 2)).toBe("0,99 GB");
-    expect(formatBytes(1000)).toBe("0,98 KB");
+    expect(formatBytes(999 * 1024 ** 2)).toBe("999.00\u202fMB");
+    expect(formatBytes(1010 * 1024 ** 2)).toBe("0.99\u202fGB");
+    expect(formatBytes(1000)).toBe("0.98\u202fKB");
   });
 });
 

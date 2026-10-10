@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmptyState } from "@/components/empty-state";
 import { LibraryToolbar, useLibraryFilters } from "@/components/library-toolbar";
 import { POSTER_GRID, PosterCard, PosterGridSkeleton } from "@/components/poster-card";
-import { apiFetch, tmdbUrl } from "@/lib/api-client";
+import { apiFetch, tmdbImage, tmdbUrl } from "@/lib/api-client";
 import type { MovieItem as Movie, MoviesResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { formatNumber, plural, resolutionLabel } from "@/lib/format";
@@ -16,8 +16,7 @@ function MovieCard({ item, href }: { item: Movie; href?: string }) {
   return (
     <PosterCard
       href={href}
-      itemId={item.Id}
-      imageTag={item.ImageTags?.Primary}
+      imageSrc={tmdbImage(item.PosterPath)}
       title={item.Name}
       meta={movieMeta(item)}
       // 1080p is the norm, so only the exceptions (4K, 720p, SD) get a badge.
@@ -38,7 +37,7 @@ export default function MoviesPage() {
   const { rows, genreCounts, langCounts, narrowed } = movieView(movies, lib.filters, lib.sortKey, lib.sortDir);
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div>
         <h1 className="text-xl font-semibold">Movies</h1>
         <p className="mt-1 text-sm text-muted-foreground">

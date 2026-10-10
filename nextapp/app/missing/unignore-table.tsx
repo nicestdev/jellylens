@@ -3,16 +3,13 @@
 import { Eye } from "lucide-react";
 import { PosterCard, type PosterBadge } from "@/components/poster-card";
 
-// itemId + imageTag: a Jellyfin poster (shows); imageSrc: TMDB's (movies,
-// collections); neither: the placeholder.
+// imageSrc: TMDB's poster; none: the placeholder.
 type IgnoredTile = {
   key: string;
   title: string;
   meta?: string;
   badge?: PosterBadge;
   filterBadge?: PosterBadge;
-  itemId?: string;
-  imageTag?: string;
   imageSrc?: string | null;
   onUnignore: () => void;
 };

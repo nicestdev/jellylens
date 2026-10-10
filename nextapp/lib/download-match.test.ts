@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { json, mockFetch } from "@/test/http";
 import { run } from "./store/sql";
 import { addPackage, listFiles, listPackages, setPackageMedia } from "./store";
-import { MATCHING_CHANGED, RECHECK_MS, checkPendingFiles, matchName, matchPendingPackages } from "./download-match";
+import {
+  MATCHING_CHANGED,
+  RECHECK_MS,
+  checkPendingFiles,
+  matchName,
+  matchPendingPackages,
+  onlineOf,
+} from "./download-match";
 
 // What runs in the background, waited for.
 const g = globalThis as unknown as {
@@ -17,8 +24,6 @@ const settled = async () => {
 // TMDB's movie search, as the Downloads page asks it for a package's name.
 function tmdb(results: Record<string, unknown[]>) {
   return mockFetch((url) => {
-    if (url.pathname === "/System/Configuration")
-      return json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" });
     if (url.pathname === "/3/search/movie")
       return json({ results: results[url.searchParams.get("query") ?? ""] ?? [] });
   });
@@ -112,5 +117,39 @@ describe("checkPendingFiles", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("asks about every new file once, its size known or not, like JDownloader's LinkGrabber", async () => {
+    const id = addPackage({
+      name: "Heat",
+      dir: "heat",
+      files: [
+        { url: "https://ddownload.com/aaaaaaaaaaa1", name: "Heat.part1.rar", size: 1000 },
+        { url: "https://ddownload.com/aaaaaaaaaaa2", name: "Heat.part2.rar", size: 1000 },
+      ],
+    });
+    const [one] = listFiles(id);
+    expect(onlineOf(one.id)).toBeNull();
+    const fetch = mockFetch((url) =>
+      url.hostname === "ddownload.com"
+        ? new Response(
+            url.pathname.endsWith("2")
+              ? "<b>File Not Found</b>"
+              : '<div class="dk-dl-name" title="Heat.part1.rar"></div><span class="dk-dl-size">1.5 GB</span>',
+          )
+        : undefined,
+    );
+    checkPendingFiles();
+    await settled();
+    expect(onlineOf(one.id)).toBe("online");
+    // The size it came with stays.
+    expect(listFiles(id)).toMatchObject([
+      { size: 1000, status: "queued" },
+      { status: "failed", error: "The hoster doesn't have it anymore" },
+    ]);
+    // Not asked again.
+    checkPendingFiles();
+    await settled();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

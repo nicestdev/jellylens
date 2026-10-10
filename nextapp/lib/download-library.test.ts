@@ -8,13 +8,21 @@ let idx = 0;
 function copy(
   kind: "movie" | "episode",
   tmdbId: number,
-  over: { season?: number; episode?: number; episodeEnd?: number; resolution?: string; codec?: string; group?: string },
+  over: {
+    season?: number;
+    episode?: number;
+    episodeEnd?: number;
+    resolution?: string;
+    codec?: string;
+    group?: string;
+    fileName?: string;
+  },
 ) {
   db()
     .prepare(
       `INSERT INTO media_files (kind, item_id, idx, parent_id, title, tmdb_id, season, episode, episode_end,
          file_name, size, grp, resolution, codec, languages, search)
-       VALUES (?, ?, ?, 'p', 'T', ?, ?, ?, ?, 'f.mkv', 1, ?, ?, ?, '[]', 't')`,
+       VALUES (?, ?, ?, 'p', 'T', ?, ?, ?, ?, ?, 1, ?, ?, ?, '[]', 't')`,
     )
     .run(
       kind,
@@ -24,6 +32,7 @@ function copy(
       over.season ?? null,
       over.episode ?? null,
       over.episodeEnd ?? null,
+      over.fileName ?? "f.mkv",
       over.group ?? null,
       over.resolution ?? "",
       over.codec ?? "",
@@ -57,7 +66,7 @@ describe("libraryOf", () => {
     copy("movie", 950, { resolution: "720p" });
     const { pkg: p, files } = pkg("Heat.1995", ["Heat.part1.rar"], { type: "movie", tmdbId: 949 });
     expect(libraryOf(p, files)).toEqual({
-      library: { have: ["1080p · x265 · FuN", "2160p"], parts: 0, partsOwned: 0, season: null },
+      library: { have: ["FuN · 1080p · x265", "2160p"], exact: 0, parts: 0, partsOwned: 0, season: null },
       owned: new Set(),
     });
   });
@@ -84,7 +93,7 @@ describe("libraryOf", () => {
     ]);
     const { library, owned } = libraryOf(p, files);
     expect(ids(files, owned)).toEqual(["Silo.S01E01.mkv", "Silo.S01E02E03.mkv"]);
-    expect(library).toEqual({ have: ["1080p · GRP", "720p"], parts: 4, partsOwned: 2, season: null });
+    expect(library).toEqual({ have: ["GRP · 1080p", "720p"], exact: 0, parts: 4, partsOwned: 2, season: null });
   });
 
   it("is nothing for a show's episodes you don't have", () => {
@@ -99,7 +108,7 @@ describe("libraryOf", () => {
     copy("episode", 7, { season: 2, episode: 1, resolution: "720p" });
     const { pkg: p, files } = pkg("Silo.S01.German.DL.1080p.WEB.x264-GRP", ["silo.part1.rar", "silo.part2.rar"]);
     expect(libraryOf(p, files)).toEqual({
-      library: { have: ["1080p"], parts: 0, partsOwned: 0, season: { number: 1, episodes: 2 } },
+      library: { have: ["1080p"], exact: 0, parts: 0, partsOwned: 0, season: { number: 1, episodes: 2 } },
       owned: new Set(),
     });
   });
@@ -113,10 +122,35 @@ describe("libraryOf", () => {
   });
 });
 
+describe("libraryOf, this very release", () => {
+  it("counts your copies from the package's release, its uploader left off", () => {
+    copy("movie", 949, { fileName: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR.mkv" });
+    copy("movie", 949, { fileName: "Heat.1995.German.DL.2160p.BluRay.x265-VECTOR.mkv" });
+    const { pkg: p, files } = pkg("Heat.1995.German.DL.1080p.BluRay.x264-VECTOR - uploader", [], {
+      type: "movie",
+      tmdbId: 949,
+    });
+    expect(libraryOf(p, files).library?.exact).toBe(1);
+  });
+
+  it("counts a season pack's episodes from it", () => {
+    copy("episode", 7, { season: 1, episode: 1, fileName: "Silo.S01E01.Freedom.Day.German.1080p.WEB.x264-GRP.mkv" });
+    copy("episode", 7, { season: 1, episode: 2, fileName: "Silo.S01E02.German.720p.WEB.x264-OTHER.mkv" });
+    const { pkg: p, files } = pkg("Silo.S01.German.1080p.WEB.x264-GRP", ["silo.part1.rar"]);
+    expect(libraryOf(p, files).library).toMatchObject({ exact: 1, season: { number: 1, episodes: 2 } });
+  });
+});
+
 describe("libraryOf, a copy over several episodes", () => {
   it("lists it for a part that's one of its later episodes", () => {
     copy("episode", 7, { season: 1, episode: 2, episodeEnd: 4, resolution: "1080p", group: "FuN" });
     const { pkg: p, files } = pkg("Silo.S01", ["Silo.S01E03.mkv"]);
-    expect(libraryOf(p, files).library).toEqual({ have: ["1080p · FuN"], parts: 1, partsOwned: 1, season: null });
+    expect(libraryOf(p, files).library).toEqual({
+      have: ["FuN · 1080p"],
+      exact: 0,
+      parts: 1,
+      partsOwned: 1,
+      season: null,
+    });
   });
 });

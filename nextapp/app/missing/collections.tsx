@@ -64,7 +64,7 @@ function CollectionGroup({
           target="_blank"
           rel="noopener noreferrer"
           title={collection.name}
-          className="mr-auto min-w-0 truncate text-[13px] font-medium text-foreground transition-colors hover:text-primary"
+          className="mr-auto min-w-0 truncate text-sm font-medium text-foreground transition-colors hover:text-primary"
         >
           {name}
         </a>

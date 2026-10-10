@@ -37,38 +37,38 @@ const chart = () => render(<ShareChart stats={movies} />);
 describe("ShareChart", () => {
   it("has a ring each for files and storage by group, and files by resolution and codec", () => {
     chart();
-    expect(screen.getByLabelText("FuN: 3 files, 75,0 % of files by group")).toBeInTheDocument();
-    expect(screen.getByLabelText("GRP: 3,00 GB, 75,0 % of storage by group")).toBeInTheDocument();
+    expect(screen.getByLabelText("FuN: 3 files, 75.0 % of files by group")).toBeInTheDocument();
+    expect(screen.getByLabelText("GRP: 3.00 GB, 75.0 % of storage by group")).toBeInTheDocument();
     // A legend per ring, with that ring's share.
     expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-      "FuN75,0 %",
-      "GRP25,0 %",
-      "FuN25,0 %",
-      "GRP75,0 %",
+      "FuN75.0\u202f%",
+      "GRP25.0\u202f%",
+      "FuN25.0\u202f%",
+      "GRP75.0\u202f%",
       // Languages out of every file, so they can add up to more.
-      "German100,0 %",
-      "English25,0 %",
+      "German100.0\u202f%",
+      "English25.0\u202f%",
       // Resolutions and codecs with the most files first.
-      "1080p75,0 %",
-      "4K25,0 %",
-      "x26575,0 %",
-      "x26425,0 %",
+      "1080p75.0\u202f%",
+      "4K25.0\u202f%",
+      "x26575.0\u202f%",
+      "x26425.0\u202f%",
     ]);
     // Each entry's value is its tooltip.
-    expect(screen.getByTitle("3,00 GB")).toHaveTextContent("GRP75,0 %");
+    expect(screen.getByTitle("3.00 GB")).toHaveTextContent("GRP75.0 %");
   });
 
   it("has a ring per audio language, out of every file", () => {
     chart();
-    expect(screen.getByLabelText("German: 4 files, 100,0 % of all files")).toBeInTheDocument();
-    expect(screen.getByLabelText("English: 1 file, 25,0 % of all files")).toBeInTheDocument();
+    expect(screen.getByLabelText("German: 4 files, 100.0 % of all files")).toBeInTheDocument();
+    expect(screen.getByLabelText("English: 1 file, 25.0 % of all files")).toBeInTheDocument();
   });
 
   it("shows the totals in the middle, or the piece under the pointer", async () => {
     const user = userEvent.setup();
     chart();
     // Storage as its number over its unit.
-    expect(screen.getByText("4,00")).toBeInTheDocument();
+    expect(screen.getByText("4.00")).toBeInTheDocument();
     expect(screen.getByText("GB")).toBeInTheDocument();
     expect(screen.getAllByText("files")).toHaveLength(3);
 

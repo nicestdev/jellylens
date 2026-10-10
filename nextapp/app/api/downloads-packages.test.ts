@@ -10,7 +10,7 @@ import {
   getPackage,
   listFiles,
   listPackages,
-  replaceJellyfin,
+  replaceLibrary,
   setPackageMedia,
   setPackageStatus,
   updateFile,
@@ -93,7 +93,8 @@ describe("POST /api/downloads", () => {
       links: `  ${DD1}\n\nnot a link ftp://example.com/x.rar\r\n${DD2}  `,
     });
     expect(status).toBe(200);
-    expect(body).toMatchObject({ added: 1, skipped: 0 });
+    // The list as GET has it, the new package in it.
+    expect(body.packages.map((p: { name: string }) => p.name)).toEqual(["Show.S01.German.1080p.WEB.x264-GRP"]);
     const [pkg] = listPackages();
     expect(pkg).toMatchObject({
       name: "Show.S01.German.1080p.WEB.x264-GRP",
@@ -119,13 +120,16 @@ describe("POST /api/downloads", () => {
     ]);
   });
 
-  it("leaves out links of hosters it can't fetch, and counts them", async () => {
+  it("keeps links of hosters it can't fetch, failed with why", async () => {
     withDdownload();
     withRealDebrid();
     const { body } = await postForm({ links: [DD1, RG, OTHER].join(" ") });
-    expect(body).toMatchObject({ added: 1, skipped: 1 });
-    expect(listFiles().map((f) => f.url)).toEqual([DD1, RG]);
-    expect(body.packages[0].sources).toEqual(["ddownload", "rapidgator.net via Real-Debrid"]);
+    expect(listFiles().map((f) => [f.url, f.status, f.error])).toEqual([
+      [DD1, "queued", null],
+      [RG, "queued", null],
+      [OTHER, "failed", "No account for its hoster"],
+    ]);
+    expect(body.packages[0].sources).toEqual(["ddownload", "rapidgator.net via Real-Debrid", "no account"]);
   });
 
   it("says so when no hoster of the links can be fetched", async () => {
@@ -184,12 +188,15 @@ describe("POST /api/downloads", () => {
     ]);
     const { body } = await postForm({ containers: [new File(["container"], "Anna.Upload.dlc")] });
     expect(dlc.decryptDlc).toHaveBeenCalledWith("container");
-    expect(body).toMatchObject({ added: 2, skipped: 1 });
+    expect(body.packages).toHaveLength(2);
     const [second, first] = listPackages();
     expect(first.name).toBe("Named.Package");
     expect(listFiles(first.id).map((f) => [f.name, f.size])).toEqual([["x.rar", 42]]);
     expect(second.name).toBe("Anna.Upload");
-    expect(listFiles(second.id).map((f) => f.name)).toEqual(["Given.rar"]);
+    expect(listFiles(second.id).map((f) => [f.name, f.status])).toEqual([
+      ["Given.rar", "queued"],
+      ["z.rar", "failed"],
+    ]);
   });
 
   it("names the container that didn't decrypt", async () => {
@@ -203,7 +210,7 @@ describe("POST /api/downloads", () => {
 
 // A show matched to TMDB 100 whose S01E01 is in the library (in 1080p by GRP).
 function library() {
-  replaceJellyfin(
+  replaceLibrary(
     {
       movies: [],
       shows: [show({ Id: "s1", Name: "Show" })],
@@ -218,7 +225,16 @@ function library() {
           tmdbId: "100",
           season: 1,
           episode: 1,
-          files: [{ Name: "Show.S01E01.1080p.WEB.h264-GRP.mkv", Size: 1, Codec: "h264", Width: 1920, Height: 1080 }],
+          files: [
+            {
+              Name: "Show.S01E01.1080p.WEB.h264-GRP.mkv",
+              Path: "Show.S01E01.1080p.WEB.h264-GRP.mkv",
+              Size: 1,
+              Codec: "h264",
+              Width: 1920,
+              Height: 1080,
+            },
+          ],
         },
       ]),
     },
@@ -276,7 +292,7 @@ describe("GET /api/downloads", () => {
     const body = await getDownloads();
     const byId = new Map(body.packages.map((p: { id: number }) => [p.id, p]));
     expect(byId.get(open)).toMatchObject({
-      library: { have: ["1080p · x264 · GRP"], parts: 2, partsOwned: 1, season: null },
+      library: { have: ["GRP · 1080p · x264"], parts: 2, partsOwned: 1, season: null },
       outputs: [],
       extractPercent: null,
       files: [

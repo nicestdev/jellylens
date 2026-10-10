@@ -34,9 +34,9 @@ describe("overview", () => {
   it("has a tile each for movies, their average and total size, and groups", () => {
     expect(overviewTiles(movies())).toEqual([
       { label: "Movies", value: "3", hint: "in the library" },
-      { label: "Average size", value: "1,33 GB", hint: "per movie" },
-      { label: "Total size", value: "4,00 GB", hint: "in 4 files" },
-      { label: "Release groups", value: "2", hint: "named in 75 % of files" },
+      { label: "Average size", value: "1.33\u202fGB", hint: "per movie" },
+      { label: "Total size", value: "4.00\u202fGB", hint: "in 4 files" },
+      { label: "Release groups", value: "2", hint: "named in 75\u202f% of files" },
     ]);
   });
 
@@ -44,7 +44,7 @@ describe("overview", () => {
     expect(overviewTiles(movies({ titles: 5, withFiles: 2 }), "shows").slice(0, 3)).toEqual([
       { label: "Shows", value: "5", hint: "in the library" },
       { label: "Files", value: "4", hint: "episodes of 2 shows" },
-      { label: "Total size", value: "4,00 GB", hint: "Ø 2,00 GB per show" },
+      { label: "Total size", value: "4.00\u202fGB", hint: "Ø 2.00\u202fGB per show" },
     ]);
   });
 
@@ -105,15 +105,15 @@ describe("share chart segments", () => {
 });
 
 describe("percent", () => {
-  it("always gives one decimal, a sliver at least 0,1 %, all but a sliver at most 99,9 %", () => {
-    expect(percent(58, 100)).toBe("58,0 %");
-    expect(percent(583, 1000)).toBe("58,3 %");
-    expect(percent(1, 100000)).toBe("0,1 %");
+  it("always gives one decimal, a sliver at least 0.1\u202f%, all but a sliver at most 99.9\u202f%", () => {
+    expect(percent(58, 100)).toBe("58.0\u202f%");
+    expect(percent(583, 1000)).toBe("58.3\u202f%");
+    expect(percent(1, 100000)).toBe("0.1\u202f%");
     // Not all of it: 9999 of 10000.
-    expect(percent(9999, 10000)).toBe("99,9 %");
-    expect(percent(649, 649)).toBe("100,0 %");
-    expect(percent(0, 100)).toBe("0,0 %");
-    expect(percent(0, 0)).toBe("0,0 %");
+    expect(percent(9999, 10000)).toBe("99.9\u202f%");
+    expect(percent(649, 649)).toBe("100.0\u202f%");
+    expect(percent(0, 100)).toBe("0.0\u202f%");
+    expect(percent(0, 0)).toBe("0.0\u202f%");
   });
 });
 

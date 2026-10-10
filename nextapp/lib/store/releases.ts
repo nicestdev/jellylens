@@ -419,7 +419,7 @@ function countTitles(w: { sql: string; params: unknown[] }): number {
   return one<{ n: number }>(`SELECT count(DISTINCT ${TILE}) AS n ${FROM} ${w.sql}`, ...w.params)!.n;
 }
 
-// Every tile, for "42 of 11.314 titles".
+// Every tile, for "42 of 11314 titles".
 export const tileCount = () => countTitles(where({ words: [], group: [], quality: [] }));
 
 // What the filter menu offers, over everything so it doesn't shrink as you

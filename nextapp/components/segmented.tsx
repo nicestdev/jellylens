@@ -25,7 +25,7 @@ export function Segmented<K extends string>({
     <div
       role="group"
       aria-label={label}
-      className={cn("flex h-7 overflow-hidden rounded-md border text-[13px]", className)}
+      className={cn("flex h-7 overflow-hidden rounded-md border text-sm", className)}
     >
       {segments.map((s) => (
         <button

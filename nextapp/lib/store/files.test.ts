@@ -8,12 +8,13 @@ import {
   filesByLanguage,
   filesByResolution,
   queryFiles,
-  replaceJellyfin,
+  replaceLibrary,
   type FileFilters,
 } from ".";
 
 const file = (Name: string, Size: number, over: Partial<MediaFile> = {}): MediaFile => ({
   Name,
+  Path: Name,
   Size,
   Codec: "hevc",
   Width: 1920,
@@ -58,7 +59,7 @@ function library() {
     episode("e2", 1, 2, [file("Silo - S01E02 - Holston.mkv", 2)]),
     episode("e1", 1, 1, [file("s01e01.mkv", 3, { Folder: "Silo.S01.German.DL.1080p.WEB.h264-cnhd" })]),
   ];
-  replaceJellyfin(
+  replaceLibrary(
     {
       movies: ["m1", "m2", "m3", "m4", "m5"].map((Id) => movie({ Id })),
       shows: [show({ Id: "s1" }), show({ Id: "s2" })],
@@ -89,7 +90,7 @@ describe("library files", () => {
   });
 
   it("is pending while there are titles but no files", () => {
-    replaceJellyfin({ movies: [movie({ Id: "m1" })], shows: [], episodes: [] }, null);
+    replaceLibrary({ movies: [movie({ Id: "m1" })], shows: [], episodes: [] }, null);
     expect(fileSummary("movies")).toMatchObject({ files: 0, pending: true });
     expect(fileSummary("shows")).toMatchObject({ titles: 0, pending: false });
   });
@@ -201,7 +202,7 @@ describe("library files", () => {
 
   it("is replaced with the library at every sync", () => {
     library();
-    replaceJellyfin({ movies: [], shows: [], episodes: [] }, null);
+    replaceLibrary({ movies: [], shows: [], episodes: [] }, null);
     expect(fileSummary("movies")).toMatchObject({ titles: 0, files: 0 });
     expect(fileSummary("shows")).toMatchObject({ titles: 0, files: 0 });
   });

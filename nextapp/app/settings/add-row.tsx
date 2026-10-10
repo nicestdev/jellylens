@@ -2,11 +2,12 @@
 
 import type { FormEvent, InputHTMLAttributes } from "react";
 import { Loader2, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // A section's last line for adding to its list (release groups, archive
 // passwords): a row like the list's own, edge to edge, with a borderless
-// field and Add as a text button, the accent once there's something to add.
-// Enter adds too.
+// field and Add as a small outline button, usable once there's something to
+// add. Enter adds too.
 export function AddRow({
   value,
   onChange,
@@ -26,7 +27,7 @@ export function AddRow({
   return (
     <form
       onSubmit={onSubmit}
-      className="-mx-3 -mb-3 flex h-9 items-center gap-2 border-t px-3 text-[13px] transition-colors focus-within:bg-muted/40"
+      className="-mx-3 -mb-3 flex h-9 items-center gap-2 border-t px-3 text-sm transition-colors focus-within:bg-muted/40"
     >
       {adding ? (
         <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
@@ -41,13 +42,9 @@ export function AddRow({
         disabled={adding || disabled}
         className="min-w-0 flex-1 bg-transparent outline-none disabled:opacity-60"
       />
-      <button
-        type="submit"
-        disabled={adding || disabled || !value.trim()}
-        className="shrink-0 text-primary transition-colors hover:text-foreground disabled:text-muted-foreground"
-      >
+      <Button type="submit" variant="outline" size="xs" disabled={adding || disabled || !value.trim()}>
         Add
-      </button>
+      </Button>
     </form>
   );
 }

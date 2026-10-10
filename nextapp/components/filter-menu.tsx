@@ -30,9 +30,7 @@ const activeIn = (f: Facet) => (f.single ? Number(Boolean(f.changed)) : f.select
 
 function CountPill({ n }: { n: number }) {
   return (
-    <span className="rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
-      {n}
-    </span>
+    <span className="rounded-sm bg-primary px-1 text-xs font-semibold text-primary-foreground tabular-nums">{n}</span>
   );
 }
 

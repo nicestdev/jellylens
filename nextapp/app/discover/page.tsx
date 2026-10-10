@@ -22,7 +22,7 @@ export default function DiscoverPage() {
   const error = r.error || discover.error;
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div>
         <h1 className="text-xl font-semibold">Discover</h1>
         <p className="mt-1 text-sm text-muted-foreground">

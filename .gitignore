@@ -15,3 +15,9 @@ nextapp/*.tsbuildinfo
 
 # misc
 .DS_Store
+
+# local compose overrides (home server paths, keys)
+docker-compose.*.local.yml
+
+# what the Downloads page fetches (the compose files' default folder)
+downloads/

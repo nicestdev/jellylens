@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { episode, movie, show } from "@/test/fixtures";
-import { addGroup, insertReleases, replaceJellyfin, replaceMissing, saveTitleMatch } from "@/lib/store";
+import { addGroup, insertReleases, replaceLibrary, replaceMissing, saveTitleMatch } from "@/lib/store";
 
 // GET /api/releases (the Releases page's tiles) and GET /api/shows.
 
@@ -35,9 +35,9 @@ function seed() {
   insertReleases("g2", [release("3", "bravo", "Bravo.2002.German.1080p.WEB.x264-GRPB", 200)]);
   saveTitleMatch("alpha", "verified", entry(1, "Alpha", 2001), { title: "Alpha", year: 2001 });
   saveTitleMatch("charlie", "verified", entry(3, "Charlie", 2003), { title: "Charlie", year: 2003 });
-  replaceJellyfin(
+  replaceLibrary(
     {
-      movies: [movie({ Id: "m1", Name: "Alpha", ProviderIds: { Tmdb: "1" }, ImageTags: { Primary: "tag1" } })],
+      movies: [movie({ Id: "m1", Name: "Alpha", ProviderIds: { Tmdb: "1" }, PosterPath: "/alpha.jpg" })],
       shows: [],
       episodes: [],
     },
@@ -85,7 +85,7 @@ describe("GET /api/releases", () => {
     const body = await releases();
     const byKey = new Map(body.Items.map((t: { key: string }) => [t.key, t]));
     expect(byKey.get("bravo")).toMatchObject({ year: 2002, library: null });
-    expect(byKey.get("movie:1")).toMatchObject({ year: 2001, library: { id: "m1", imageTag: "tag1" } });
+    expect(byKey.get("movie:1")).toMatchObject({ year: 2001, library: { id: "m1", posterPath: "/alpha.jpg" } });
     expect(byKey.get("movie:3")).toMatchObject({ library: null });
     expect(body).toMatchObject({
       facets: { group: ["GRPA", "GRPB"], quality: ["HD-1080p", "UHD-2160p"] },
@@ -102,7 +102,7 @@ describe("GET /api/shows", () => {
 
   it("counts each audio language's episodes, overall and per season", async () => {
     const lang = (ep: ReturnType<typeof episode>, AudioLanguages: string[]) => ({ ...ep, AudioLanguages });
-    replaceJellyfin(
+    replaceLibrary(
       {
         movies: [],
         shows: [show({ Id: "s1", Name: "Show One" }), show({ Id: "s2", Name: "Show Two" })],
@@ -131,7 +131,7 @@ describe("GET /api/shows", () => {
   });
 
   it("adds what the missing recheck found", async () => {
-    replaceJellyfin(
+    replaceLibrary(
       { movies: [], shows: [show({ Id: "s1" }), show({ Id: "s2" })], episodes: [episode("s1", 1, 1)] },
       "2026-10-01T00:00:00.000Z",
     );

@@ -27,7 +27,7 @@ const unit = (key: string, title: string, group: string, alternatives: Alternati
   title,
   year: 1995,
   tmdbId: 949,
-  imageTag: null,
+  posterPath: null,
   season: null,
   fileName: `${title}.1995.German.1080p.BluRay.x264-${group}.mkv`,
   files: 1,
@@ -65,7 +65,7 @@ describe("SwitchView", () => {
   it("starts with the first target A→Z, listing what it has and adding it up", () => {
     render(<SwitchView library="movies" data={data} onOpen={() => {}} />);
     expect(within(tile("FuN has")).getByText("2")).toBeInTheDocument();
-    expect(within(tile("Storage")).getByText("−2,00 GB")).not.toHaveClass("text-success");
+    expect(within(tile("Storage")).getByText("−2.00 GB")).not.toHaveClass("text-success");
     expect(listed()).toEqual(["Brazil", "Heat"]);
   });
 
@@ -119,7 +119,7 @@ describe("SwitchView", () => {
       within(row)
         .getAllByRole("cell")
         .map((c) => c.textContent),
-    ).toEqual([expect.any(String), "FuN", "720p", "x264", "DL", "4,00 GB", expect.any(String)]);
+    ).toEqual([expect.any(String), "FuN", "720p", "x264", "DL", "4.00\u202fGB", expect.any(String)]);
     expect(within(row).getByTitle("Now w00t")).toHaveTextContent("FuN");
     expect(within(row).getByTitle("Now 1080p")).toHaveTextContent("720p");
   });
@@ -144,8 +144,8 @@ describe("SwitchView", () => {
     // The same codec and quality aren't marked: plain in the name, muted in the column.
     expect(within(heat).getAllByText("x264")).toHaveLength(1);
     expect(within(heat).getByText("x264")).toHaveClass("text-muted-foreground");
-    expect(within(heat).getByText("5,00 GB")).toHaveAttribute("title", "Now 8,00 GB");
-    expect(within(heat).getByText("−3,00 GB")).toHaveClass("text-success");
+    expect(within(heat).getByText("5.00 GB")).toHaveAttribute("title", "Now 8.00\u202fGB");
+    expect(within(heat).getByText("−3.00 GB")).toHaveClass("text-success");
 
     await userEvent.click(screen.getByRole("button", { name: "Target: FuN" }));
     await userEvent.click(screen.getByRole("menuitemcheckbox", { name: /VECTOR/ }));
@@ -154,7 +154,7 @@ describe("SwitchView", () => {
     const [inName, inColumn] = within(alien).getAllByText("x265");
     expect(inName).toHaveClass("text-success");
     expect(inColumn).not.toHaveClass("text-success");
-    expect(within(alien).getByText("+1,00 GB")).toHaveClass("text-destructive");
+    expect(within(alien).getByText("+1.00 GB")).toHaveClass("text-destructive");
   });
 
   it("puts quality, codec and audio in one Format menu, counting what's off its default", async () => {

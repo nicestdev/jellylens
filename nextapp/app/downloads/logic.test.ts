@@ -6,10 +6,9 @@ import {
   displayName,
   errorLine,
   groups,
-  headline,
   isActive,
   libraryBadge,
-  partProblem,
+  partCheck,
   queueTiles,
   statusLabel,
   summarize,
@@ -28,6 +27,7 @@ const file = (id: number, over: Partial<DownloadFileItem> = {}): DownloadFileIte
   error: null,
   speed: null,
   inLibrary: false,
+  checked: "online",
   ...over,
 });
 
@@ -46,6 +46,10 @@ const pkg = (
   finishedAt: null,
   media: null,
   matched: true,
+  movedTo: null,
+  movedAt: null,
+  movedFiles: null,
+  replaced: false,
   library: null,
   sources: [],
   outputs: [],
@@ -95,8 +99,8 @@ describe("summarize", () => {
 
 describe("timeLeft", () => {
   it("says minutes, then hours and minutes, and nothing without speed", () => {
-    expect(timeLeft(30 * MB, MB)).toBe("1 min");
-    expect(timeLeft(4500 * MB, MB)).toBe("1 h 15 min");
+    expect(timeLeft(30 * MB, MB)).toBe("1\u202fmin");
+    expect(timeLeft(4500 * MB, MB)).toBe("1\u202fh 15\u202fmin");
     expect(timeLeft(MB, 0)).toBeNull();
   });
 });
@@ -120,14 +124,12 @@ describe("groups", () => {
     ]);
     expect(groups([pkg(1, "done")]).map((g) => g.title)).toEqual(["Finished"]);
   });
-});
 
-describe("headline", () => {
-  it("counts what's where, or says what the page does", () => {
-    expect(headline([pkg(1, "pending"), pkg(2, "downloading"), pkg(3, "paused")])).toBe(
-      "1 new · 1 downloading · 1 paused",
-    );
-    expect(headline([])).toMatch(/^Fetches DLC containers/);
+  it("leaves a finished one moved into the library to Organize's list", () => {
+    const moved = pkg(2, "done", { movedTo: "nvme01/movies/Heat (1995) [tmdbid-949]" });
+    expect(groups([pkg(1, "done"), moved]).map((g) => [g.title, g.packages.map((p) => p.id)])).toEqual([
+      ["Finished", [1]],
+    ]);
   });
 });
 
@@ -144,13 +146,13 @@ describe("queueTiles", () => {
     });
     expect(tiles.map((t) => [t.label, t.value, t.hint, Boolean(t.muted)])).toEqual([
       ["Packages", "1", "1 running", false],
-      ["Speed", "2,00 MB/s", "1 file coming in", false],
-      ["Left", "160,00 MB", "about 2 min at this speed", false],
-      ["Free space", "500,00 GB", "in /downloads", false],
+      ["Speed", "2.00\u202fMB/s", "1 file coming in", false],
+      ["Left", "160.00\u202fMB", "about 2\u202fmin at this speed", false],
+      ["Free space", "500.00\u202fGB", "in /downloads", false],
     ]);
     const empty = queueTiles({ packages: [], freeBytes: null, downloadDir: "/d" });
     expect(empty[0]).toMatchObject({ value: "0", hint: "none yet", muted: true });
-    expect(empty[1]).toMatchObject({ value: "0 B/s", muted: true });
+    expect(empty[1]).toMatchObject({ value: "0\u202fB/s", muted: true });
   });
 });
 
@@ -160,15 +162,28 @@ describe("libraryBadge", () => {
       libraryBadge(
         pkg(1, "pending", {
           media: { type: "movie" } as never,
-          library: { have: ["1080p · x265 · FuN"], parts: 0, partsOwned: 0, season: null },
+          library: { have: ["FuN · 1080p · x265"], exact: 0, parts: 0, partsOwned: 0, season: null },
         }),
       ),
-    ).toEqual({ label: "In library", hint: "You have: 1080p · x265 · FuN" });
-    expect(libraryBadge(pkg(1, "pending", { library: { have: [], parts: 10, partsOwned: 4, season: null } }))).toEqual({
-      label: "4 of 10 in library",
-      hint: "",
-    });
+    ).toEqual({ label: "In library", hint: "FuN · 1080p · x265", exact: false });
+    expect(
+      libraryBadge(pkg(1, "pending", { library: { have: [], exact: 0, parts: 10, partsOwned: 4, season: null } })),
+    ).toEqual({ label: "4 of 10 in library", hint: "", exact: false });
     expect(libraryBadge(pkg(1, "pending"))).toBeNull();
+  });
+
+  it("says when the library has this very release", () => {
+    const library = (over: object) => ({ have: [], exact: 1, parts: 0, partsOwned: 0, season: null, ...over });
+    expect(libraryBadge(pkg(1, "pending", { media: { type: "movie" } as never, library: library({}) }))).toMatchObject({
+      label: "This release in library",
+      exact: true,
+    });
+    expect(libraryBadge(pkg(1, "pending", { library: library({ exact: 2, parts: 4, partsOwned: 2 }) }))?.label).toBe(
+      "2 of 4 in library, all of this release",
+    );
+    expect(
+      libraryBadge(pkg(1, "pending", { library: library({ exact: 3, season: { number: 1, episodes: 8 } }) }))?.label,
+    ).toBe("S01: 8 episodes in library, 3 of this release");
   });
 });
 
@@ -181,47 +196,79 @@ describe("errorLine", () => {
     expect(errorLine("7-Zip (7zz) isn't installed")).toBe("7-Zip (7zz) isn't installed");
   });
 
+  it("starts it like a sentence, without its closing period", () => {
+    expect(errorLine("Gen.V.S01E01.mkv: the copy doesn't match the original")).toBe(
+      "The copy doesn't match the original",
+    );
+    expect(errorLine("No season in Gen.V.Folge.1.mkv.")).toBe("No season in Gen.V.Folge.1.mkv");
+  });
+
   it("says Failed without an error", () => {
     expect(errorLine(null)).toBe("Failed");
     expect(errorLine("")).toBe("Failed");
   });
 });
 
-describe("partProblem", () => {
+describe("partCheck", () => {
   const parts = (...nums: number[]) => nums.map((n) => file(n, { name: `Heat.1995.part${n}.rar` }));
 
-  it("names the parts the hoster has no more, with their errors on hover", () => {
-    const p = pkg(1, "pending", {
-      files: [...parts(1, 2), file(3, { name: "Heat.1995.part3.rar", status: "failed", error: null })],
-    });
-    expect(partProblem(p)).toEqual({ line: "1 part offline", detail: "Heat.1995.part3.rar: Offline" });
+  it("says Checking until the hoster was asked about every part", () => {
+    const p = pkg(1, "pending", { files: [...parts(1, 2), file(3, { name: "Heat.1995.part3.rar", checked: null })] });
+    expect(partCheck(p)).toEqual({ line: "Checking · 2/3" });
   });
 
-  it("finds gaps in a multi-part RAR's numbering, counting them past two", () => {
-    expect(partProblem(pkg(1, "pending", { files: parts(1, 3, 4) }))).toEqual({
-      line: "part2 missing",
-      detail: "part2 missing",
-    });
-    expect(partProblem(pkg(1, "pending", { files: parts(2, 5) }))?.line).toBe("3 parts missing");
-  });
-
-  it("puts both on one line", () => {
-    const p = pkg(1, "pending", {
-      files: [
-        file(1, { name: "Heat.1995.part1.rar", status: "failed", error: "File not found" }),
-        file(3, { name: "Heat.1995.part3.rar" }),
-      ],
-    });
-    expect(partProblem(p)).toEqual({
-      line: "1 part offline · part2 missing",
-      detail: "Heat.1995.part1.rar: File not found\npart2 missing",
+  it("counts the parts online, plain when all are", () => {
+    expect(partCheck(pkg(1, "pending", { files: parts(1, 2, 3) }))).toEqual({ line: "Online · 3/3" });
+    expect(partCheck(pkg(1, "pending", { files: [file(1, { name: "Heat.1995.mkv" })] }))).toEqual({
+      line: "Online · 1/1",
     });
   });
 
-  it("is null when nothing's wrong, or once it's started", () => {
-    expect(partProblem(pkg(1, "pending", { files: parts(1, 2, 3) }))).toBeNull();
-    expect(partProblem(pkg(1, "pending", { files: [file(1, { name: "Heat.1995.mkv" })] }))).toBeNull();
-    expect(partProblem(pkg(1, "failed", { files: parts(1, 3) }))).toBeNull();
+  it("says why parts failed and how many, red, each one's reason on hover", () => {
+    const failed = (n: number, error: string | null) =>
+      file(n, { name: `Heat.1995.part${n}.rar`, status: "failed", error });
+    expect(partCheck(pkg(1, "pending", { files: [...parts(1, 2), failed(3, null)] }))).toEqual({
+      line: "Failed · 1 part",
+      hint: "Heat.1995.part3.rar: Failed",
+      tone: "error",
+    });
+    const files = [
+      ...parts(1),
+      failed(2, "No account for its hoster"),
+      failed(3, "No account for its hoster"),
+      failed(4, "Heat.1995.part4.rar: file not found."),
+    ];
+    expect(partCheck(pkg(1, "pending", { files }))).toEqual({
+      line: "No account for its hoster +1 · 3 parts",
+      hint: [
+        "Heat.1995.part2.rar: No account for its hoster",
+        "Heat.1995.part3.rar: No account for its hoster",
+        "Heat.1995.part4.rar: Heat.1995.part4.rar: file not found.",
+      ].join("\n"),
+      tone: "error",
+    });
+  });
+
+  it("counts gaps in a multi-part RAR's numbering as parts, red", () => {
+    expect(partCheck(pkg(1, "pending", { files: parts(1, 3, 4) }))).toEqual({ line: "Online · 3/4", tone: "error" });
+    expect(partCheck(pkg(1, "pending", { files: parts(2, 5) }))).toEqual({ line: "Online · 2/5", tone: "error" });
+  });
+
+  it("is peach for parts the hoster didn't answer for, red winning", () => {
+    const unknown = (n: number) => file(n, { name: `Heat.1995.part${n}.rar`, checked: "unknown" });
+    expect(partCheck(pkg(1, "pending", { files: [...parts(1, 2), unknown(3)] }))).toEqual({
+      line: "Online · 2/3",
+      tone: "warning",
+    });
+    expect(partCheck(pkg(1, "pending", { files: [...parts(1), unknown(3)] }))).toEqual({
+      line: "Online · 1/3",
+      tone: "error",
+    });
+  });
+
+  it("leaves out parts skipped at Start", () => {
+    const p = pkg(1, "pending", { files: [...parts(1, 2), file(3, { name: "x.mkv", status: "skipped" })] });
+    expect(partCheck(p)).toEqual({ line: "Online · 2/2" });
   });
 });
 

@@ -5,7 +5,7 @@ import {
   getMismatches,
   getMissingCollections,
   getMissingSeries,
-  replaceJellyfin,
+  replaceLibrary,
   replaceTmdb,
   syncedAt,
   type TmdbCollection,
@@ -166,7 +166,7 @@ describe("computeMissing", () => {
   });
 
   it("writes what it finds", () => {
-    replaceJellyfin(
+    replaceLibrary(
       {
         movies: [movie({ Id: "m1", ProviderIds: { Tmdb: "1", TmdbCollection: "c" } })],
         shows: [],

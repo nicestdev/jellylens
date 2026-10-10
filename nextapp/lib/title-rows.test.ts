@@ -39,6 +39,7 @@ const wcx = (name: string, over: Partial<WcxRelease> = {}): WcxRelease => ({
   ...over,
 });
 const copy = (over: Partial<LibraryCopy> = {}): LibraryCopy => ({
+  fileName: "other.mkv",
   season: null,
   episode: null,
   episodeEnd: null,
@@ -113,17 +114,40 @@ describe("libraryNote", () => {
   const episode = xrelRow(xrel("Silo.S01E02.German.DL.1080p.WEB.h264-VECTOR"));
 
   it("names a movie's copies", () => {
-    expect(libraryNote(movie, [copy(), copy({ resolution: "2160p", codec: "x265", group: null })], true)).toBe(
-      "In library\nYou have: 1080p · x264 · VECTOR, 2160p · x265",
-    );
+    expect(libraryNote(movie, [copy(), copy({ resolution: "2160p", codec: "x265", group: null })], true)).toEqual({
+      label: "In library",
+      hint: "VECTOR · 1080p · x264, 2160p · x265",
+      exact: false,
+    });
     expect(libraryNote(movie, [], true)).toBeNull();
   });
 
   it("counts a season's episodes, or says one episode is there", () => {
     const copies = [copy({ season: 1, episode: 1 }), copy({ season: 1, episode: 2, episodeEnd: 3 })];
-    expect(libraryNote(pack, copies, false)).toBe("S01: 2 episodes in library\nYou have: 1080p · x264 · VECTOR");
-    expect(libraryNote(episode, copies, false)).toBe("In library\nYou have: 1080p · x264 · VECTOR");
+    expect(libraryNote(pack, copies, false)).toEqual({
+      label: "S01: 2 episodes in library",
+      hint: "VECTOR · 1080p · x264",
+      exact: false,
+    });
+    expect(libraryNote(episode, copies, false)?.label).toBe("In library");
     expect(libraryNote(pack, [copy({ season: 2, episode: 1 })], false)).toBeNull();
+  });
+
+  it("says when a file is from this very release", () => {
+    expect(
+      libraryNote(movie, [copy({ fileName: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR.mkv" })], true),
+    ).toMatchObject({ label: "This release in library", exact: true });
+    const mine = (e: number) =>
+      copy({ season: 1, episode: e, fileName: `Silo.S01E0${e}.Die.Folge.German.DL.1080p.WEB.h264-VECTOR.mkv` });
+    expect(libraryNote(pack, [mine(1), mine(2)], false)).toMatchObject({
+      label: "S01: 2 episodes in library, all of this release",
+      exact: true,
+    });
+    expect(libraryNote(pack, [mine(1), copy({ season: 1, episode: 2 })], false)).toMatchObject({
+      label: "S01: 2 episodes in library, 1 of this release",
+      exact: true,
+    });
+    expect(libraryNote(episode, [mine(2)], false)).toMatchObject({ label: "This release in library", exact: true });
   });
 });
 

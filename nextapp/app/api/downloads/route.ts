@@ -4,7 +4,7 @@ import { libraryOf } from "@/lib/download-library";
 import { DDOWNLOAD_LOGIN, DDOWNLOAD_PASSWORD, DOWNLOAD_DIR, REALDEBRID_TOKEN } from "@/lib/env";
 import { decryptDlc } from "@/lib/dlc";
 import { nameFromUrl, routeOf } from "@/lib/hosters";
-import { checkPendingFiles, matchPendingPackages } from "@/lib/download-match";
+import { checkPendingFiles, matchPendingPackages, onlineOf } from "@/lib/download-match";
 import { kickDownloads, liveProgress, packageDir, packageOutputs, pauseAllDownloads } from "@/lib/downloader";
 import {
   MAX_DOWNLOAD_SLOTS,
@@ -71,6 +71,7 @@ async function downloads(): Promise<DownloadsResponse> {
           ...f,
           speed: live.speed.get(f.id) ?? null,
           inLibrary: owned.has(f.id),
+          checked: onlineOf(f.id),
         })),
       };
     }),
@@ -120,6 +121,8 @@ export async function PATCH(req: Request) {
   return Response.json((await downloads()) satisfies DownloadsResponse);
 }
 
+const NO_ACCOUNT = "No account for its hoster";
+
 const fileBase = (name: string) => name.replace(/\.[^.]+$/, "");
 
 type NewPackage = {
@@ -130,7 +133,8 @@ type NewPackage = {
 // POST multipart: `containers` (.dlc files), `links` (one per line, one
 // package; archive passwords: Settings', then ARCHIVE_PASSWORDS). Adds a package per
 // container package, pending: nothing downloads until it's started
-// (POST /api/downloads/<id>). Links of hosters we can't fetch are left out.
+// (POST /api/downloads/<id>). A link of a hoster we can't fetch stays in
+// as a failed file, so its package says so; one with nothing to fetch isn't added.
 export async function POST(req: Request) {
   let form: FormData;
   try {
@@ -139,7 +143,6 @@ export async function POST(req: Request) {
     return Response.json({ error: "Expected a form with DLC files or links." }, { status: 400 });
   }
   const packages: NewPackage[] = [];
-  const skipped: string[] = [];
 
   for (const entry of form.getAll("containers")) {
     if (!(entry instanceof File)) continue;
@@ -172,27 +175,26 @@ export async function POST(req: Request) {
   }
 
   let added = 0;
+  let unfetchable = 0;
   for (const p of packages) {
     const fetchable = await Promise.all(p.files.map(async (f) => Boolean(await routeLabel(f.url))));
-    const supported = p.files.filter((_, i) => fetchable[i]);
-    skipped.push(...p.files.filter((_, i) => !fetchable[i]).map((f) => f.url));
-    if (!supported.length) continue;
-    addPackage({ name: p.name, dir: packageDir(p.name), files: supported });
+    if (!fetchable.some(Boolean)) {
+      unfetchable++;
+      continue;
+    }
+    const files = p.files.map((f, i) => (fetchable[i] ? f : { ...f, error: NO_ACCOUNT }));
+    addPackage({ name: p.name, dir: packageDir(p.name), files });
     added++;
   }
   if (!added) {
     return Response.json(
       {
-        error: skipped.length
+        error: unfetchable
           ? "None of the links can be fetched: there's no account for their hoster, and Real-Debrid doesn't cover it (or isn't set up)."
           : "No links found.",
       },
       { status: 400 },
     );
   }
-  return Response.json({
-    ...(await downloads()),
-    added,
-    skipped: skipped.length,
-  });
+  return Response.json((await downloads()) satisfies DownloadsResponse);
 }

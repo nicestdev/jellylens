@@ -1,13 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
-import { json, mockFetch } from "@/test/http";
 import { movie } from "@/test/fixtures";
 import { all } from "@/lib/store/sql";
-import { addGroup, insertReleases, replaceJellyfin, saveTitleMatch } from "@/lib/store";
+import { addGroup, insertReleases, replaceLibrary, saveTitleMatch } from "@/lib/store";
 
-// GET /api/discover, /api/image/<id> and /api/tmdb-poster/<type>/<id>.
-// TMDB_API_KEY is read from `env` as it's used; TMDB's lookups and the
-// Jellyfin image cache are mocked.
+// GET /api/discover and /api/tmdb-poster/<type>/<id>. TMDB_API_KEY is
+// read from `env` as it's used; TMDB's lookups are mocked.
 const env = vi.hoisted(() => ({ TMDB_API_KEY: "tmdb-key" }));
 vi.mock("@/lib/env", async (original) => {
   const mocked = { ...(await original<typeof import("@/lib/env")>()) };
@@ -20,21 +17,10 @@ vi.mock("@/lib/availability", async (original) => ({
   ...(await original<typeof import("@/lib/availability")>()),
   withAvailability: async (items: object[]) => items.map((i) => ({ ...i, availability: "released" })),
 }));
-const images = vi.hoisted(() => ({ getImage: vi.fn() }));
-vi.mock("@/lib/image-cache", async (original) => ({
-  ...(await original<typeof import("@/lib/image-cache")>()),
-  ...images,
-}));
 
 beforeEach(() => {
   env.TMDB_API_KEY = "tmdb-key";
-  for (const fn of [...Object.values(tmdb), images.getImage]) fn.mockReset();
-  // The library's metadata language.
-  mockFetch((url) =>
-    url.pathname === "/System/Configuration"
-      ? json({ PreferredMetadataLanguage: "de", MetadataCountryCode: "DE" })
-      : undefined,
-  );
+  for (const fn of Object.values(tmdb)) fn.mockReset();
 });
 
 const result = (tmdbId: number, mediaType: "movie" | "tv" = "movie") => ({
@@ -54,7 +40,7 @@ describe("GET /api/discover", () => {
   };
   // Movie 1 is in the library.
   const owned = () =>
-    replaceJellyfin(
+    replaceLibrary(
       { movies: [movie({ Id: "m1", ProviderIds: { Tmdb: "1" } })], shows: [], episodes: [] },
       "2026-10-01T00:00:00.000Z",
     );
@@ -107,63 +93,6 @@ describe("GET /api/discover", () => {
     env.TMDB_API_KEY = "tmdb-key";
     tmdb.searchTmdb.mockRejectedValue(new Error("TMDB answered HTTP 503"));
     expect(await discover("?q=x")).toEqual({ status: 502, body: { error: "TMDB answered HTTP 503" } });
-  });
-});
-
-describe("GET /api/image/<id>", () => {
-  const ID = "0123456789abcdef0123456789ABCDEF";
-  const image = async (id: string, query: string) => {
-    const { GET } = await import("./image/[id]/route");
-    return GET(new NextRequest(`http://jellylens.test/api/image/${id}?${query}`), {
-      params: Promise.resolve({ id }),
-    });
-  };
-  const height = async (h: string) => {
-    images.getImage.mockClear();
-    images.getImage.mockResolvedValue({ body: Buffer.from("img"), type: "image/webp" });
-    await image(ID, `tag=abc&h=${h}`);
-    return images.getImage.mock.calls[0][2];
-  };
-
-  it("serves the cached image", async () => {
-    images.getImage.mockResolvedValue({ body: Buffer.from("img"), type: "image/webp" });
-    const res = await image(ID, "tag=Ab9&h=300");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Content-Type")).toBe("image/webp");
-    expect(await res.text()).toBe("img");
-    expect(images.getImage).toHaveBeenCalledWith(ID, "Ab9", 320);
-  });
-
-  it("snaps the height to 40px steps between 40 and 1200, 240 if not given", async () => {
-    expect(await height("300")).toBe(320);
-    expect(await height("259")).toBe(240);
-    expect(await height("30")).toBe(40);
-    expect(await height("-500")).toBe(40);
-    expect(await height("5000")).toBe(1200);
-    expect(await height("")).toBe(240);
-    expect(await height("abc")).toBe(240);
-    expect(await height("10")).toBe(40);
-  });
-
-  it("refuses ids and tags that aren't Jellyfin's", async () => {
-    for (const [id, query] of [
-      ["0123", "tag=abc"],
-      [ID + "0", "tag=abc"],
-      ["../../0123456789abcdef0123456", "tag=abc"],
-      [ID, ""],
-      [ID, "tag=a-b"],
-      [ID, "tag=" + "a".repeat(65)],
-      [ID, "tag=..%2Fx"],
-    ]) {
-      const res = await image(id, query);
-      expect(res.status, `${id} ${query}`).toBe(400);
-    }
-    expect(images.getImage).not.toHaveBeenCalled();
-  });
-
-  it("answers 404 when Jellyfin has no image", async () => {
-    images.getImage.mockResolvedValue(null);
-    expect((await image(ID, "tag=abc")).status).toBe(404);
   });
 });
 

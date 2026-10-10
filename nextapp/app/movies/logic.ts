@@ -8,7 +8,7 @@ import { libraryView, type LibraryFilters, type SortDir } from "@/lib/facets";
 // "2010 · 148 min" under the poster.
 export function movieMeta(item: MovieItem): string {
   const minutes = item.RunTimeTicks ? Math.round(item.RunTimeTicks / 600000000) : null;
-  return [item.ProductionYear, minutes ? `${minutes} min` : null].filter(Boolean).join(" · ");
+  return [item.ProductionYear, minutes ? `${minutes}\u202fmin` : null].filter(Boolean).join(" · ");
 }
 
 // Title sorts A→Z first; the numeric keys start with the longest/newest,

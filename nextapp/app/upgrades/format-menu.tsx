@@ -47,7 +47,7 @@ export function FormatMenu({
       >
         Format
         {changed > 0 ? (
-          <span className="rounded-sm bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
+          <span className="rounded-sm bg-primary px-1 text-xs font-semibold text-primary-foreground tabular-nums">
             {changed}
           </span>
         ) : null}

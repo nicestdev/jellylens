@@ -34,7 +34,7 @@ const valueText = (measure: Ring["measure"], n: number) => (measure === "files" 
 function totalParts(measure: Ring["measure"], n: number): [string, string] {
   if (measure === "files") return [formatNumber(n), "files"];
   const text = formatBytes(n);
-  const at = text.lastIndexOf(" ");
+  const at = text.lastIndexOf("\u202f");
   return [text.slice(0, at), text.slice(at + 1)];
 }
 
@@ -90,8 +90,8 @@ function Donut({ ring, hovered, pick }: { ring: Ring; hovered: string | null; pi
                 <div className="font-num text-xs leading-tight font-semibold whitespace-nowrap tabular-nums @[17rem]/card:text-sm">
                   {percent(current[m], total)}
                 </div>
-                <div className="text-[11px] leading-tight text-foreground">{valueText(m, current[m])}</div>
-                <div className="mt-0.5 flex max-w-full items-center gap-1 text-[11px] leading-tight text-muted-foreground">
+                <div className="text-xs leading-tight text-foreground">{valueText(m, current[m])}</div>
+                <div className="mt-0.5 flex max-w-full items-center gap-1 text-xs leading-tight text-muted-foreground">
                   <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: current.color }} />
                   <span className="truncate">{current.label}</span>
                 </div>
@@ -101,7 +101,7 @@ function Donut({ ring, hovered, pick }: { ring: Ring; hovered: string | null; pi
                 <div className="font-num text-xs leading-tight font-semibold whitespace-nowrap tabular-nums @[17rem]/card:text-sm">
                   {totalParts(m, total)[0]}
                 </div>
-                <div className="text-[11px] text-muted-foreground">{totalParts(m, total)[1]}</div>
+                <div className="text-xs text-muted-foreground">{totalParts(m, total)[1]}</div>
               </>
             )}
           </div>

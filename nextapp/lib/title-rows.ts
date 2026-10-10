@@ -2,7 +2,7 @@ import type { LibraryCopy, TitleRelease, WcxRelease } from "./api-types";
 import { MB, plural, seasonCode } from "./format";
 import { rankIn, toggled, type SortDir } from "./facets";
 import { matchesWords } from "./text";
-import { resolutionOf, seasonsOf, withoutTitle } from "./release-labels";
+import { copyLabel, fromRelease, resolutionOf, seasonsOf, withoutTitle } from "./release-labels";
 import { audioOf, codecOf, episodesOf } from "./upgrades";
 
 // The title page's releases (components/title-view.tsx), xREL's and WCX's
@@ -49,13 +49,20 @@ export const wcxRow = (r: WcxRelease): ReleaseRow => ({
 });
 
 // What the library already has of a release, as Downloads says it (its
-// peach icon's tooltip): a movie's copies; for a show, of the seasons (or
-// the one episode) the release holds, how many episodes and in what. null
-// if nothing.
-export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean): string | null {
-  const label = (c: LibraryCopy) => [c.resolution, c.codec, c.group].filter(Boolean).join(" · ") || "unknown quality";
-  const have = (list: LibraryCopy[]) => `You have: ${[...new Set(list.map(label))].join(", ")}`;
-  if (movie) return copies.length ? `In library\n${have(copies)}` : null;
+// icon and tooltip): a movie's copies; for a show, of the seasons (or the
+// one episode) the release holds, how many episodes and in what. exact:
+// some of them are from this very release (fromRelease), not just the
+// same title. null if nothing.
+export type LibraryMark = { label: string; hint: string; exact: boolean };
+
+export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean): LibraryMark | null {
+  const have = (list: LibraryCopy[]) => [...new Set(list.map(copyLabel))].join(", ");
+  const exact = (list: LibraryCopy[]) => list.filter((c) => fromRelease(c.fileName, r.name)).length;
+  if (movie) {
+    if (!copies.length) return null;
+    const n = exact(copies);
+    return { label: n ? "This release in library" : "In library", hint: have(copies), exact: n > 0 };
+  }
   if (!r.seasons) return null;
   const [from, to] = r.seasons;
   const ep = from === to ? episodesOf(r.name)?.episodes : null;
@@ -67,8 +74,14 @@ export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean
       (!ep || (c.episode !== null && ep.some((e) => e >= c.episode! && e <= (c.episodeEnd ?? c.episode!)))),
   );
   if (!mine.length) return null;
-  const what = ep ? "In library" : `${seasonCode(from, to)}: ${plural(mine.length, "episode")} in library`;
-  return `${what}\n${have(mine)}`;
+  const n = exact(mine);
+  const what = ep
+    ? n
+      ? "This release in library"
+      : "In library"
+    : `${seasonCode(from, to)}: ${plural(mine.length, "episode")} in library` +
+      (n ? (n === mine.length ? ", all of this release" : `, ${n} of this release`) : "");
+  return { label: what, hint: have(mine), exact: n > 0 };
 }
 
 // Every row of a title page, xREL's and WCX's.

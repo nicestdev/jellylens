@@ -10,13 +10,12 @@ import type { DownloadPackageItem, DownloadsResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { usePoll } from "@/hooks/use-poll";
 import { AddControls } from "./add-form";
-import { QueueActions, type QueueChange } from "./queue-controls";
+import { queueItems, type QueueChange } from "./queue-controls";
 import { PACKAGE_COLUMNS, PackageRow } from "./package-row";
 import { DataTable } from "@/components/library-table";
-import { groups, headline, isActive, queueTiles } from "./logic";
+import { groups, isActive, queueTiles } from "./logic";
 import { StatTile } from "@/components/stat-tile";
 import { SectionTitle } from "@/components/section-title";
-import { Button } from "@/components/ui/button";
 
 const loadDownloads = () => apiFetch<DownloadsResponse>("/api/downloads");
 
@@ -28,7 +27,6 @@ export default function DownloadsPage() {
   const page = useLoad(loadDownloads);
   const data = page.data;
   const [actionError, setError] = useState("");
-  const [note, setNote] = useState("");
   const error = actionError || (page.error && `Failed to load downloads: ${page.error}`);
 
   usePoll(page.reload, data && isActive(data.packages) ? 1000 : 10000);
@@ -57,24 +55,38 @@ export default function DownloadsPage() {
   }
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
-      {/* Adding packages at the right of the heading, where other pages have
-          their switch (pasted links open below it); Pause all and Resume all
-          sit on Running's heading, how many come in at once is on Settings. */}
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+      {/* The page's ⋯ at the right of the heading: adding packages (pasted
+          links open below it), Download all, Pause all and Resume all; how
+          many come in at once is on Settings. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Downloads</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{note || (data ? headline(data.packages) : "Loading…")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Fetches and extracts DLCs and links.</p>
         </div>
         <AddControls
-          onAdded={(next, text) => {
-            page.setData(next);
-            setNote(text);
-          }}
-          onError={(message) => {
-            setError(message);
-            setNote("");
-          }}
+          more={
+            data
+              ? [
+                  data.packages.some((p) => p.status === "pending")
+                    ? [
+                        {
+                          icon: CircleArrowDown,
+                          label: "Download all",
+                          onClick: () =>
+                            act(
+                              data.packages.filter((p) => p.status === "pending"),
+                              jsonRequest("POST", { action: "start" }),
+                            ),
+                        },
+                      ]
+                    : [],
+                  queueItems(data, changeQueue),
+                ]
+              : []
+          }
+          onAdded={page.setData}
+          onError={setError}
         />
       </div>
 
@@ -113,32 +125,15 @@ export default function DownloadsPage() {
           <EmptyState
             icon={FileDown}
             title="Drop DLC files anywhere on this page"
-            hint={`Or pick them with DLC at the top. Files are saved to ${data.downloadDir}.`}
+            hint={`Or pick them with Upload DLC in the ⋯ at the top. Files are saved to ${data.downloadDir}.`}
           />
         ) : (
           groups(data.packages).map((group) => (
-            // Framed like Missing's and Settings' sections, the table flat in it.
-            <section key={group.title} className="overflow-hidden rounded-lg border bg-card p-3">
-              <SectionTitle
-                count={group.packages.length}
-                hint={group.title === "Finished" ? `In ${data.downloadDir}` : undefined}
-                action={
-                  group.title === "Running" ? (
-                    <QueueActions data={data} onChange={changeQueue} />
-                  ) : group.title === "New" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => act(group.packages, jsonRequest("POST", { action: "start" }))}
-                    >
-                      <CircleArrowDown />
-                      Download all
-                    </Button>
-                  ) : null
-                }
-              >
-                {group.title}
-              </SectionTitle>
+            // Framed like Missing's and Settings' sections, the table flat in it;
+            // what acts on all of it in the page's ⋯. No padding below:
+            // the last row's own is enough, and its hover reaches the edge.
+            <section key={group.title} className="overflow-hidden rounded-lg border bg-card p-3 pb-0">
+              <SectionTitle>{group.title}</SectionTitle>
               <DataTable flat columns={PACKAGE_COLUMNS}>
                 {group.packages.map((pkg) => (
                   <PackageRow

@@ -1,27 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileDown, Globe, Link2, Loader2 } from "lucide-react";
+import { FileDown, FileUp, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageMenu, type PageMenuItem } from "@/components/page-menu";
 import { apiFetch } from "@/lib/api-client";
-import { plural } from "@/lib/format";
 import type { DownloadsResponse } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
-
-type AddResponse = DownloadsResponse & { added: number; skipped: number };
 
 const dlcs = (files: FileList | null | undefined) => [...(files ?? [])].filter((f) => /\.dlc$/i.test(f.name));
 const dragsFiles = (e: DragEvent) => Boolean(e.dataTransfer?.types.includes("Files"));
 
 // Where packages come in: DLC containers dropped anywhere on the page (an
 // overlay shows while they're dragged over it) or picked with "Upload
-// DLCs", or links pasted. They come in as new packages; nothing downloads
-// until one is started.
+// DLC" in the page's ⋯ (with the page's other items, more), or links
+// pasted ("Add links" opens a box below the heading). They come in as new
+// packages; nothing downloads until one is started.
 export function AddControls({
+  more,
   onAdded,
   onError,
 }: {
-  onAdded: (data: DownloadsResponse, note: string) => void;
+  more: PageMenuItem[][];
+  onAdded: (data: DownloadsResponse) => void;
   onError: (message: string) => void;
 }) {
   const [over, setOver] = useState(false);
@@ -38,13 +39,10 @@ export function AddControls({
     setBusy(true);
     onError("");
     try {
-      const res = await apiFetch<AddResponse>("/api/downloads", { method: "POST", body: form });
+      const res = await apiFetch<DownloadsResponse>("/api/downloads", { method: "POST", body: form });
       setLinks("");
       setShowLinks(false);
-      onAdded(
-        res,
-        `Added ${plural(res.added, "package")}${res.skipped ? ` · ${plural(res.skipped, "link")} left out (no account for their hoster)` : ""}`,
-      );
+      onAdded(res);
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -100,40 +98,26 @@ export function AddControls({
   }, []);
   return (
     <>
-      <div className="flex shrink-0 gap-2">
-        <Button
-          variant="outline"
-          onClick={() => setShowLinks((v) => !v)}
-          aria-expanded={showLinks}
-          aria-label="Paste links"
-          title="Paste links"
-        >
-          <Link2 />
-          Links
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => input.current?.click()}
-          disabled={busy}
-          aria-label="Upload DLC"
-          title="Upload DLC"
-        >
-          {/* JDownloader's DLC files carry a globe. */}
-          {busy ? <Loader2 className="animate-spin" /> : <Globe />}
-          DLC
-        </Button>
-        <input
-          ref={input}
-          type="file"
-          accept=".dlc"
-          multiple
-          hidden
-          onChange={(e) => {
-            send(dlcs(e.target.files), "");
-            e.target.value = "";
-          }}
-        />
-      </div>
+      <PageMenu
+        groups={[
+          [
+            { icon: FileUp, label: "Upload DLC", onClick: () => input.current?.click(), disabled: busy },
+            { icon: Link2, label: "Add links", onClick: () => setShowLinks(true) },
+          ],
+          ...more,
+        ]}
+      />
+      <input
+        ref={input}
+        type="file"
+        accept=".dlc"
+        multiple
+        hidden
+        onChange={(e) => {
+          send(dlcs(e.target.files), "");
+          e.target.value = "";
+        }}
+      />
 
       {showLinks ? (
         <form
@@ -152,14 +136,18 @@ export function AddControls({
             aria-label="Links"
             className="w-full rounded-lg border border-input bg-input/30 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
-          <Button type="submit" disabled={busy || !links.trim()} className="self-end">
-            Add links
-          </Button>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setShowLinks(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="outline" disabled={busy || !links.trim()}>
+              Add links
+            </Button>
+          </div>
         </form>
       ) : null}
 
-      {/* What the page shows while files are dragged over it (reading them
-          shows on the Upload button). */}
+      {/* What the page shows while files are dragged over it. */}
       <div
         aria-hidden
         className={cn(

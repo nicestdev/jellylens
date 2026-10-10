@@ -26,7 +26,7 @@ export function StatTile({
         </>
       ) : (
         <>
-          <div className={cn("mt-1 font-num text-[22px] leading-tight tabular-nums", muted && "text-muted-foreground")}>
+          <div className={cn("mt-1 font-num text-2xl leading-tight tabular-nums", muted && "text-muted-foreground")}>
             {value}
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>

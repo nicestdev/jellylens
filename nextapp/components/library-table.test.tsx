@@ -35,8 +35,8 @@ describe("DataTable", () => {
     );
     expect(headers()[1]).toHaveClass("max-sm:hidden");
     expect(headers()[0]).not.toHaveClass("max-sm:hidden");
-    expect(screen.getByRole("table")).toHaveClass("sm:min-w-[640px]");
-    expect(screen.getByRole("table")).not.toHaveClass("min-w-[640px]");
+    expect(screen.getByRole("table")).toHaveClass("sm:min-w-[40rem]");
+    expect(screen.getByRole("table")).not.toHaveClass("min-w-[40rem]");
 
     rerender(
       <DataTable columns={[{ label: "Title" }, { label: "Size", width: "w-24", phone: false }]}>{null}</DataTable>,
@@ -45,7 +45,7 @@ describe("DataTable", () => {
     expect(screen.getByRole("table")).not.toHaveClass("min-w-[48rem]");
 
     rerender(<DataTable columns={[{ label: "Title" }, { label: "Size" }]}>{null}</DataTable>);
-    expect(screen.getByRole("table")).toHaveClass("min-w-[640px]");
+    expect(screen.getByRole("table")).toHaveClass("min-w-[40rem]");
     expect(headers()[1]).not.toHaveClass("max-sm:hidden");
   });
 });

@@ -30,7 +30,15 @@ export type DownloadPackage = {
   // The TMDB entry its name points to; null if none (or not looked up yet).
   media: DownloadMedia | null;
   matched: boolean;
+  // Moved into the library: the folder its files went to, and which went
+  // where (from: in the package, to: in that folder); null if not.
+  // replaced: by Replace, what the library had of it taken out (no Undo).
+  movedTo: string | null;
+  movedAt: string | null;
+  movedFiles: MovedFile[] | null;
+  replaced: boolean;
 };
+export type MovedFile = { from: string; to: string };
 export type DownloadMedia = {
   type: "movie" | "tv";
   tmdbId: number;
@@ -54,6 +62,10 @@ type PackageRow = {
   year: number | null;
   poster_path: string | null;
   matched_at: string | null;
+  moved_to: string | null;
+  moved_at: string | null;
+  moved_files: string | null;
+  moved_replaced: number;
 };
 type FileRow = Omit<DownloadFile, "packageId"> & { package_id: number };
 
@@ -71,13 +83,18 @@ const toPackage = (r: PackageRow): DownloadPackage => ({
       ? { type: r.media_type, tmdbId: r.tmdb_id, title: r.title, year: r.year, posterPath: r.poster_path }
       : null,
   matched: r.matched_at !== null,
+  movedTo: r.moved_to,
+  movedAt: r.moved_at,
+  movedFiles: r.moved_files ? (JSON.parse(r.moved_files) as MovedFile[]) : null,
+  replaced: r.moved_replaced === 1,
 });
 const toFile = ({ package_id, ...r }: FileRow): DownloadFile => ({ ...r, packageId: package_id });
 
 export function addPackage(pkg: {
   name: string;
   dir: string;
-  files: { url: string; name: string; size: number | null }[];
+  // error: a file it can't fetch, in failed (no account for its hoster).
+  files: { url: string; name: string; size: number | null; error?: string }[];
 }): number {
   return tx(() => {
     const id = Number(
@@ -90,11 +107,13 @@ export function addPackage(pkg: {
     );
     for (const f of pkg.files) {
       run(
-        "INSERT INTO download_files (package_id, url, name, size, status) VALUES (?, ?, ?, ?, 'queued')",
+        "INSERT INTO download_files (package_id, url, name, size, status, error) VALUES (?, ?, ?, ?, ?, ?)",
         id,
         f.url,
         f.name,
         f.size,
+        f.error ? "failed" : "queued",
+        f.error ?? null,
       );
     }
     return id;
@@ -176,6 +195,19 @@ export function setPackageMedia(id: number, media: DownloadMedia | null) {
     media?.year ?? null,
     media?.posterPath ?? null,
     new Date().toISOString(),
+    id,
+  );
+}
+
+// A finished package's files are in the library now, in folder (replaced:
+// by Replace); or (null) back in its own folder.
+export function setPackageMoved(id: number, moved: { folder: string; files: MovedFile[]; replaced?: boolean } | null) {
+  run(
+    "UPDATE download_packages SET moved_to = ?, moved_at = ?, moved_files = ?, moved_replaced = ? WHERE id = ?",
+    moved?.folder ?? null,
+    moved ? new Date().toISOString() : null,
+    moved ? JSON.stringify(moved.files) : null,
+    moved?.replaced ? 1 : 0,
     id,
   );
 }

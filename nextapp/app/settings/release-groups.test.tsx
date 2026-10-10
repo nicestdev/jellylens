@@ -54,7 +54,7 @@ describe("ReleaseGroups", () => {
   it("lists the P2P and the scene groups apart, a table each", () => {
     setup([group({}), group({ id: "scene:WAYNE", kind: "scene", name: "WAYNE", count: 55 })]);
     const row = within(region("P2P groups")).getByText("VECTOR").closest("tr")!;
-    expect(within(row).getByText("1.200")).toBeInTheDocument();
+    expect(within(row).getByText("1200")).toBeInTheDocument();
     expect(within(row).getByText("just now")).toBeInTheDocument();
     expect(within(region("Scene groups")).getByText("WAYNE")).toBeInTheDocument();
     expect(within(region("Scene groups")).queryByText("VECTOR")).toBeNull();

@@ -26,7 +26,8 @@ RUN apk add --no-cache xz \
 FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
-RUN apk add --no-cache su-exec
+# ffprobe for the library scan (lib/ffprobe.ts).
+RUN apk add --no-cache su-exec ffmpeg
 COPY --from=sevenzip /usr/local/bin/7zz /usr/local/bin/7zz
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./

@@ -4,6 +4,8 @@ import { spawn } from "child_process";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { ARCHIVE_PASSWORDS, DOWNLOAD_DIR } from "./env";
+import { formatBytes } from "./format";
+import { notify } from "./events";
 import { resolveLink } from "./hosters";
 import {
   getDownloadSettings,
@@ -91,21 +93,6 @@ export function packageOutputs(pkg: Pick<DownloadPackage, "dir">): { path: strin
   }
 }
 
-// A file in a package's folder by its relative path; null if the path
-// leads outside it or to nothing. Symlinks (an archive can hold them) are
-// followed first, so one can't point out of the folder either.
-export function packageFile(pkg: Pick<DownloadPackage, "dir">, rel: string): string | null {
-  const root = packagePath(pkg);
-  const full = path.resolve(root, rel);
-  if (!full.startsWith(root + path.sep)) return null;
-  try {
-    if (!fs.realpathSync(full).startsWith(fs.realpathSync(root) + path.sep)) return null;
-    return fs.statSync(full).isFile() ? full : null;
-  } catch {
-    return null;
-  }
-}
-
 // Bytes per second of each file being fetched, and how far each extraction is.
 export function liveProgress() {
   const s = state();
@@ -178,7 +165,8 @@ async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
       }
     });
     await pipeline(body, fs.createWriteStream(target, { flags: resumed ? "a" : "w" }), { signal: abort.signal });
-    if (size && received < size) throw new Error(`The download broke off at ${received} of ${size} bytes`);
+    if (size && received < size)
+      throw new Error(`The download broke off at ${formatBytes(received)} of ${formatBytes(size)}`);
     fs.renameSync(target, path.join(dir, name));
     updateFile(file.id, { status: "done", received, size: size ?? received });
   } catch (e) {
@@ -289,13 +277,13 @@ async function extractSet(pkgId: number, set: ArchiveSet) {
     const error = await extract7z(path.join(dir, set.first), dir, pkgId);
     // Removed, reset or failed meanwhile: leave it.
     if (!getPackage(pkgId) || getPackage(pkgId)?.status === "failed" || !setReady(pkgId, set)) return;
-    if (error) return setPackageStatus(pkgId, "failed", `${set.first}: ${error}`);
+    if (error) return finish(pkgId, "failed", `${set.first}: ${error}`);
     for (const f of listFiles(pkgId).filter((f) => set.members.includes(f.name))) {
       fs.rmSync(path.join(dir, f.name), { force: true });
       updateFile(f.id, { status: "extracted" });
     }
   } catch (e) {
-    if (getPackage(pkgId)) setPackageStatus(pkgId, "failed", errorText(e));
+    if (getPackage(pkgId)) finish(pkgId, "failed", errorText(e));
   } finally {
     s.extracting.delete(pkgId);
     s.pendingSets.delete(`${pkgId}:${set.key}`);
@@ -323,14 +311,24 @@ export function settlePackage(pkgId: number) {
     s.extractChain = s.extractChain.then(() => extractSet(pkgId, set));
   }
   const failed = files.filter((f) => f.status === "failed");
-  if (failed.length)
-    return setPackageStatus(pkgId, "failed", failed.map((f) => `${f.name}: ${f.error ?? "Failed"}`).join("\n"));
+  if (failed.length) return finish(pkgId, "failed", failed.map((f) => `${f.name}: ${f.error ?? "Failed"}`).join("\n"));
   if (files.some((f) => f.status === "queued" || f.status === "downloading")) return;
   if ([...s.pendingSets].some((k) => k.startsWith(`${pkgId}:`))) {
     if (pkg.status !== "extracting") setPackageStatus(pkgId, "extracting");
     return;
   }
-  setPackageStatus(pkgId, "done");
+  finish(pkgId, "done");
+}
+
+// A package done or failed, with a note for it (lib/events.ts): its title
+// (TMDB's, else its name), a failure's first line.
+function finish(pkgId: number, status: "done" | "failed", error: string | null = null) {
+  setPackageStatus(pkgId, status, error);
+  const pkg = getPackage(pkgId);
+  const name = pkg?.media ? `${pkg.media.title}${pkg.media.year ? ` (${pkg.media.year})` : ""}` : (pkg?.name ?? "");
+  if (status === "done") notify("Downloaded", { description: name, tone: "success" });
+  else
+    notify("Download failed", { description: [name, error?.split("\n")[0]].filter(Boolean).join(": "), tone: "error" });
 }
 
 // Fills the free slots from the queue (oldest package first, a package's

@@ -6,7 +6,7 @@ import {
   replaceMissing,
   syncedAt,
   type CollectionPart,
-  type JellyfinEpisode,
+  type LibraryEpisode,
   type MismatchEntry,
   type MissingCollection,
   type MissingEntry,
@@ -41,7 +41,7 @@ export function formatEpisodeRanges(numbers: number[]): string {
 // seriesId -> season -> owned episode numbers. A combined multi-episode
 // file (S02E01-E02 in one) carries IndexNumberEnd, so every number in that
 // range counts as owned, not just the first.
-export function ownedEpisodes(episodes: JellyfinEpisode[]): Map<string, Map<number, Set<number>>> {
+export function ownedEpisodes(episodes: LibraryEpisode[]): Map<string, Map<number, Set<number>>> {
   const bySeries = new Map<string, Map<number, Set<number>>>();
   for (const ep of episodes) {
     if (!ep.SeriesId || ep.ParentIndexNumber == null || ep.IndexNumber == null) continue;

@@ -2,7 +2,7 @@ import { db } from "../db";
 import { all, one, run } from "./sql";
 
 // The library's files for Analytics (media_files in lib/db.ts), written
-// with the library by replaceJellyfin: the movies' and the episodes'.
+// with the library by replaceLibrary: the movies' and the episodes'.
 // Everything the page shows is counted, searched, filtered and paged here
 // in SQL, never in the browser (a show library has tens of thousands).
 
@@ -30,6 +30,8 @@ export type StoredFile = {
   episodeEnd: number | null;
   episodeTitle: string | null;
   fileName: string;
+  // Under LIBRARY_DIR ("nvme01/movies/…/Heat….mkv").
+  path: string;
   size: number;
   group: string | null;
   groupKey: string | null;
@@ -39,13 +41,13 @@ export type StoredFile = {
   search: string;
 };
 
-// Called inside replaceJellyfin's transaction.
+// Called inside replaceLibrary's transaction.
 export function replaceFiles(files: StoredFile[]) {
   run("DELETE FROM media_files");
   const insert = db().prepare(
     `INSERT INTO media_files (kind, item_id, idx, parent_id, title, year, tmdb_id, season, episode, episode_end, episode_title,
-                              file_name, size, grp, grp_key, resolution, codec, languages, search)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                              file_name, path, size, grp, grp_key, resolution, codec, languages, search)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const f of files) {
     insert.run(
@@ -61,6 +63,7 @@ export function replaceFiles(files: StoredFile[]) {
       f.episodeEnd,
       f.episodeTitle,
       f.fileName,
+      f.path,
       f.size,
       f.group,
       f.groupKey,
@@ -73,7 +76,7 @@ export function replaceFiles(files: StoredFile[]) {
 }
 
 // Each movie's video codec label (its first version's file), by item id,
-// for the Movies list; "" when Jellyfin didn't name one.
+// for the Movies list; "" when the probe found none.
 export function movieCodecs(): Map<string, string> {
   const rows = all<{ itemId: string; codec: string }>(
     "SELECT item_id AS itemId, codec FROM media_files WHERE kind = 'movie' AND idx = 0",
@@ -250,9 +253,10 @@ export function queryFiles(
 }
 
 // What the library has of a TMDB movie or show, for the Downloads page:
-// each file's quality, codec and group, and an episode's season and
+// each file's name, quality, codec and group, and an episode's season and
 // numbers.
 export type LibraryCopy = {
+  fileName: string;
   season: number | null;
   episode: number | null;
   episodeEnd: number | null;
@@ -263,7 +267,7 @@ export type LibraryCopy = {
 
 export function libraryCopies(kind: "movie" | "episode", tmdbId: number): LibraryCopy[] {
   return all<LibraryCopy>(
-    `SELECT season, episode, episode_end AS episodeEnd, resolution, codec, grp AS "group"
+    `SELECT file_name AS fileName, season, episode, episode_end AS episodeEnd, resolution, codec, grp AS "group"
      FROM media_files WHERE kind = ? AND tmdb_id = ?`,
     kind,
     String(tmdbId),

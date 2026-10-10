@@ -4,7 +4,8 @@ import {
   JELLYFIN_URL,
   JELLYFIN_API_KEY,
   TMDB_API_KEY,
-  JELLYFIN_SYNC_INTERVAL_HOURS,
+  TMDB_LANGUAGE,
+  LIBRARY_SCAN_INTERVAL_HOURS,
   TMDB_SYNC_INTERVAL_HOURS,
   MISSING_RECHECK_INTERVAL_HOURS,
   XREL_SYNC_INTERVAL_HOURS,
@@ -28,6 +29,7 @@ export async function GET() {
     jellyfinUrl: JELLYFIN_URL,
     jellyfinApiKey: maskKey(JELLYFIN_API_KEY),
     tmdbApiKey: maskKey(TMDB_API_KEY),
+    tmdbLanguage: TMDB_LANGUAGE,
     authEnabled: AUTH_ENABLED,
     ddownloadLogin: DDOWNLOAD_LOGIN,
     // Never any of its characters, nor its length.
@@ -36,7 +38,7 @@ export async function GET() {
     archivePasswords: ARCHIVE_PASSWORDS.length,
     downloadDir: DOWNLOAD_DIR,
     intervals: {
-      jellyfin: JELLYFIN_SYNC_INTERVAL_HOURS,
+      library: LIBRARY_SCAN_INTERVAL_HOURS,
       tmdb: TMDB_SYNC_INTERVAL_HOURS,
       missing: MISSING_RECHECK_INTERVAL_HOURS,
       releases: XREL_SYNC_INTERVAL_HOURS,

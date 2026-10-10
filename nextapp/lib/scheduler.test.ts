@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { eventsAfter } from "./events";
 import { makeTrigger, setSchedule, start } from "./scheduler";
 
 describe("makeTrigger", () => {
@@ -41,6 +42,14 @@ describe("makeTrigger", () => {
     await expect(trigger()).rejects.toThrow("boom");
     expect(await trigger()).toBe("ok");
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("notes a failed run, named for its stage", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(makeTrigger("tmdb-sync", () => Promise.reject(new Error("TMDB is down")))()).rejects.toThrow();
+    expect(eventsAfter(0).events).toEqual([
+      { id: 1, title: "TMDB sync failed", description: "TMDB is down", tone: "error" },
+    ]);
   });
 });
 

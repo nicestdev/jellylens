@@ -12,7 +12,7 @@ const ITEMS = { movies: "movies", shows: "shows" } as const;
 export function ownedFiles(library: Library): OwnedFile[] {
   return all<Omit<OwnedFile, "languages"> & { languages: string }>(
     `SELECT f.parent_id AS parentId, f.title, f.year, f.tmdb_id AS tmdbId,
-            json_extract(i.data, '$.ImageTags.Primary') AS imageTag,
+            json_extract(i.data, '$.PosterPath') AS posterPath,
             f.season, f.episode, f.episode_end AS episodeEnd, f.file_name AS fileName, f.size, f.grp AS "group", f.resolution, f.codec, f.languages
        FROM media_files f LEFT JOIN ${ITEMS[library]} i ON i.id = f.parent_id
       WHERE f.kind = ? ORDER BY f.parent_id, f.season, f.episode, f.item_id, f.idx`,

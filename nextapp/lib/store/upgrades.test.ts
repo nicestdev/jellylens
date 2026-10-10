@@ -8,7 +8,7 @@ import {
   libraryReleases,
   markGroupSynced,
   ownedFiles,
-  replaceJellyfin,
+  replaceLibrary,
   saveTitleMatch,
   setPreferences,
   upgradeGroups,
@@ -36,7 +36,14 @@ function library() {
       year: 1995,
       tmdbId: "949",
       files: [
-        { Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv", Size: 8, Codec: "h264", Width: 1920, Languages: ["DE"] },
+        {
+          Name: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv",
+          Path: "Heat.1995.German.1080p.BluRay.x264-w00t.mkv",
+          Size: 8,
+          Codec: "h264",
+          Width: 1920,
+          Languages: ["DE"],
+        },
       ],
     },
     {
@@ -48,12 +55,20 @@ function library() {
       tmdbId: "125988",
       season: 1,
       episode: 2,
-      files: [{ Name: "Silo.S01E02.German.DL.1080p.WEB.h264-FuN.mkv", Size: 3, Codec: "h264", Width: 1920 }],
+      files: [
+        {
+          Name: "Silo.S01E02.German.DL.1080p.WEB.h264-FuN.mkv",
+          Path: "Silo.S01E02.German.DL.1080p.WEB.h264-FuN.mkv",
+          Size: 3,
+          Codec: "h264",
+          Width: 1920,
+        },
+      ],
     },
   ];
-  replaceJellyfin(
+  replaceLibrary(
     {
-      movies: [movie({ Id: "m1", Name: "Heat", ImageTags: { Primary: "heat-tag" } })],
+      movies: [movie({ Id: "m1", Name: "Heat", PosterPath: "/heat.jpg" })],
       shows: [show({ Id: "s1", Name: "Silo" })],
       episodes: [],
       files: storedFiles(items),
@@ -80,7 +95,7 @@ describe("upgrades", () => {
         title: "Heat",
         year: 1995,
         tmdbId: "949",
-        imageTag: "heat-tag",
+        posterPath: "/heat.jpg",
         season: null,
         episode: null,
         episodeEnd: null,
@@ -93,7 +108,7 @@ describe("upgrades", () => {
       },
     ]);
     expect(ownedFiles("shows")).toEqual([
-      expect.objectContaining({ parentId: "s1", season: 1, episode: 2, imageTag: null, group: "FuN" }),
+      expect.objectContaining({ parentId: "s1", season: 1, episode: 2, posterPath: null, group: "FuN" }),
     ]);
   });
 

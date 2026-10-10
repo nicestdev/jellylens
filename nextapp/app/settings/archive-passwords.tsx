@@ -59,9 +59,7 @@ export function ArchivePasswords({
 
   return (
     <section aria-label="Archive passwords" className={cn("min-w-0", SECTION)}>
-      <SectionTitle count={passwords?.length} hint="Tried in turn when an archive is encrypted.">
-        Archive passwords
-      </SectionTitle>
+      <SectionTitle hint="Tried in turn when an archive is encrypted.">Archive passwords</SectionTitle>
       {passwords === null ? (
         <Skeleton className="h-9 w-full" />
       ) : (

@@ -22,10 +22,10 @@ export default function AnalyticsPage() {
   const { data, error, loading, reload } = useLoad(loadAnalytics);
   const [library, setLibrary] = useState<Library>("movies");
   // Files stored before the file list was only come with a Jellyfin sync.
-  const sync = useSyncNow("jellyfin", reload);
+  const sync = useSyncNow("library", reload);
 
   return (
-    <main className="w-full max-w-[1440px] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">Analytics</h1>
@@ -58,7 +58,7 @@ export default function AnalyticsPage() {
           {loading && !data ? (
             <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
               {Array.from({ length: 4 }, (_, i) => (
-                <Skeleton key={i} className="h-[74px] rounded-lg" />
+                <Skeleton key={i} className="h-[4.625rem] rounded-lg" />
               ))}
             </div>
           ) : data ? (

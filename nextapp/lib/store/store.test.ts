@@ -10,14 +10,13 @@ import {
   getPreferences,
   libraryCounts,
   libraryEntries,
-  libraryIds,
   listIgnored,
   listRequests,
   matchedShows,
   removeIgnored,
   removeRequest,
   removeRequester,
-  replaceJellyfin,
+  replaceLibrary,
   replaceTmdb,
   requestExists,
   setPreferences,
@@ -28,16 +27,15 @@ import {
 import { LOCAL_USER } from "../session";
 import { movie, show } from "@/test/fixtures";
 
-describe("Jellyfin library", () => {
+describe("library", () => {
   const library = {
     movies: [
       movie({
         Id: "m2",
         Name: "Zulu",
         ProviderIds: { Tmdb: "2" },
-        ServerId: "srv",
         FileName: "Zulu-GRP.mkv",
-        ImageTags: { Primary: "t2" },
+        PosterPath: "/zulu.jpg",
       }),
       movie({ Id: "m1", Name: "Alien", ProviderIds: { Tmdb: "1", TmdbCollection: "c1" } }),
       movie({ Id: "m3", Name: "Unmatched" }),
@@ -56,34 +54,33 @@ describe("Jellyfin library", () => {
     ],
   };
 
-  it("keeps Jellyfin's order and every field", () => {
-    replaceJellyfin(library, "2026-06-15T00:00:00Z");
+  it("keeps the scan's order and every field", () => {
+    replaceLibrary(library, "2026-06-15T00:00:00Z");
     expect(getMovies().map((m) => m.Id)).toEqual(["m2", "m1", "m3"]);
     expect(getMovies()[0]).toEqual(library.movies[0]);
     expect(getEpisodes()).toEqual(library.episodes);
-    expect(syncedAt("jellyfin")).toBe("2026-06-15T00:00:00Z");
+    expect(syncedAt("library")).toBe("2026-06-15T00:00:00Z");
   });
 
   it("replaces the whole library on every sync", () => {
-    replaceJellyfin(library, "2026-06-15T00:00:00Z");
-    replaceJellyfin({ movies: [library.movies[1]], shows: [], episodes: [] }, "2026-06-16T00:00:00Z");
+    replaceLibrary(library, "2026-06-15T00:00:00Z");
+    replaceLibrary({ movies: [library.movies[1]], shows: [], episodes: [] }, "2026-06-16T00:00:00Z");
     expect(libraryCounts()).toEqual({ movies: 1, shows: 0, episodes: 0 });
-    expect(syncedAt("jellyfin")).toBe("2026-06-16T00:00:00Z");
+    expect(syncedAt("library")).toBe("2026-06-16T00:00:00Z");
   });
 
   it("answers the lookups other parts need", () => {
-    replaceJellyfin(library, "2026-06-15T00:00:00Z");
+    replaceLibrary(library, "2026-06-15T00:00:00Z");
     expect(libraryEntries()).toEqual(
       expect.arrayContaining([
-        { mediaType: "movie", id: "m2", tmdbId: "2", serverId: "srv", imageTag: "t2", fileName: "Zulu-GRP.mkv" },
-        { mediaType: "movie", id: "m1", tmdbId: "1", serverId: "", imageTag: undefined, fileName: undefined },
-        { mediaType: "tv", id: "s1", tmdbId: "10", serverId: "", imageTag: undefined, fileName: undefined },
+        { mediaType: "movie", id: "m2", tmdbId: "2", posterPath: "/zulu.jpg", fileName: "Zulu-GRP.mkv" },
+        { mediaType: "movie", id: "m1", tmdbId: "1", posterPath: null, fileName: undefined },
+        { mediaType: "tv", id: "s1", tmdbId: "10", posterPath: null, fileName: undefined },
       ]),
     );
     expect(libraryEntries()).toHaveLength(3); // m3 isn't matched to TMDB
     expect(collectionIds()).toEqual(["c1"]);
     expect(matchedShows()).toEqual([{ id: "s1", tmdbId: "10" }]);
-    expect(libraryIds()).toEqual(new Set(["m1", "m2", "m3", "s1"]));
   });
 });
 

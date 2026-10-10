@@ -18,7 +18,7 @@ const owned = (over: Partial<OwnedFile> = {}): OwnedFile => ({
   title: "Heat",
   year: 1995,
   tmdbId: "949",
-  imageTag: "tag",
+  posterPath: "/heat.jpg",
   season: null,
   episode: null,
   episodeEnd: null,

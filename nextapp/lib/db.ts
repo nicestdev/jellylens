@@ -227,6 +227,51 @@ const MIGRATIONS: string[] = [
   -- The queue's settings from the Downloads page (slots); value is JSON.
   CREATE TABLE download_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `,
+  `
+  -- A finished package moved into the library (Move, lib/library-move.ts):
+  -- the folder its files went to, when, and which went where (JSON
+  -- [{ from, to }]: in the package, in that folder; for Undo). It stays
+  -- done; its own folder under DOWNLOAD_DIR is gone.
+  ALTER TABLE download_packages ADD COLUMN moved_to TEXT;
+  ALTER TABLE download_packages ADD COLUMN moved_at TEXT;
+  ALTER TABLE download_packages ADD COLUMN moved_files TEXT;
+  `,
+  `
+  -- The library comes from LIBRARY_DIR's disks now, not Jellyfin
+  -- (lib/library-scan.ts): a movie's and a show's id is its TMDB id, an
+  -- episode's "<show>:<season>:<episode>". What was keyed by Jellyfin ids is
+  -- dropped and filled again by the next scan and syncs.
+  DELETE FROM movies;
+  DELETE FROM shows;
+  DELETE FROM episodes;
+  DELETE FROM media_files;
+  DELETE FROM tmdb_series;
+  DELETE FROM missing_series;
+  DELETE FROM mismatches;
+  DELETE FROM ignored WHERE kind IN ('missing', 'mismatch');
+  DELETE FROM sync_state WHERE stage IN ('jellyfin', 'tmdb', 'missing');
+  -- path: the file under LIBRARY_DIR ("nvme01/movies/Heat (1995) [tmdbid-949]/Heat….mkv").
+  ALTER TABLE media_files ADD COLUMN path TEXT NOT NULL DEFAULT '';
+
+  -- What ffprobe read from a file (JSON, lib/ffprobe.ts), by its path under
+  -- LIBRARY_DIR; probed again only when its size or mtime changes.
+  CREATE TABLE probes (path TEXT PRIMARY KEY, size INTEGER NOT NULL, mtime INTEGER NOT NULL, data TEXT NOT NULL);
+  -- TMDB's details of a library title (JSON, lib/tmdb.ts TmdbDetails), in
+  -- the metadata language: name, genres, poster, a movie's collection, a
+  -- show's status. Fetched by the scan for new titles, refreshed by the TMDB sync.
+  CREATE TABLE tmdb_details (
+    media_type TEXT NOT NULL,
+    tmdb_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (media_type, tmdb_id)
+  );
+  `,
+  `
+  -- A package moved in by Replace: what the library had of it was taken
+  -- out, so there's no Undo.
+  ALTER TABLE download_packages ADD COLUMN moved_replaced INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.
@@ -264,11 +309,16 @@ function migrate(conn: Database.Database) {
 }
 
 // One connection per process, opened on first use. Kept on globalThis so
-// `next dev` module reloads don't open another.
-const globalForDb = globalThis as unknown as { __jellylensDb?: Database.Database };
+// `next dev` module reloads don't open another; a reload that brings a new
+// migration runs it on that connection (migrated: how many it has run).
+const globalForDb = globalThis as unknown as { __jellylensDb?: Database.Database; __jellylensMigrated?: number };
 
 export function db(): Database.Database {
   globalForDb.__jellylensDb ??= openDatabase(DB_FILE);
+  if (globalForDb.__jellylensMigrated !== MIGRATIONS.length) {
+    migrate(globalForDb.__jellylensDb);
+    globalForDb.__jellylensMigrated = MIGRATIONS.length;
+  }
   return globalForDb.__jellylensDb;
 }
 

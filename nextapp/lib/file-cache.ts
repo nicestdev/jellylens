@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 
-// Shared by the image caches (lib/image-cache.ts, lib/tmdb-image-cache.ts).
+// Shared by the image caches (lib/tmdb-image-cache.ts).
 
 export type CachedImage = { body: Buffer; type: string };
 

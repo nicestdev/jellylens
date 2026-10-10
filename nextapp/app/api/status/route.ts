@@ -15,7 +15,7 @@ export async function GET() {
   const missing = missingCounts();
   const releases = releaseCounts();
   return Response.json({
-    jellyfin: { ...stage("jellyfin"), movies: library.movies, shows: library.shows },
+    library: { ...stage("library"), movies: library.movies, shows: library.shows },
     tmdb: { ...stage("tmdb"), shows: tmdb.shows, collections: tmdb.collections },
     missing: {
       ...stage("missing"),

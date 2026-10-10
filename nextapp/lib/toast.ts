@@ -9,7 +9,7 @@ import type { LucideIcon } from "lucide-react";
 // dropped first.
 
 type ToastAction = { label: string; href?: string; onClick?: () => void };
-export type ToastTone = "success" | "removed" | "plain";
+export type ToastTone = "success" | "removed" | "error" | "plain";
 // icon: in place of the tone's own (Wishlist: a bookmark).
 export type Toast = {
   id: number;

@@ -4,8 +4,8 @@
 // browser.
 import type {
   IgnoreEntry,
-  JellyfinMovie,
-  JellyfinShow,
+  LibraryMovie,
+  LibraryShow,
   MismatchEntry,
   MissingCollection,
   MissingEntry,
@@ -17,17 +17,19 @@ import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
 import type { FileListRow, FilePart, FileTotals } from "./store";
 import type { Unit } from "./upgrades";
-import type { DownloadFile, DownloadPackage, LibraryCopy } from "./store";
+import type { DownloadFile, DownloadMedia, DownloadPackage, LibraryCopy } from "./store";
+import type { LibraryTarget, MoveProgress, OwnedFile } from "./library-move";
+import type { AppEvent } from "./events";
 
 export type { IgnoreEntry, MatchInfo, Preferences, TitleRelease };
 
-// An owned movie or show in Jellyfin, for linking to it.
-export type LibraryRef = { id: string; serverId: string };
+// An owned movie or show (its id in the library).
+export type LibraryRef = { id: string };
 
 // GET /api/movies — the stored movies without their file names (admins
 // only, see /api/collections and /api/analytics).
 // Codec: the file's video codec label ("x265"; "" if unknown).
-export type MovieItem = Omit<JellyfinMovie, "FileName"> & { Codec: string };
+export type MovieItem = Omit<LibraryMovie, "FileName"> & { Codec: string };
 export type MoviesResponse = { Items: MovieItem[] };
 
 // How many owned episodes carry each audio language, overall and per season.
@@ -39,7 +41,7 @@ export type LanguageCoverage = {
 
 // GET /api/shows — for the TV Shows and Missing pages. Languages: null for
 // a show without episodes.
-export type ShowItem = JellyfinShow & {
+export type ShowItem = LibraryShow & {
   MissingEpisodes: MissingEntry | null;
   Mismatches: MismatchEntry | null;
   Languages: LanguageCoverage | null;
@@ -64,7 +66,7 @@ export type IgnoredResponse = { Items: IgnoreEntry[] };
 // running now, and how its last run failed (null once one succeeds).
 export type StageStatus = { syncedAt: string | null; running: boolean; error: string | null };
 export type StatusResponse = {
-  jellyfin: StageStatus & { movies: number; shows: number };
+  library: StageStatus & { movies: number; shows: number };
   tmdb: StageStatus & { shows: number; collections: number };
   missing: StageStatus & { incompleteCount: number; incompleteCollectionCount: number; mismatchCount: number };
   releases: StageStatus & { groups: number; releases: number };
@@ -76,6 +78,7 @@ export type ConfigResponse = {
   jellyfinUrl: string;
   jellyfinApiKey: string;
   tmdbApiKey: string;
+  tmdbLanguage: string;
   authEnabled: boolean;
   ddownloadLogin: string;
   ddownloadPassword: string;
@@ -109,9 +112,9 @@ export type RequestItem = Omit<RequestEntry, "requesters"> & {
 };
 export type RequestsResponse = { Items: RequestItem[]; all: boolean; admin: boolean };
 
-// GET /api/releases — one entry per title; library: owned in Jellyfin, with
-// its poster's tag.
-export type ReleaseTitle = TitleRow & { library: (LibraryRef & { imageTag: string | null }) | null };
+// GET /api/releases — one entry per title; library: owned, with its
+// poster (TMDB's path).
+export type ReleaseTitle = TitleRow & { library: (LibraryRef & { posterPath: string | null }) | null };
 export type ReleasesResponse = {
   total: number;
   matched: number;
@@ -134,7 +137,7 @@ export type ReleaseHead = {
   posterPath: string | null;
   mediaType: "movie" | "tv" | null;
   tmdbId: number | null;
-  library: (LibraryRef & { imageTag: string | null }) | null;
+  library: (LibraryRef & { posterPath: string | null }) | null;
   copies: LibraryCopy[];
 };
 export type { LibraryCopy };
@@ -230,24 +233,29 @@ export type WcxAddResponse = { packageId: number; name: string; hoster: string }
 // GET /api/downloads — every package, newest first, with its files.
 // speed: bytes a second while a file comes in; extractPercent: while its
 // archives are extracted. ready: a hoster sign-in is set, so links can be fetched.
-// inLibrary: an episode the library already has.
+// inLibrary: an episode the library already has. checked: what the hoster
+// said before it's started (lib/download-match.ts): online, unknown (asked,
+// no answer), null (not asked yet); an offline one is failed.
 export type DownloadFileItem = Omit<DownloadFile, "url" | "packageId"> & {
   url: string;
   speed: number | null;
   inLibrary: boolean;
+  checked: "online" | "unknown" | null;
 };
-// What the library already has of a package: your copies (quality · codec
-// · group), and for a show how many of its episode parts you have, or for
-// a season pack how many of that season's episodes.
+// What the library already has of a package: your copies (copyLabel: group ·
+// quality · codec · DL), and for a show how many of its episode parts you have, or for
+// a season pack how many of that season's episodes. exact: how many of
+// those copies are from this very release (fromRelease).
 export type DownloadLibrary = {
   have: string[];
+  exact: number;
   parts: number;
   partsOwned: number;
   season: { number: number; episodes: number } | null;
 };
 // sources: where an unfinished one's files come from ("ddownload",
 // "rapidgator.net via Real-Debrid", "no account"). outputs: a finished
-// one's files on disk (GET /api/downloads/<id>/file?path=).
+// one's files on disk (its size; Organize moves them).
 export type DownloadPackageItem = DownloadPackage & {
   library: DownloadLibrary | null;
   sources: string[];
@@ -265,3 +273,55 @@ export type DownloadsResponse = {
   maxSlots: number;
   packages: DownloadPackageItem[];
 };
+
+// GET /api/organize — finished downloads to move into the library, the
+// library's disks, and what was moved (newest first). ready: LIBRARY_DIR
+// is set and readable. An item's folder: the title's folder name ("Name
+// (Year) [tmdbid-N]", lib/library-names.ts); files: each file's path in it
+// (a show's in Season NN/); targets: its kind's folder on each disk
+// (existing: the title's folder there, if any); move: while it waits,
+// runs, or after it failed.
+export type OrganizeDisk = { disk: string; freeBytes: number | null; totalBytes: number | null };
+export type OrganizeItem = {
+  id: number;
+  name: string;
+  media: DownloadMedia | null;
+  folder: string;
+  files: string[];
+  bytes: number;
+  error: string | null;
+  targets: LibraryTarget[];
+  // What the library has of it already (it's moved only by Replace or Add
+  // as version then).
+  owned: OwnedFile[];
+  move: MoveProgress | null;
+};
+// A moved one: files, each one's path in its folder (none known: it can't
+// be moved back), bytes (theirs, as they are now); move, while it's moved
+// back (Undo).
+export type OrganizeMoved = {
+  id: number;
+  name: string;
+  media: DownloadMedia | null;
+  movedTo: string;
+  movedAt: string;
+  files: string[];
+  bytes: number;
+  // Moved in by Replace: no Undo.
+  replaced: boolean;
+  move: MoveProgress | null;
+};
+// GET/POST /api/organize/scan — the library scan: running, and how far its probing is
+// (0–100; null while idle).
+export type OrganizeScan = { running: boolean; percent: number | null };
+export type OrganizeResponse = {
+  ready: boolean;
+  libraryDir: string;
+  disks: OrganizeDisk[];
+  items: OrganizeItem[];
+  moved: OrganizeMoved[];
+};
+
+// GET /api/events — what happened in the background (lib/events.ts) after
+// the id asked for, and the last id there is.
+export type EventsResponse = { last: number; events: AppEvent[] };

@@ -16,7 +16,9 @@ const noFilters = (over: Partial<LibraryFilters> = {}): LibraryFilters => ({
 
 describe("movieMeta", () => {
   it("shows the year and the runtime in minutes", () => {
-    expect(movieMeta(movie({ Id: "a", ProductionYear: 2010, RunTimeTicks: 148 * 600000000 }))).toBe("2010 · 148 min");
+    expect(movieMeta(movie({ Id: "a", ProductionYear: 2010, RunTimeTicks: 148 * 600000000 }))).toBe(
+      "2010 · 148\u202fmin",
+    );
     expect(movieMeta(movie({ Id: "a" }))).toBe("");
   });
 });
