@@ -1,0 +1,41 @@
+/* The color palette, "Dusk": a dark blue-violet grey, lavender as the
+   one accent, soft mint, sand,
+   coral and sky for states. globals.css maps it onto the
+   UI's tokens once, so another look is just other values here.
+
+   base     page background        mantle   sidebar
+   surface0 raised parts, borders  surface1 inputs
+   surface2 analytics' "other"     text, subtext (muted)
+   subtext1 secondary text, between text and subtext
+   soft     the text of the page   track    bars' tracks
+   accent   the one accent         red      worse, missing
+   peach    open, waiting          green    better
+   blue, yellow  two more chart colors
+   sky      info                   pink     on the wishlist (the heart, = red)
+   Optional: card (else between base and surface0), border (else
+   surface0), row (between a table's rows, else border) and table (behind
+   a table's rows, else the page). */
+
+:root {
+  --p-base: #1a1626;
+  --p-mantle: #13101c;
+  --p-card: var(--p-mantle);
+  --p-border: #3a3152;
+  --p-row: #241e33;
+  --p-surface0: #272138;
+  --p-surface1: #372f4d;
+  --p-surface2: #4f4569;
+  --p-text: #f3eefe;
+  --p-subtext: #b0a6cc;
+  --p-subtext1: #c4bcdc;
+  --p-soft: #d8d2ec;
+  --p-track: #2b2440;
+  --p-accent: #b9a6f2;
+  --p-red: #ee8a78;
+  --p-peach: #e2b466;
+  --p-green: #7fcba8;
+  --p-blue: #7f9fd8;
+  --p-yellow: #d9c27a;
+  --p-sky: #8db8ea;
+  --p-pink: var(--p-red);
+}

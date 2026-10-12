@@ -1,0 +1,161 @@
+import { describe, expect, it, vi } from "vitest";
+import { json, mockFetch } from "@/test/http";
+import { addPackage, listFiles, listPackages, setPackageMedia, updateFile } from "./store";
+import { RECHECK_MS, checkPendingFiles, matchName, matchPendingPackages, onlineOf } from "./download-match";
+
+// What runs in the background, waited for.
+const g = globalThis as unknown as {
+  __downloadMatching?: Promise<void> | null;
+  __downloadChecking?: Promise<void> | null;
+};
+const settled = async () => {
+  await g.__downloadMatching;
+  await g.__downloadChecking;
+};
+
+// TMDB's movie search, as the Queue asks it for a package's name.
+function tmdb(results: Record<string, unknown[]>) {
+  return mockFetch((url) => {
+    if (url.pathname === "/3/search/movie")
+      return json({ results: results[url.searchParams.get("query") ?? ""] ?? [] });
+  });
+}
+
+const mazeRunner = {
+  id: 198663,
+  title: "Maze Runner - Die Auserwählten im Labyrinth",
+  original_title: "The Maze Runner",
+  release_date: "2014-09-10",
+  poster_path: "/maze.jpg",
+};
+
+describe("matchName", () => {
+  it("searches again with umlauts when a German name spells them out", async () => {
+    const fetch = tmdb({ "Maze Runner Die Auserwählten im Labyrinth": [mazeRunner] });
+    expect(
+      await matchName("Maze.Runner.Die.Auserwaehlten.im.Labyrinth.2014.German.EAC3.DL.1080p.BluRay.x265-VECTOR"),
+    ).toEqual({
+      type: "movie",
+      tmdbId: 198663,
+      title: "Maze Runner - Die Auserwählten im Labyrinth",
+      year: 2014,
+      posterPath: "/maze.jpg",
+    });
+    const queries = fetch.mock.calls
+      .map(([u]) => new URL(String(u)))
+      .filter((u) => u.pathname === "/3/search/movie")
+      .map((u) => u.searchParams.get("query"));
+    expect(queries).toEqual([
+      "Maze Runner Die Auserwaehlten im Labyrinth",
+      "Maze Runner Die Auserwählten im Labyrinth",
+    ]);
+  });
+
+  it("takes only a hit that fits from the search with umlauts", async () => {
+    tmdb({ "Die Brücke": [{ ...mazeRunner, title: "Something Else", original_title: "Something Else" }] });
+    expect(await matchName("Die.Bruecke.2008.German.1080p.BluRay.x264-GRP")).toBeNull();
+  });
+});
+
+describe("matchPendingPackages", () => {
+  const maze = "Maze.Runner.Die.Auserwaehlten.im.Labyrinth.2014.German.EAC3.DL.1080p.BluRay.x265-VECTOR";
+
+  it("searches once for a package not looked up yet", async () => {
+    addPackage({ name: maze, dir: "maze", files: [] });
+    const fetch = tmdb({ "Maze Runner Die Auserwählten im Labyrinth": [mazeRunner] });
+
+    matchPendingPackages();
+    await settled();
+    expect(listPackages()[0].media).toMatchObject({ tmdbId: 198663 });
+    expect(fetch).toHaveBeenCalled();
+
+    // Looked up: left alone, found or not.
+    setPackageMedia(listPackages()[0].id, null);
+    const fetch2 = mockFetch(() => undefined);
+    matchPendingPackages();
+    await settled();
+    expect(fetch2).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkPendingFiles", () => {
+  it("asks the hoster again about a file it didn't answer for, after a while", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const id = addPackage({
+        name: "Heat",
+        dir: "heat",
+        files: [{ url: "https://ddownload.com/aaaaaaaaaaa1", name: "aaaaaaaaaaa1", size: null }],
+      });
+      let answer = "<html>busy</html>";
+      const fetch = mockFetch((url) => (url.hostname === "ddownload.com" ? new Response(answer) : undefined));
+
+      checkPendingFiles();
+      await settled();
+      checkPendingFiles();
+      await settled();
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      answer = '<div class="dk-dl-name" title="Heat.part1.rar"></div><span class="dk-dl-size">1.5 GB</span>';
+      vi.setSystemTime(Date.now() + RECHECK_MS);
+      checkPendingFiles();
+      await settled();
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(listFiles(id)[0]).toMatchObject({ name: "Heat.part1.rar", size: 1610612736 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves a file alone that started while the hoster was asked", async () => {
+    const id = addPackage({
+      name: "Heat",
+      dir: "heat",
+      files: [{ url: "https://ddownload.com/aaaaaaaaaaa1", name: "Heat.part1.rar", size: 1000 }],
+    });
+    const [file] = listFiles(id);
+    mockFetch((url) => {
+      if (url.hostname !== "ddownload.com") return undefined;
+      // Start (Download all) while the check waits for the answer.
+      updateFile(file.id, { status: "downloading", received: 10 });
+      return new Response("<b>File Not Found</b>");
+    });
+    checkPendingFiles();
+    await settled();
+    expect(listFiles(id)[0]).toMatchObject({ status: "downloading", error: null });
+  });
+
+  it("asks about every new file once, its size known or not, like JDownloader's LinkGrabber", async () => {
+    const id = addPackage({
+      name: "Heat",
+      dir: "heat",
+      files: [
+        { url: "https://ddownload.com/aaaaaaaaaaa1", name: "Heat.part1.rar", size: 1000 },
+        { url: "https://ddownload.com/aaaaaaaaaaa2", name: "Heat.part2.rar", size: 1000 },
+      ],
+    });
+    const [one] = listFiles(id);
+    expect(onlineOf(one.id)).toBeNull();
+    const fetch = mockFetch((url) =>
+      url.hostname === "ddownload.com"
+        ? new Response(
+            url.pathname.endsWith("2")
+              ? "<b>File Not Found</b>"
+              : '<div class="dk-dl-name" title="Heat.part1.rar"></div><span class="dk-dl-size">1.5 GB</span>',
+          )
+        : undefined,
+    );
+    checkPendingFiles();
+    await settled();
+    expect(onlineOf(one.id)).toBe("online");
+    // The size it came with stays.
+    expect(listFiles(id)).toMatchObject([
+      { size: 1000, status: "queued" },
+      { status: "failed", error: "The hoster doesn't have it anymore" },
+    ]);
+    // Not asked again.
+    checkPendingFiles();
+    await settled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});

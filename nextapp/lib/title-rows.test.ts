@@ -1,0 +1,340 @@
+import { describe, expect, it } from "vitest";
+import type { LibraryCopy, TitleRelease, WcxRelease } from "./api-types";
+import {
+  allRowsOf,
+  combineRows,
+  facetValues,
+  formatFacet,
+  ghostRows,
+  keepRow,
+  libraryNote,
+  noRowFilters,
+  toggleFilter,
+  wcxRow,
+  xrelRow,
+  RELEASE_SORTS,
+  seasonGroups,
+  sortRows,
+  type ReleaseRow,
+  type ReleaseSortKey,
+} from "./title-rows";
+
+const xrel = (name: string, over: Partial<TitleRelease> = {}): TitleRelease => ({
+  id: name,
+  name,
+  link: "https://www.xrel.to/" + name,
+  quality: "HD-1080p",
+  publishedAt: 1790000000,
+  group: "VECTOR",
+  sizeMb: null,
+  ...over,
+});
+const wcx = (name: string, over: Partial<WcxRelease> = {}): WcxRelease => ({
+  uid: "w-" + name,
+  name,
+  group: "FuN",
+  quality: null,
+  seasons: null,
+  seasonEpisodes: null,
+  size: null,
+  createdAt: null,
+  mirrors: [],
+  ...over,
+});
+const copy = (over: Partial<LibraryCopy> = {}): LibraryCopy => ({
+  fileName: "other.mkv",
+  path: "nvme01/other.mkv",
+  size: 0,
+  season: null,
+  episode: null,
+  episodeEnd: null,
+  resolution: "1080p",
+  codec: "x264",
+  group: "VECTOR",
+  ...over,
+});
+
+describe("xrelRow and wcxRow", () => {
+  it("read resolution, codec, audio, size and seasons the same way for both", () => {
+    expect(
+      xrelRow(xrel("Silo.S01.German.DL.2160p.WEB.h265-VECTOR", { quality: "HD-2160p", sizeMb: 2, episodes: 3 })),
+    ).toEqual({
+      id: "Silo.S01.German.DL.2160p.WEB.h265-VECTOR",
+      name: "Silo.S01.German.DL.2160p.WEB.h265-VECTOR",
+      episodes: 3,
+      group: "VECTOR",
+      resolution: "2160p",
+      codec: "x265",
+      audio: "DL",
+      size: 2 * 1024 * 1024,
+      date: 1790000000,
+      seasons: [1, 1],
+    });
+    expect(
+      wcxRow(wcx("Silo.S01-S02.German.1080p.WEB.h264-FuN", { size: 5, createdAt: "2026-10-08T00:00:00Z" })),
+    ).toMatchObject({
+      id: "w-Silo.S01-S02.German.1080p.WEB.h264-FuN",
+      episodes: null,
+      resolution: "1080p",
+      size: 5,
+      date: Date.UTC(2026, 9, 8) / 1000,
+      seasons: [1, 2],
+    });
+  });
+
+  it("puts every title's releases and WCX's in one list", () => {
+    const rows = allRowsOf([{ items: [xrel("A")] }, { items: [xrel("B")] }], [wcx("C")]);
+    expect(rows.map((r) => r.id)).toEqual(["A", "B", "w-C"]);
+  });
+});
+
+describe("the toolbar", () => {
+  const rows = [
+    xrelRow(xrel("Silo.S02.German.DL.720p.WEB.h264-VECTOR", { quality: "HD-720p" })),
+    xrelRow(xrel("Silo.S01.German.DL.2160p.WEB.h265-VECTOR", { quality: "HD-2160p" })),
+    wcxRow(wcx("Silo.S01-S03.German.DVDRip.XviD-FuN", { quality: "SD" })),
+  ];
+
+  it("offers qualities best first and seasons in order", () => {
+    expect(facetValues("resolution", rows)).toEqual(["2160p", "720p", "SD"]);
+    expect(facetValues("season", rows)).toEqual(["1", "2", "3"]);
+    expect(formatFacet("resolution", "2160p")).toBe("4K");
+    expect(formatFacet("season", "2")).toBe("S02");
+    expect(formatFacet("season", "0")).toBe("Specials");
+  });
+
+  it("keeps rows with every word, any picked value of a facet, and a pack for each season", () => {
+    expect(rows.filter(keepRow("silo web", noRowFilters())).length).toBe(2);
+    const season3 = toggleFilter(noRowFilters(), "season", "3");
+    expect(rows.filter(keepRow("", season3)).map((r) => r.group)).toEqual(["FuN"]);
+    const twoQualities = toggleFilter(toggleFilter(noRowFilters(), "resolution", "720p"), "resolution", "SD");
+    expect(rows.filter(keepRow("", twoQualities)).length).toBe(2);
+    expect(toggleFilter(twoQualities, "resolution", "SD").resolution).toEqual(new Set(["720p"]));
+  });
+});
+
+describe("libraryNote", () => {
+  const movie = xrelRow(xrel("Heat.1995.German.DL.1080p.BluRay.x264-VECTOR"));
+  const pack = xrelRow(xrel("Silo.S01.German.DL.1080p.WEB.h264-VECTOR"));
+  const episode = xrelRow(xrel("Silo.S01E02.German.DL.1080p.WEB.h264-VECTOR"));
+
+  it("names a movie's copies", () => {
+    expect(libraryNote(movie, [copy(), copy({ resolution: "2160p", codec: "x265", group: null })], true)).toEqual({
+      label: "In library",
+      hint: "VECTOR · 1080p · x264, 2160p · x265",
+      exact: false,
+    });
+    expect(libraryNote(movie, [], true)).toBeNull();
+  });
+
+  it("counts a season's episodes, or says one episode is there", () => {
+    const copies = [copy({ season: 1, episode: 1 }), copy({ season: 1, episode: 2, episodeEnd: 3 })];
+    expect(libraryNote(pack, copies, false)).toEqual({
+      label: "S01: 2 episodes in library",
+      hint: "VECTOR · 1080p · x264",
+      exact: false,
+    });
+    expect(libraryNote(episode, copies, false)?.label).toBe("In library");
+    expect(libraryNote(pack, [copy({ season: 2, episode: 1 })], false)).toBeNull();
+  });
+
+  it("says when a file is from this very release", () => {
+    expect(
+      libraryNote(movie, [copy({ fileName: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR.mkv" })], true),
+    ).toMatchObject({ label: "This release in library", exact: true, disks: "nvme01" });
+    const mine = (e: number) =>
+      copy({ season: 1, episode: e, fileName: `Silo.S01E0${e}.Die.Folge.German.DL.1080p.WEB.h264-VECTOR.mkv` });
+    expect(libraryNote(pack, [mine(1), mine(2)], false)).toMatchObject({
+      label: "S01: 2 episodes in library, all of this release",
+      exact: true,
+    });
+    expect(libraryNote(pack, [mine(1), copy({ season: 1, episode: 2 })], false)).toMatchObject({
+      label: "S01: 2 episodes in library, 1 of this release",
+      exact: true,
+    });
+    expect(libraryNote(episode, [mine(2)], false)).toMatchObject({ label: "This release in library", exact: true });
+  });
+
+  it("counts a season pack's episodes from this very release, a combined file's each", () => {
+    const mine = (e: number, end: number | null = null) =>
+      copy({
+        season: 1,
+        episode: e,
+        episodeEnd: end,
+        fileName: `Silo.S01E0${e}.German.DL.1080p.WEB.h264-VECTOR.mkv`,
+      });
+    expect(libraryNote(pack, [mine(1), mine(2, 3), copy({ season: 1, episode: 4 })], false)?.episodes).toBe(3);
+    expect(libraryNote(pack, [copy({ season: 1, episode: 4 })], false)).not.toHaveProperty("episodes");
+    expect(libraryNote(episode, [mine(2)], false)).not.toHaveProperty("episodes");
+  });
+});
+
+describe("ghostRows", () => {
+  it("makes one row of a season's dubbed and undubbed files, named after most of them", () => {
+    const ep = (n: number, audio: string) =>
+      copy({
+        fileName: `The.Walking.Dead.S11E${String(n).padStart(2, "0")}.Titel.GERMAN.${audio}.720p.WEB.x265-w00t.mkv`,
+        season: 11,
+        episode: n,
+      });
+    const rows = ghostRows([ep(1, "AC3D"), ep(2, "AC3D"), ep(9, "AC3"), ep(10, "AC3"), ep(11, "AC3")], [], false);
+    expect(rows.map((r) => [r.name, r.episodes])).toEqual([["S11.GERMAN.AC3.720p.WEB.x265-w00t", 5]]);
+  });
+  it("makes a row of a movie file no listed release is, with the disks it's on", () => {
+    const listed = xrelRow(xrel("Heat.1995.German.DL.1080p.BluRay.x264-VECTOR"));
+    const copies = [
+      copy({ fileName: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR.mkv" }),
+      copy({
+        fileName: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-OLD.mkv",
+        path: "nvme02/movies/Heat (1995) [tmdbid-949]/Heat.1995.German.DL.2160p.UHD.BluRay.x265-OLD.mkv",
+        size: 9,
+        resolution: "2160p",
+        codec: "x265",
+        group: "OLD",
+      }),
+    ];
+    expect(ghostRows(copies, [listed], true)).toEqual([
+      {
+        id: "library:German.DL.2160p.UHD.BluRay.x265-OLD",
+        name: "Heat.1995.German.DL.2160p.UHD.BluRay.x265-OLD",
+        episodes: null,
+        group: "OLD",
+        resolution: "2160p",
+        codec: "x265",
+        audio: "DL",
+        size: 9,
+        date: null,
+        seasons: null,
+        owned: "nvme02",
+      },
+    ]);
+  });
+
+  it("makes a row per season and release of a show's files, newest season first", () => {
+    const ep = (season: number, episode: number, fileName: string, disk = "nvme01") =>
+      copy({ season, episode, fileName, path: `${disk}/shows/Silo/${fileName}`, size: 2, group: "OLD" });
+    const rows = ghostRows(
+      [
+        ep(1, 1, "Silo.S01E01.Freedom.Day.German.DL.720p.WEB.x264-OLD.mkv", "nvme03"),
+        ep(1, 2, "Silo.S01E02.German.DL.720p.WEB.x264-OLD.mkv"),
+        ep(2, 1, "Silo.S02E01.German.1080p.WEB.x264-NEW.mkv"),
+      ],
+      [],
+      false,
+    );
+    expect(rows.map((r) => [r.name, r.episodes, r.size, r.seasons, r.owned])).toEqual([
+      ["S02.German.1080p.WEB.x264-NEW", 1, 2, [2, 2], "nvme01"],
+      ["S01.German.DL.720p.WEB.x264-OLD", 2, 4, [1, 1], "nvme01, nvme03"],
+    ]);
+  });
+});
+
+describe("seasonGroups", () => {
+  it("groups a show's season packs by season, newest first, then specials, then the rest", () => {
+    const rows = [
+      "Silo.S01.German.1080p-A",
+      "Silo.S01E02.German.1080p-B",
+      "Silo.S02.German.1080p-C",
+      "Silo.S00.German.1080p-D",
+      "Silo.S01-S02.German.1080p-E",
+      "Silo.S01.German.720p-F",
+    ].map((name) => xrelRow(xrel(name)));
+    expect(seasonGroups(rows).map((g) => [g.label, g.rows.map((r) => r.name.slice(-1))])).toEqual([
+      ["Season 2", ["C"]],
+      ["Season 1", ["A", "F"]],
+      ["Specials", ["D"]],
+      ["Other", ["B", "E"]],
+    ]);
+  });
+});
+
+describe("combineRows", () => {
+  const live = {
+    hoster: "ddownload.com",
+    source: "wcx" as const,
+    links: 1,
+    route: "ddownload",
+    offline: false,
+    container: null,
+  };
+  const dead = { ...live, offline: true };
+
+  it("gives a release xREL and WCX both list one row, by its name in any case", () => {
+    const name = "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR";
+    const copy = wcx(name.toUpperCase(), { size: 7 });
+    const rows = combineRows([xrelRow(xrel(name, { sizeMb: 1 }))], [copy]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: name, name, xrel: true, size: 1024 * 1024, wcx: [copy] });
+  });
+
+  it("takes the episodes from the WCX copy that counts the most when xREL doesn't say", () => {
+    const name = "Silo.S01.German.DL.1080p.WEB.h264-VECTOR";
+    const copies = [
+      wcx(name, { seasonEpisodes: 6 }),
+      wcx(name, { uid: "b", seasonEpisodes: 8 }),
+      wcx(name, { uid: "c" }),
+    ];
+    expect(combineRows([xrelRow(xrel(name))], copies)[0].episodes).toBe(8);
+    expect(combineRows([xrelRow(xrel(name, { episodes: 10 }))], copies)[0].episodes).toBe(10);
+    expect(combineRows([xrelRow(xrel(name))], [wcx(name)])[0].episodes).toBeNull();
+    expect(wcxRow(copies[0]).episodes).toBe(6);
+  });
+
+  it("takes the size from WCX's first copy when xREL has none", () => {
+    const name = "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR";
+    const rows = combineRows([xrelRow(xrel(name))], [wcx(name, { size: 7 }), wcx(name, { uid: "b", size: 9 })]);
+    expect(rows[0].size).toBe(7);
+    expect(combineRows([xrelRow(xrel(name))], [])[0]).toMatchObject({ size: null, xrel: true, wcx: [] });
+  });
+
+  it("makes a row of WCX's first copy of a release xREL doesn't have", () => {
+    const first = wcx("Heat.1995.German.DL.2160p.WEB.h265-FuN", { uid: "a", size: 5 });
+    const second = wcx("heat.1995.german.dl.2160p.web.h265-fun", { uid: "b", size: 6 });
+    const rows = combineRows([], [first, second]);
+    expect(rows).toEqual([{ ...wcxRow(first), xrel: false, wcx: [first, second] }]);
+  });
+
+  it("lists the copies with a live mirror first", () => {
+    const name = "Heat.1995.German.DL.2160p.WEB.h265-FuN";
+    const gone = wcx(name, { uid: "gone", mirrors: [dead] });
+    const none = wcx(name, { uid: "none" });
+    const up = wcx(name, { uid: "up", mirrors: [dead, live] });
+    const rows = combineRows([], [gone, none, up]);
+    expect(rows[0].wcx.map((r) => r.uid)).toEqual(["up", "gone", "none"]);
+    // The row is the live one's.
+    expect(rows[0].id).toBe("up");
+  });
+
+  it("puts the newest first, one without a date last", () => {
+    const rows = combineRows(
+      [xrelRow(xrel("Old", { publishedAt: 1000 })), xrelRow(xrel("New", { publishedAt: 3000 }))],
+      [wcx("Undated"), wcx("Middle", { createdAt: new Date(2000 * 1000).toISOString() })],
+    );
+    expect(rows.map((r) => r.name)).toEqual(["New", "Middle", "Old", "Undated"]);
+  });
+});
+
+describe("sortRows", () => {
+  const row = (id: string, date: number | null, size: number | null, name = id): ReleaseRow => ({
+    id,
+    name,
+    episodes: null,
+    group: null,
+    resolution: null,
+    codec: "",
+    audio: null,
+    size,
+    date,
+    seasons: null,
+  });
+  const rows = [row("b", 2, 30), row("a", 3, null), row("c", null, 10)];
+  const ids = (key: ReleaseSortKey, dir: "asc" | "desc") => sortRows(rows, key, dir).map((r) => r.id);
+
+  it("sorts by date, size or name, a row without one last either way", () => {
+    expect(RELEASE_SORTS[0]).toMatchObject({ key: "date", defaultDir: "desc" });
+    expect(ids("date", "desc")).toEqual(["a", "b", "c"]);
+    expect(ids("date", "asc")).toEqual(["b", "a", "c"]);
+    expect(ids("size", "desc")).toEqual(["b", "c", "a"]);
+    expect(ids("name", "asc")).toEqual(["a", "b", "c"]);
+  });
+});

@@ -1,0 +1,112 @@
+import { describe, expect, it } from "vitest";
+import { episode, movie } from "@/test/fixtures";
+import { computeMissing, diffShow, formatEpisodeRanges, ownedEpisodes } from "./compute-missing";
+import { getMissingShows, replaceLibrary, replaceTmdb, syncedAt } from "./store";
+
+const ep = episode;
+
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+describe("formatEpisodeRanges", () => {
+  it("joins runs into ranges", () => {
+    expect(formatEpisodeRanges([1, 3, 4, 5, 7, 9, 10])).toBe("1, 3-5, 7, 9-10");
+    expect(formatEpisodeRanges([])).toBe("");
+  });
+});
+
+describe("ownedEpisodes", () => {
+  it("counts every episode of a combined file", () => {
+    const owned = ownedEpisodes([ep("s", 2, 1, 2), ep("s", 2, 4)]);
+    expect([...owned.get("s")!.get(2)!]).toEqual([1, 2, 4]);
+  });
+
+  it("skips episodes without a season or number", () => {
+    const owned = ownedEpisodes([
+      { ...ep("s", 1, 1), season: null },
+      { ...ep("s", 1, 2), episode: null },
+    ]);
+    expect(owned.size).toBe(0);
+  });
+});
+
+describe("diffShow", () => {
+  const tmdb = (seasons: { season: number; aired: number[]; all?: number[] }[]) => ({
+    s: {
+      tmdbId: "1",
+      seasons: seasons.map((x) => ({
+        season: x.season,
+        airedEpisodeNumbers: x.aired,
+        episodeNumbers: x.all ?? x.aired,
+      })),
+    },
+  });
+
+  it("lists aired episodes that aren't owned", () => {
+    const missing = diffShow(
+      tmdb([{ season: 1, aired: range(1, 6) }]),
+      ownedEpisodes([1, 2, 4].map((n) => ep("s", 1, n))),
+    );
+    expect(missing.s).toMatchObject({
+      count: 3,
+      seasons: [{ season: 1, episodes: "3, 5-6", wholeSeason: false, ended: true, total: 6 }],
+    });
+  });
+
+  it("marks a season with nothing owned as whole, and one still airing as not ended", () => {
+    const missing = diffShow(
+      tmdb([
+        { season: 1, aired: range(1, 3) },
+        { season: 2, aired: [1, 2], all: range(1, 4) },
+      ]),
+      ownedEpisodes(
+        range(1, 3)
+          .map((n) => ep("s", 1, n))
+          .concat(ep("s", 2, 1)),
+      ),
+    );
+    expect(missing.s.seasons).toEqual([
+      expect.objectContaining({ season: 2, episodes: "2", ended: false, wholeSeason: false }),
+    ]);
+    expect(missing.s.seasons[0].episodeStates.map((e) => e.state)).toEqual([
+      "owned",
+      "missing",
+      "upcoming",
+      "upcoming",
+    ]);
+
+    const none = diffShow(tmdb([{ season: 1, aired: [1, 2] }]), new Map());
+    expect(none.s.seasons[0].wholeSeason).toBe(true);
+  });
+
+  it("leaves complete shows out", () => {
+    const missing = diffShow(tmdb([{ season: 1, aired: [1, 2] }]), ownedEpisodes([ep("s", 1, 1), ep("s", 1, 2)]));
+    expect(missing).toEqual({});
+  });
+});
+
+describe("computeMissing", () => {
+  it("needs a TMDB sync first", () => {
+    expect(() => computeMissing()).toThrow(/Sync TMDB first/);
+  });
+
+  it("writes what it finds", () => {
+    replaceLibrary(
+      {
+        movies: [movie({ id: "m1", tmdbId: "1" })],
+        shows: [],
+        episodes: [ep("s", 1, 1)],
+      },
+      "2026-06-15T00:00:00Z",
+    );
+    replaceTmdb(
+      { s: { tmdbId: "9", seasons: [{ season: 1, airedEpisodeNumbers: [1, 2], episodeNumbers: [1, 2] }] } },
+      "2026-06-15T00:00:00Z",
+    );
+
+    const result = computeMissing(new Date("2026-06-15T12:00:00Z"));
+
+    expect(result).toMatchObject({ incompleteCount: 1 });
+    expect(getMissingShows().s.seasons[0].episodes).toBe("2");
+    expect(syncedAt("missing")).toBe("2026-06-15T12:00:00.000Z");
+  });
+});

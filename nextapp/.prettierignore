@@ -1,0 +1,5 @@
+# Generated or vendored: shadcn's components are its own source, the lock
+# file belongs to npm.
+components/ui/
+package-lock.json
+data/

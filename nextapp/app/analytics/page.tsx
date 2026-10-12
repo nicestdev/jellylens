@@ -1,0 +1,61 @@
+"use client";
+
+import { useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Segmented } from "@/components/segmented";
+import { SyncNotice, useSyncNow } from "@/components/sync-notice";
+import { apiFetch } from "@/lib/api-client";
+import type { AnalyticsResponse } from "@/lib/api-types";
+import { useLoad } from "@/hooks/use-load";
+import { LibraryView } from "./library-view";
+import { LIBRARIES_SHOWS_FIRST as LIBRARIES, type Library } from "@/lib/libraries";
+import { ErrorAlert } from "@/components/error-alert";
+
+const loadAnalytics = () => apiFetch<AnalyticsResponse>("/api/analytics");
+
+// One view per library behind a switch: the tiles, the share charts and
+// the file list. Both stay mounted (the other one hidden), so switching
+// keeps each one's filters and page.
+export default function AnalyticsPage() {
+  const { data, error, loading, reload } = useLoad(loadAnalytics);
+  const [library, setLibrary] = useState<Library>("shows");
+  // Files not stored yet come with the next library scan.
+  const sync = useSyncNow("library", reload);
+
+  return (
+    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="text-3xl font-semibold max-md:sr-only">Analytics</h1>
+        <Segmented
+          label="Library"
+          segments={LIBRARIES}
+          value={library}
+          onChange={setLibrary}
+          className="w-full sm:w-auto"
+        />
+      </div>
+
+      {error || sync.error ? <ErrorAlert>{sync.error || `Failed to load analytics: ${error}`}</ErrorAlert> : null}
+
+      {data?.movies.pending || data?.shows.pending ? (
+        <SyncNotice onSync={sync.sync} syncing={sync.syncing}>
+          The library&apos;s files come with the next library scan.
+        </SyncNotice>
+      ) : null}
+
+      {LIBRARIES.map((l) => (
+        <div key={l.key} hidden={l.key !== library}>
+          {loading && !data ? (
+            <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              {Array.from({ length: 4 }, (_, i) => (
+                <Skeleton key={i} className="h-[4.625rem] rounded-lg" />
+              ))}
+            </div>
+          ) : data ? (
+            <LibraryView library={l.key} stats={data[l.key]} version={data.syncedAt} />
+          ) : null}
+        </div>
+      ))}
+    </main>
+  );
+}

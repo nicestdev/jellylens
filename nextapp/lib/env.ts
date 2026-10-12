@@ -1,0 +1,54 @@
+export const JELLYFIN_URL = (process.env.JELLYFIN_URL || "").replace(/\/+$/, "");
+export const JELLYFIN_API_KEY = process.env.JELLYFIN_API_KEY || "";
+export const TMDB_API_KEY = process.env.TMDB_API_KEY || "";
+// The language TMDB's titles, genres and posters come in, as a TMDB locale
+// ("de-DE"); its country also picks the release dates that count.
+export const TMDB_LANGUAGE = process.env.TMDB_LANGUAGE?.trim() || "en-US";
+
+// Hours between automatic runs of each sync stage; 0 turns that schedule off
+// (manual "Sync" only). Unset, empty or invalid values use the default.
+function hours(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  const n = Number(raw);
+  return raw && Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+export const LIBRARY_SCAN_INTERVAL_HOURS = hours("LIBRARY_SCAN_INTERVAL_HOURS", 6);
+export const TMDB_SYNC_INTERVAL_HOURS = hours("TMDB_SYNC_INTERVAL_HOURS", 24);
+export const MISSING_RECHECK_INTERVAL_HOURS = hours("MISSING_RECHECK_INTERVAL_HOURS", 24);
+export const XREL_SYNC_INTERVAL_HOURS = hours("XREL_SYNC_INTERVAL_HOURS", 6);
+
+// Sign-in with Jellyfin accounts; on unless set to "false" (or 0/no/off).
+// Off, Jellylens is open to anyone who can reach it, as a single admin.
+export const AUTH_ENABLED = !/^(false|0|no|off)$/i.test(process.env.AUTH_ENABLED?.trim() ?? "");
+
+// A comma-separated list as a list of names, blanks left out.
+const list = (name: string) =>
+  (process.env[name] || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+// Favorite release groups added at every start if they're missing (by
+// name, as on Settings), so a new database comes with them.
+export const P2P_GROUPS = list("P2P_GROUPS");
+export const SCENE_GROUPS = list("SCENE_GROUPS");
+
+export const WCX_URL = (process.env.WCX_URL || "").replace(/\/+$/, "");
+export const WCX_API_URL = (process.env.WCX_API_URL || "").replace(/\/+$/, "");
+
+export const DATA_DIR = process.env.DATA_DIR || "/app/data";
+
+// Downloads (the Queue): the ddownload.com premium account it
+// signs in with (lib/hosters.ts), a Real-Debrid token, the passwords tried on archives in turn
+// (comma-separated), and where packages are downloaded and extracted.
+export const DDOWNLOAD_LOGIN = process.env.DDOWNLOAD_LOGIN?.trim() || "";
+export const DDOWNLOAD_PASSWORD = process.env.DDOWNLOAD_PASSWORD || "";
+// Real-Debrid's private API token (real-debrid.com/apitoken): for links on
+// hosters without an account of their own.
+export const REALDEBRID_TOKEN = process.env.REALDEBRID_TOKEN?.trim() || "";
+export const ARCHIVE_PASSWORDS = list("ARCHIVE_PASSWORDS");
+export const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || `${DATA_DIR}/downloads`;
+// The media library's disks: one folder per disk, each with movies/ and
+// shows/ (e.g. /library/nvme01/movies). The library scan reads them, and
+// the Queue moves finished downloads into them.
+export const LIBRARY_DIR = (process.env.LIBRARY_DIR || "").trim().replace(/\/+$/, "");

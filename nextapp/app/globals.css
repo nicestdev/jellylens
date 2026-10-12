@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "./themes.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* A phone on its side stays a phone: sm and md also need some height
+   (a landscape phone is under 30rem tall, a desktop window rarely), and
+   max-sm and max-md are their exact opposites. The max- ones first: they
+   come after the min- ones in the CSS either way (PHONE in
+   components/page-tools.tsx is max-md). */
+@custom-variant max-md (@media (width < 48rem) or (height < 30rem));
+@custom-variant max-sm (@media (width < 40rem) or (height < 30rem));
+@custom-variant sm (@media (width >= 40rem) and (height >= 30rem));
+@custom-variant md (@media (width >= 48rem) and (height >= 30rem));
+
+/* Clear of the notch and the rounded corners (viewportFit in app/layout.tsx). */
+@utility px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-bright: var(--bright);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  /* Numbers (sizes, years, counts): the text font with even digits
+     (tabular-nums), as in the design; codes stay font-mono. */
+  --font-num: var(--font-geist-sans);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-row: var(--row);
+  --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-wish: var(--p-pink, var(--p-red));
+  --color-fc: var(--fc);
+  --color-success: var(--success);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-sub-foreground: var(--sub-foreground);
+  --color-track: var(--p-track);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-table: var(--table);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/* Dark only (the <html> element always carries .dark so the dark: variants
+   in components/ui apply). The colors come from the palette (themes.css): base and mantle (sidebar) as backgrounds, surface0/1 for
+   raised parts, the accent as the one accent; red (missing), peach (open,
+   warnings), green and sky for states; blue and peach for the DD and RG hosters. */
+:root {
+  color-scheme: dark;
+  --radius: 0.5rem;
+  --background: var(--p-base);
+  /* Text one step below the palette's brightest, which stays for what's
+     hovered (bright): full white everywhere glares. */
+  --foreground: var(--p-soft, var(--p-text));
+  --bright: var(--p-text);
+  --card: var(--p-card, color-mix(in srgb, var(--p-base), var(--p-surface0) 26%));
+  --card-foreground: var(--foreground);
+  /* Behind a DataTable's rows; the page's own unless a theme sets one. */
+  --table: var(--p-table, transparent);
+  --popover: var(--p-surface0);
+  --popover-foreground: var(--foreground);
+  --primary: var(--p-accent);
+  --primary-foreground: var(--p-base);
+  --secondary: var(--p-surface0);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--p-surface0);
+  --muted-foreground: var(--p-subtext);
+  /* Secondary text a step brighter than muted: headings of sections,
+     status lines, idle toolbar buttons. */
+  --sub-foreground: var(--p-subtext1, var(--p-subtext));
+  /* Hovered menu items and the picked segment: a step above the popover. */
+  --accent: color-mix(in srgb, var(--p-surface0), var(--p-surface1) 55%);
+  --accent-foreground: var(--p-text);
+  --destructive: var(--p-red);
+  --warning: var(--p-peach);
+  --info: var(--p-sky);
+  --success: var(--p-green);
+  /* filecrypt's blue (a Check's lock), whatever the palette. */
+  --fc: #1b91db;
+  --border: var(--p-border, var(--p-surface0));
+  --row: var(--p-row, var(--border));
+  --input: var(--p-surface1);
+  --ring: var(--p-accent);
+  /* Analytics' series, then its "other" and "none" pieces. */
+  --chart-1: var(--p-blue);
+  --chart-2: var(--p-peach);
+  --chart-3: var(--p-green);
+  --chart-4: var(--p-accent);
+  --chart-5: var(--p-yellow);
+  --chart-other: var(--p-surface2);
+  --chart-none: var(--p-surface1);
+  --sidebar: var(--p-mantle);
+  --sidebar-accent: var(--p-surface0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Below md a nav page's heading is in the phone bar (`MobileBar`), so what
+   comes after it starts right under the page's top padding. The Queue's
+   heading shares a line with its ⋯, gone to the bar too, its file input
+   and drop overlay, and the box for pasted links, which keeps the space
+   while it's open. Unlayered, so it wins over the margin utilities. */
+@media (width < 48rem) or (height < 30rem) {
+  main > h1:first-child + *,
+  main > :first-child:has(> h1:first-child):not(:has(> :not(h1, input[hidden], [aria-hidden="true"]))) + * {
+    margin-top: 0;
+  }
+}

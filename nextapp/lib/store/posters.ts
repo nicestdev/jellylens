@@ -1,0 +1,14 @@
+import { all } from "./sql";
+
+// Every TMDB poster path something stored still shows: the library's
+// titles, requests and titles on Discover. The TMDB
+// image cache keeps these (see pruneTmdbImages).
+export function tmdbPosterPaths(): Set<string> {
+  const rows = all<{ path: string | null }>(
+    `SELECT json_extract(data, '$.posterPath') AS path FROM movies
+     UNION SELECT json_extract(data, '$.posterPath') FROM shows
+     UNION SELECT poster_path FROM requests
+     UNION SELECT poster_path FROM title_matches`,
+  );
+  return new Set(rows.map((r) => r.path).filter((p): p is string => Boolean(p)));
+}
