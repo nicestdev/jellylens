@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { json, mockFetch } from "@/test/http";
 import type { SessionUser } from "@/lib/session";
-import { NextRequest } from "next/server";
 import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
 import { addGroup, replaceLibrary, saveImdbLookup } from "@/lib/store";
 import { movie, show } from "@/test/fixtures";
@@ -184,11 +183,11 @@ describe("PATCH /api/preferences", () => {
 describe("/api/ignored", () => {
   it("adds and removes entries, and rejects malformed ones", async () => {
     const route = await import("./ignored/route");
-    const entry = { showId: "s1", season: null };
+    const entry = { showId: "s1" };
     expect(await (await route.POST(post("/api/ignored", entry))).json()).toEqual({ items: [entry] });
     expect(await (await route.DELETE(post("/api/ignored", entry, "DELETE"))).json()).toEqual({ items: [] });
-    expect((await route.POST(post("/api/ignored", { showId: "s", season: "1" }))).status).toBe(400);
-    expect((await route.POST(post("/api/ignored", { showId: "", season: 1 }))).status).toBe(400);
+    expect((await route.POST(post("/api/ignored", { showId: 1 }))).status).toBe(400);
+    expect((await route.POST(post("/api/ignored", { showId: "" }))).status).toBe(400);
   });
 });
 
@@ -238,11 +237,6 @@ describe("GET /api/movies and /api/analytics", () => {
       "2026-10-01T00:00:00.000Z",
     );
   };
-  const files = async (query: string) => {
-    const { GET } = await import("./analytics/files/route");
-    return (await GET(new NextRequest("http://jellylens.test/api/analytics/files?" + query))).json();
-  };
-
   it("keeps file names out of the movie list, but gives each its codec", async () => {
     library();
     const { GET } = await import("./movies/route");
@@ -252,60 +246,24 @@ describe("GET /api/movies and /api/analytics", () => {
     expect(alien).toMatchObject({ id: "m2", codec: "" });
   });
 
-  it("sums up each library's files by group, resolution, codec and language", async () => {
+  it("sums up each library's files, and both libraries' by group, resolution, codec and audio", async () => {
     library();
     const { GET } = await import("./analytics/route");
     const body = await (await GET()).json();
-    expect(body.shows).toMatchObject({
-      titles: 1,
-      withFiles: 1,
-      files: 1,
-      groups: [{ value: "cnhd", files: 1, size: 3 }],
-    });
-    expect({ ...body, shows: undefined }).toEqual({
-      movies: {
-        titles: 2,
-        withFiles: 2,
-        files: 2,
-        size: 50,
-        pending: false,
-        groups: [
-          { value: "GRP", files: 1, size: 42 },
-          { value: null, files: 1, size: 8 },
-        ],
-        resolutions: [
-          { value: "1080p", files: 1, size: 42 },
-          { value: "", files: 1, size: 8 },
-        ],
-        codecs: [
-          { value: "x264", files: 1, size: 42 },
-          { value: "", files: 1, size: 8 },
-        ],
-        languages: [{ value: "", files: 2, size: 50 }],
-      },
-      syncedAt: "2026-10-01T00:00:00.000Z",
-    });
-  });
-
-  it("pages the files, searched and filtered", async () => {
-    library();
-    expect(await files("")).toMatchObject({ matched: 2, pageSize: 50, items: [{ title: "Alien" }, { title: "Heat" }] });
-    expect(await files("q=heat 1995")).toMatchObject({
-      matched: 1,
-      items: [{ fileName: "Heat.1995.1080p.x264-GRP.mkv" }],
-    });
-    // An empty value: files without a group, or an unknown codec.
-    expect(await files("group=")).toMatchObject({ matched: 1, items: [{ title: "Alien" }] });
-    expect(await files("group=grp&codec=x264&resolution=1080p")).toMatchObject({
-      matched: 1,
-      items: [{ title: "Heat" }],
-    });
-    expect(await files("sort=size")).toMatchObject({ items: [{ size: 42 }, { size: 8 }] });
-    expect(await files("sort=nonsense&offset=1")).toMatchObject({ matched: 2, items: [{ title: "Heat" }] });
-    expect(await files("library=shows")).toMatchObject({
-      matched: 1,
-      items: [{ title: "Silo", season: 1, episode: 1 }],
-    });
+    expect(body.movies).toEqual({ titles: 2, files: 2, size: 50, seconds: 0, pending: false });
+    expect(body.shows).toEqual({ titles: 1, files: 1, size: 3, seconds: 0, pending: false });
+    expect(body.groups).toEqual([
+      { value: "GRP", movies: 1, episodes: 0, size: 42 },
+      { value: null, movies: 1, episodes: 0, size: 8 },
+      { value: "cnhd", movies: 0, episodes: 1, size: 3 },
+    ]);
+    expect(body.resolutions).toEqual([
+      { value: "1080p", movies: 1, episodes: 0, size: 42 },
+      { value: "", movies: 1, episodes: 1, size: 11 },
+    ]);
+    expect(body.codecs.map((p: { value: string }) => p.value)).toEqual(["x264", ""]);
+    expect(body.audio).toEqual([{ value: "", movies: 2, episodes: 1, size: 53 }]);
+    expect(body.quality).toEqual(expect.arrayContaining([{ resolution: "1080p", codec: "x264", files: 1, size: 42 }]));
   });
 });
 
@@ -526,12 +484,12 @@ describe("POST /api/sync/<stage>", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { POST } = await import("./sync/[stage]/route");
     const { GET } = await import("./status/route");
-    // The missing recheck fails without a TMDB sync to compare against.
-    await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "missing" }) });
+    // The TMDB sync fails before a library scan.
+    await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ stage: "tmdb" }) });
     await new Promise((resolve) => setImmediate(resolve));
-    expect((await (await GET()).json()).missing).toMatchObject({
+    expect((await (await GET()).json()).tmdb).toMatchObject({
       running: false,
-      error: expect.stringMatching(/Sync TMDB first/),
+      error: expect.stringMatching(/Scan the library first/),
     });
   });
 
@@ -661,5 +619,36 @@ describe("GET /api/wcx-search", () => {
     expect((await call("")).status).toBe(400);
     expect((await call("tmdbId=movie:abc")).status).toBe(400);
     expect((await call("tmdbId=person:1")).status).toBe(400);
+  });
+});
+
+describe("GET /api/xrel-link", () => {
+  const get = async (query: string) =>
+    (await import("./xrel-link/route")).GET(new Request(`http://x/api/xrel-link?${query}`));
+  const heat = {
+    mediaType: "movie" as const,
+    tmdbId: 949,
+    title: "Heat",
+    originalTitle: "Heat",
+    year: 1995,
+    posterPath: null,
+  };
+
+  it("redirects to the entry xREL has for the title's IMDb id", async () => {
+    saveImdbLookup("tt0113277", heat);
+    mockFetch((url) =>
+      url.pathname.endsWith("/search/ext_info.json")
+        ? json({ results: [{ link_href: "https://www.xrel.to/movie/123/heat.html", uris: ["imdb:tt0113277"] }] })
+        : undefined,
+    );
+    const res = await get("tmdbId=movie:949&title=Heat");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("https://www.xrel.to/movie/123/heat.html");
+  });
+
+  it("falls back to xREL's search for the title, and refuses a bad id", async () => {
+    const res = await get("tmdbId=movie:1&title=Heat");
+    expect(res.headers.get("location")).toBe("https://www.xrel.to/search.html?xrel_search_query=Heat");
+    expect((await get("tmdbId=heat")).status).toBe(400);
   });
 });

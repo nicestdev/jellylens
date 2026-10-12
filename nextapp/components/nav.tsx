@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 const noSubscribe = () => () => {};
 
 // icon: in the sidebar, before the label. count: which number goes next to
-// the link. admin: only for admins (proxy.ts enforces it).
+// the link, only when it's more than 0. admin: only for admins (proxy.ts enforces it).
 type NavLink = {
   href: string;
   label: string;
@@ -164,9 +164,7 @@ export function Sidebar({ user, canSignOut }: { user: SessionUser; canSignOut: b
                     <l.icon className={NAV_ICON} />
                     {l.label}
                   </span>
-                  {count !== null ? (
-                    <span className="font-num text-xs text-muted-foreground tabular-nums">{count}</span>
-                  ) : null}
+                  {count ? <span className="font-mono text-xs text-muted-foreground">{count}</span> : null}
                 </Link>
               );
             })}

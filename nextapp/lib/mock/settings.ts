@@ -1,6 +1,6 @@
 // Made-up Settings data for `next dev` (Mock data,
 // lib/mock/fetch.ts), like lib/mock/data.ts for the Queue:
-// a stage synced, one running, one never synced and one off; keys set,
+// a stage synced, one running, one never synced (and off); keys set,
 // masked and missing; release groups synced, syncing, still loading and
 // waiting for their first sync. Typed by the routes' responses.
 import type { ConfigResponse, ReleaseGroupsResponse, StatusResponse } from "@/lib/api-types";
@@ -12,13 +12,7 @@ export function mockStatus(): StatusResponse {
   return {
     library: { syncedAt: ago(95), running: false, error: null, movies: 1824, shows: 312 },
     tmdb: { syncedAt: ago(60 * 20), running: true, error: null, movies: 1824, shows: 312 },
-    missing: {
-      syncedAt: null,
-      running: false,
-      error: null,
-      incompleteCount: 0,
-    },
-    releases: { syncedAt: ago(12), running: false, error: null, groups: 7, releases: 4618 },
+    releases: { syncedAt: null, running: false, error: null, groups: 7, releases: 4618 },
   };
 }
 
@@ -36,7 +30,7 @@ export function mockConfig(): ConfigResponse {
     p2pGroups: 3,
     sceneGroups: 0,
     downloadDir: "/downloads",
-    intervals: { library: 6, tmdb: 24, missing: 24, releases: 0 },
+    intervals: { library: 6, tmdb: 24, releases: 0 },
     downloadSlots: 3,
     maxDownloadSlots: 10,
     passwords: ["serienjunkies.org", "hd-area.org"],

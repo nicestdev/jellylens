@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Google_Sans, Google_Sans_Code } from "next/font/google";
 import "./globals.css";
 import { Footer } from "@/components/footer";
 import { Toaster } from "@/components/toaster";
@@ -10,15 +10,21 @@ import { AUTH_ENABLED } from "@/lib/env";
 
 // The fonts are downloaded once at build time and served by Jellylens itself
 // (the CSP allows fonts only from 'self'); browsers never ask Google.
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Google Sans and Google Sans Code, the Mono drawn from the Sans, so the
+// Mono data beside the text doesn't stand out.
+// next/font has no metrics to size a fallback like them (it warns at
+// build), so a plain one while they load.
+const uiSans = Google_Sans({
+  variable: "--font-ui-sans",
   subsets: ["latin"],
+  adjustFontFallback: false,
+  fallback: ["system-ui", "sans-serif"],
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const uiMono = Google_Sans_Code({
+  variable: "--font-ui-mono",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  adjustFontFallback: false,
+  fallback: ["ui-monospace", "monospace"],
 });
 
 export const metadata: Metadata = {
@@ -37,7 +43,7 @@ export default async function RootLayout({ children, modal }: { children: React.
   // null only on the sign-in page, which has no nav (its card has the logo).
   const user = await currentUser();
   return (
-    <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="en" className={`dark ${uiSans.variable} ${uiMono.variable} antialiased`}>
       <body className="min-h-svh bg-background text-foreground">
         {user ? (
           <div className="flex min-h-svh">

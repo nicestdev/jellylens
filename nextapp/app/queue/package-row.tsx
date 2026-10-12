@@ -33,8 +33,9 @@ const MAIN_ACTION: Partial<Record<DownloadPackageItem["status"], MainAction>> = 
 // Where a package is at (components/row-status.tsx): a new one's parts
 // (partCheck: Checking, then how many are online, red when one is offline
 // or missing); while it moves a bar over the state and speed and
-// time left while it comes in, else how much is here (nothing more while
-// it's extracted, the bar is that); a failed one's error (red). A finished
+// time left while it comes in (how much is here if it's stalled); waiting,
+// paused or extracting the state alone, the bar is the rest; a failed
+// one's error (red). A finished
 // one is an OrganizeRow.
 function stateOf(pkg: DownloadPackageItem): RowState {
   if (pkg.status === "pending") {
@@ -47,7 +48,7 @@ function stateOf(pkg: DownloadPackageItem): RowState {
     return {
       line: (
         // Like the tree's marks: − what goes, ∗ what's skipped (blue), + what comes.
-        <span className="font-num">
+        <span className="font-mono">
           {lib.exact ? (
             <span className="text-info">∗{lib.skip} </span>
           ) : (
@@ -61,16 +62,18 @@ function stateOf(pkg: DownloadPackageItem): RowState {
   if (pkg.status === "failed") return { line: errorLine(pkg.error), tone: "error" };
   const s = summarize(pkg);
   const left = s.estimate ? timeLeft(s.estimate - s.received, s.speed) : null;
+  // Waiting, paused or extracting: the state alone, the bar's share and the
+  // Size column say how far.
   const detail =
-    pkg.status === "extracting"
+    pkg.status !== "downloading"
       ? null
-      : pkg.status === "downloading" && s.speed
-        ? [formatSpeed(s.speed), left].filter(Boolean).join(" · ")
+      : s.speed
+        ? [formatSpeed(s.speed), left]
         : s.total
-          ? `${formatBytes(s.received)} of ${formatBytes(s.total)}`
-          : formatBytes(s.received);
+          ? [`${formatBytes(s.received)} of ${formatBytes(s.total)}`]
+          : [formatBytes(s.received)];
   return {
-    line: [STATUS_LABEL[pkg.status], detail].filter(Boolean).join(" · "),
+    line: [STATUS_LABEL[pkg.status], ...(detail ?? [])],
     bar: { fraction: s.fraction, color: BAR[pkg.status] ?? "" },
   };
 }
@@ -181,7 +184,7 @@ export function PackageRow({
           library has it on, peach like the icon after the title (where a
           Replace would go), else empty while it comes in. */}
       <td className={cn(CELL, NOT_ON_PHONE)}>
-        {onDisk ? <span className="block truncate text-warning">{onDisk}</span> : null}
+        {onDisk ? <span className="block truncate font-mono text-xs text-warning">{onDisk}</span> : null}
       </td>
       <StatusCell state={state} />
       <td className={cn(NUMBER_CELL, NOT_ON_PHONE)}>{size}</td>

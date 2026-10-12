@@ -1,6 +1,5 @@
 import { db, toJson, tx } from "../db";
-import { all, byKey, one, run } from "./sql";
-import { setSyncedAt } from "./sync-state";
+import { all, byKey, run } from "./sql";
 
 // ended: every episode TMDB knows about for this season has already aired —
 // as opposed to a season that's still currently airing, where "missing"
@@ -22,13 +21,10 @@ export type MissingEntry = { count: number; seasons: MissingSeason[] };
 
 export const getMissingShows = () => byKey<MissingEntry>(all("SELECT show_id AS key, data FROM missing_shows"));
 
-export const missingCounts = () => one<{ series: number }>("SELECT count(*) AS series FROM missing_shows")!;
-
-export function replaceMissing(byShowId: Record<string, MissingEntry>, at: string | null) {
+export function replaceMissing(byShowId: Record<string, MissingEntry>) {
   tx(() => {
     run("DELETE FROM missing_shows");
     const insert = db().prepare("INSERT INTO missing_shows (show_id, data) VALUES (?, ?)");
     for (const [id, value] of Object.entries(byShowId)) insert.run(id, toJson(value));
-    setSyncedAt("missing", at);
   });
 }

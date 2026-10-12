@@ -14,6 +14,7 @@ import {
 import { fetchGroupReleases, fetchSceneReleases, RateLimitError } from "./xrel";
 import { fetchTmdbTitles, findTmdbByImdb, searchTmdbTitle } from "./tmdb";
 import { mapWithConcurrency } from "./async";
+import { addEnvGroups } from "./release-groups";
 import { decideMatch, type TitleLookup } from "./title-match";
 
 // What the sync is doing right now, for Settings and Discover:
@@ -82,7 +83,9 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
   });
 }
 
-// Syncs every favorite group in turn, P2P and scene, then looks up and
+// Adds P2P_GROUPS and SCENE_GROUPS the database doesn't have yet (one xREL
+// couldn't be asked about at the last try, out of calls, comes in now), then
+// syncs every favorite group in turn, P2P and scene, then looks up and
 // checks new titles on TMDB. A group added while this runs is picked up
 // before it ends, even one added while the titles were checked (that takes
 // minutes after a big first sync): its releases load next, then their
@@ -90,6 +93,7 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
 // the next run carries on (a first sync that was cut off walks the list
 // again, adding what's missing).
 export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: string; language: string }) {
+  await addEnvGroups();
   const done = new Set<string>();
   const nextGroup = () => listGroups().find((g) => !done.has(g.id));
   let added = 0;

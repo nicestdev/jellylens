@@ -15,7 +15,7 @@ import { useLoad } from "@/hooks/use-load";
 import { useWindowEvent } from "@/hooks/use-window-event";
 import { MissingTable } from "./missing-table";
 import { QueueTable, DisksTable, ImportsTable, WishlistTable } from "./rail";
-import { sections } from "@/app/queue/logic";
+import { queueLine, sections } from "@/app/queue/logic";
 import { usePoll } from "@/hooks/use-poll";
 import { missingShows, openWishlist, recentImports } from "./logic";
 import { ErrorAlert } from "@/components/error-alert";
@@ -50,11 +50,15 @@ export default function DashboardPage() {
   // Only with something on it: on top of the narrow column, on a phone
   // (one column) on top of the page.
   const wishes = wishlist.length ? <WishlistTable items={wishlist.slice(0, 8)} total={wishlist.length} /> : null;
-  // What needs a hand; Downloading and Done go on by themselves.
+  // What's in the Queue, but what's done.
   const queue = downloads.data
-    ? sections(downloads.data.packages, organize.data ?? null).filter(
-        (s) => s.title === "Needs attention" || s.title === "Ready to organize",
-      )
+    ? sections(downloads.data.packages, organize.data ?? null).filter((s) => s.title !== "Done")
+    : [];
+  // Only while something comes in: the Queue's Speed and Time left.
+  const running = downloads.data
+    ? queueLine(downloads.data)
+        .filter((st) => st.label === "Speed" || st.label === "Time left")
+        .map((st) => st.value)
     : [];
   const error =
     actionError ||
@@ -68,15 +72,15 @@ export default function DashboardPage() {
 
       {error ? <ErrorAlert>{error}</ErrorAlert> : null}
 
-      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <QueueTable parts={queue} />
-          {wishes ? <div className="xl:hidden">{wishes}</div> : null}
-          <MissingTable shows={missingShows(shows, ignores)} loading={missing.loading} onIgnore={ignore} />
-          <ImportsTable moved={recentImports(organize.data?.moved ?? [])} loading={organize.loading} />
+      <div className="mt-4 grid items-start gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-[minmax(0,1fr)_22rem] phone-landscape:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-6">
+          <QueueTable parts={queue} running={running} />
+          {wishes ? <div className="xl:hidden phone-landscape:hidden">{wishes}</div> : null}
+          <MissingTable shows={missingShows(shows, ignores)} onIgnore={ignore} />
+          <ImportsTable moved={recentImports(organize.data?.moved ?? [])} />
         </div>
-        <div className="flex min-w-0 flex-col gap-6">
-          {wishes ? <div className="max-xl:hidden">{wishes}</div> : null}
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-6">
+          {wishes ? <div className="max-xl:hidden phone-landscape:block">{wishes}</div> : null}
           <DisksTable disks={organize.data?.disks ?? []} loading={organize.loading} />
         </div>
       </div>

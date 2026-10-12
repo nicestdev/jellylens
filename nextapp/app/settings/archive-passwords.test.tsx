@@ -10,17 +10,17 @@ describe("ArchivePasswords", () => {
     const save = vi.fn(async () => {});
     render(<ArchivePasswords passwords={["serienfans.org"]} save={save} onError={() => {}} />);
     expect(screen.queryByRole("textbox")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Add password" }));
-    const field = screen.getByRole("textbox", { name: "Add password" });
+    await userEvent.click(screen.getByRole("button", { name: "Add archive password" }));
+    const field = screen.getByRole("textbox", { name: "Add archive password" });
     expect(field).toHaveFocus();
     await userEvent.type(field, " hd-source.to {Enter}");
     expect(save).toHaveBeenCalledWith(["serienfans.org", "hd-source.to"]);
-    expect(screen.getByRole("textbox", { name: "Add password" })).toHaveValue("");
+    expect(screen.getByRole("textbox", { name: "Add archive password" })).toHaveValue("");
   });
 
   it("closes the field with Esc", async () => {
     render(<ArchivePasswords passwords={["serienfans.org"]} save={vi.fn()} onError={() => {}} />);
-    await userEvent.click(screen.getByRole("button", { name: "Add password" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add archive password" }));
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("textbox")).toBeNull();
   });
@@ -38,8 +38,8 @@ describe("ArchivePasswords", () => {
     const onError = vi.fn();
     render(<ArchivePasswords passwords={[]} save={() => Promise.reject(new Error("HTTP 500"))} onError={onError} />);
     expect(screen.getByText("None yet")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Add password" }));
-    await userEvent.type(screen.getByRole("textbox", { name: "Add password" }), "x{Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Add archive password" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Add archive password" }), "x{Enter}");
     expect(onError).toHaveBeenLastCalledWith("Couldn't add the password: HTTP 500");
   });
 });

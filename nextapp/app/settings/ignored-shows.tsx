@@ -15,11 +15,10 @@ import { apiFetch, jsonRequest, loadShowsAndIgnores } from "@/lib/api-client";
 import type { IgnoreEntry, IgnoredResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { cn } from "@/lib/utils";
-import { seasonLabel } from "@/lib/format";
 import { ignoredList } from "./logic";
 
-// The shows' seasons (or whole shows) ignored on the Dashboard's Missing
-// shows: the show, which of it, Unignore in the ⋯.
+// The shows ignored on the Dashboard's Incomplete shows: the show,
+// Unignore in the ⋯.
 export function IgnoredShows({ onError }: { onError: (message: string) => void }) {
   const page = useLoad(loadShowsAndIgnores);
   const entries = page.data ? ignoredList(page.data.shows, page.data.ignored) : null;
@@ -36,28 +35,27 @@ export function IgnoredShows({ onError }: { onError: (message: string) => void }
 
   return (
     <TableFrame
-      title="Ignored shows"
+      title="Ignored incomplete shows"
       count={entries?.length}
       minWidth="min-w-0"
-      columns={[{ label: "Show" }, { label: "Season" }, { label: "Actions", hidden: true }]}
+      columns={[{ label: "Show" }, { label: "Actions", hidden: true }]}
     >
       {entries === null ? (
         <tr className={ROW}>
-          <td colSpan={3} className={CELL}>
+          <td colSpan={2} className={CELL}>
             <Skeleton className="h-5 w-full" />
           </td>
         </tr>
       ) : entries.length === 0 ? (
         <tr className={ROW}>
-          <td colSpan={3} className={MUTED_CELL}>
+          <td colSpan={2} className={MUTED_CELL}>
             None yet
           </td>
         </tr>
       ) : null}
       {(entries ?? []).map(({ entry, name }) => (
-        <tr key={`${entry.showId}-${entry.season}`} className={ROW}>
+        <tr key={entry.showId} className={ROW}>
           <td className={cn(TITLE_CELL, "font-medium")}>{name}</td>
-          <td className={MUTED_CELL}>{entry.season === null ? "All" : seasonLabel(entry.season)}</td>
           <td className={cn(CELL, "py-0 text-right")}>
             <DropdownMenu>
               <DropdownMenuTrigger

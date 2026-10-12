@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import "@/test/dom";
+import { wholeText } from "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import { REQUESTS_CHANGED } from "@/lib/api-client";
 import type { RequestItem } from "@/lib/api-types";
@@ -81,7 +81,7 @@ describe("WishlistTile", () => {
       />,
     );
     expect(screen.queryByText("In cinemas")).toBeNull();
-    expect(screen.getByText("1995 · Digital 3 Feb 2027")).toBeInTheDocument();
+    expect(screen.getByText(wholeText("1995 · Digital 3 Feb 2027"))).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Remove Heat from wishlist" }));
     expect(c.toggle).toHaveBeenCalledWith(expect.objectContaining({ tmdbId: 949 }), true, false, true);
   });
@@ -107,7 +107,7 @@ describe("WishlistTile", () => {
       { name: "Ben", requestedAt: "2026-09-02T00:00:00Z" },
     ];
     render(<WishlistTile item={request({ mine: false, requesters })} ctx={c} />);
-    expect(screen.getByText("1995 · Anna, Ben")).toBeInTheDocument();
+    expect(screen.getByText(wholeText("1995 · Anna, Ben"))).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Remove Heat for everyone" }));
     expect(c.toggle).toHaveBeenCalledWith(expect.objectContaining({ tmdbId: 949 }), true, true, true);
   });

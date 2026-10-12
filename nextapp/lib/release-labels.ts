@@ -1,6 +1,6 @@
 import type { MatchInfo, TitleRelease } from "./api-types";
 import { plural } from "./format";
-import { audioOf, episodesOf } from "./release-name";
+import { episodesOf } from "./release-name";
 
 // How xREL releases and their matches read, on Discover's release tiles
 // and on a title's page (components/title-view.tsx).
@@ -8,10 +8,12 @@ import { audioOf, episodesOf } from "./release-name";
 // A file or release without a group, wherever it's named.
 export const NO_GROUP = "n/a";
 
-// "2010 · 3 releases" under a Releases poster. releases: left out while
-// it isn't known.
-export const titleMeta = (t: { year: number | null; releases?: number }) =>
-  [t.year, t.releases === undefined ? null : plural(t.releases, "release")].filter(Boolean).join(" · ");
+// "2010 · 3 releases" under a Releases poster, as values shown with Dots.
+// releases: left out while it isn't known.
+export const titleMeta = (t: { year: number | null; releases?: number }) => [
+  t.year,
+  t.releases === undefined ? null : plural(t.releases, "release"),
+];
 
 // Why the tile shows what it shows, when that isn't simply xREL's match.
 export function matchNote(match: MatchInfo): string | null {
@@ -122,11 +124,6 @@ export function withoutTitle(name: string, { keepEpisode = false } = {}): string
   const year = [...name.slice(0, end).matchAll(/[._ ](?:19|20)\d{2}(?=[._ ]|$)/g)].at(-1);
   return (year && name.slice(year.index + year[0].length + 1)) || name;
 }
-
-// A library copy as a release's line under its name reads: group,
-// quality, codec, DL/ML (from the file's name).
-export const copyLabel = (c: { fileName: string; group: string | null; resolution: string; codec: string }) =>
-  [c.group, c.resolution, c.codec, audioOf(c.fileName)].filter(Boolean).join(" · ") || "unknown quality";
 
 // Whether a library file is from this very release, not just the same
 // title: its name (any case, dots, spaces or underscores alike, without

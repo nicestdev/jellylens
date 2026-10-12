@@ -18,11 +18,11 @@ a wishlist of what to add next.
 ## Features
 
 - 🎬 **Library**: your movies and shows as posters, read straight from your disks; search, sort, filter by genre or audio language.
-- 🧩 **Dashboard**: what in the Queue needs a hand, missing episodes and seasons (checked against TMDB), the wishlist, your disks and the last imports.
+- 🧩 **Dashboard**: the Queue at a glance, incomplete shows (checked against TMDB), the wishlist, your disks and the last imports.
 - 📝 **Discover and Wishlist**: search TMDB, keep a wishlist per user.
 - 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to), with [WCX](#wcx-and-downloads) mirrors.
-- 📊 **Analytics**: your files by group, language, resolution and codec.
-- 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked, with Undo.
+- 📊 **Analytics**: your files by audio (German and English), resolution and codec, and release group.
+- 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked.
 - 🔔 **Notes**: a heads-up when something needs a hand: a download to organize, or a failure.
 - 🔐 **Jellyfin sign-in**: admin pages for Jellyfin admins only.
 - 🔄 **Automatic sync** of your disks, TMDB and xREL, on a schedule you set.
@@ -68,8 +68,7 @@ Available for `linux/amd64` and `linux/arm64`.
 | `TMDB_LANGUAGE` | | `en-US` | Language of titles, genres and posters, e.g. `de-DE` |
 | `LIBRARY_SCAN_INTERVAL_HOURS` | | `6` | Hours between library scans, `0` = off |
 | `TMDB_SYNC_INTERVAL_HOURS` | | `24` | Hours between TMDB metadata refreshes, `0` = off |
-| `MISSING_RECHECK_INTERVAL_HOURS` | | `24` | Hours between rechecks for missing episodes, `0` = off |
-| `P2P_GROUPS` | | | Comma-separated P2P release groups to follow, e.g. `VECTOR,FuN`; added at every start if missing, so a new setup has them right away |
+| `P2P_GROUPS` | | | Comma-separated P2P release groups to follow, e.g. `VECTOR,FuN`; added at every releases sync if missing, so a new setup has them right away |
 | `SCENE_GROUPS` | | | The same for scene groups |
 | `XREL_SYNC_INTERVAL_HOURS` | | `6` | Hours between syncs of your release groups' lists from xREL, `0` = off |
 | `AUTH_ENABLED` | | `true` | Sign in with Jellyfin accounts; `false` opens Jellylens to anyone who can reach it |
@@ -122,7 +121,7 @@ Finished downloads wait on the Queue page under *Ready to organize*. Each gets t
 
 A movie goes to `movies/Name (Year) [tmdbid-N]/`, a show's episodes to `shows/Name (Year) [tmdbid-N]/Season NN/`, named with TMDB's title as TMDB writes it. A disk with a folder for that TMDB id already, whatever it's called, gets the files in that folder. Only videos and subtitles go, not samples, `.nfo` or other extras; a movie's video named with spaces gets the release's name instead.
 
-If the library has the title already, you choose: **Replace** takes the old files out once the new ones are in (no Undo then), or **Delete** the download.
+If the library has the title already, you choose: **Replace** takes the old files out once the new ones are in, or **Delete** the download.
 
 After a move, Jellylens scans the library again and asks Jellyfin to do the same, so point your Jellyfin libraries at the same folders (or a pool over them). **Rescan library** in the Queue page's ⋯ menu does it by hand.
 

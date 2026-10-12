@@ -6,6 +6,9 @@ import { syncedAt } from "./store";
 import { json, mockFetch } from "@/test/http";
 import type { XrelP2pRelease, XrelSceneRelease } from "./xrel";
 
+const env = vi.hoisted(() => ({ addEnvGroups: vi.fn(async () => 0) }));
+vi.mock("./release-groups", () => env);
+
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -271,5 +274,13 @@ describe("releaseSync", () => {
     releaseSync().matching = true;
     resetServerState();
     expect(releaseSync()).toEqual({ groupId: null, matching: false });
+  });
+});
+
+describe("syncReleases' env groups", () => {
+  it("adds P2P_GROUPS and SCENE_GROUPS first, every run, so one missed for want of xREL calls comes in later", async () => {
+    await syncReleases({ tmdbApiKey: "", language: "de-DE" });
+    await syncReleases({ tmdbApiKey: "", language: "de-DE" });
+    expect(env.addEnvGroups).toHaveBeenCalledTimes(2);
   });
 });

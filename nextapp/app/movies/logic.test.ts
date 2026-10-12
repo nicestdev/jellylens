@@ -4,6 +4,9 @@ import { movie as stored } from "@/test/fixtures";
 import { movieMeta, movieView } from "./logic";
 import type { LibraryFilters } from "@/lib/facets";
 
+// The values as the poster shows them, with its spaced dots.
+const shownMeta = (parts: unknown[]) => parts.filter(Boolean).join(" · ");
+
 // A movie as /api/movies sends it.
 const movie = (over: Partial<MovieItem> & { id: string }): MovieItem => ({ ...stored(over), codec: "", ...over });
 
@@ -16,8 +19,8 @@ const noFilters = (over: Partial<LibraryFilters> = {}): LibraryFilters => ({
 
 describe("movieMeta", () => {
   it("shows the year and the runtime in minutes", () => {
-    expect(movieMeta(movie({ id: "a", year: 2010, runtime: 148 * 60 }))).toBe("2010 · 148\u202fmin");
-    expect(movieMeta(movie({ id: "a" }))).toBe("");
+    expect(shownMeta(movieMeta(movie({ id: "a", year: 2010, runtime: 148 * 60 })))).toBe("2010 · 148\u202fmin");
+    expect(shownMeta(movieMeta(movie({ id: "a" })))).toBe("");
   });
 });
 

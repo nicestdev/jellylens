@@ -30,14 +30,8 @@ const dark: ShowItem = {
 
 describe("MissingTable", () => {
   it("has a row per season with a gap: the show, the season, its episodes as dots, how many", () => {
-    render(
-      <MissingTable
-        shows={[{ item: dark, seasons: [season(1), season(3)], count: 2 }]}
-        loading={false}
-        onIgnore={vi.fn()}
-      />,
-    );
-    expect(screen.getAllByRole("columnheader")[0]).toHaveTextContent("Missing shows · 1 · 2 episodes");
+    render(<MissingTable shows={[{ item: dark, seasons: [season(1), season(3)], count: 2 }]} onIgnore={vi.fn()} />);
+    expect(screen.getAllByRole("columnheader")[0]).toHaveTextContent("Incomplete shows · 1");
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getAllByRole("link", { name: "Dark (2017)" })[0]).toHaveAttribute("href", "/title/tv/70523");
@@ -49,22 +43,18 @@ describe("MissingTable", () => {
     ]);
   });
 
-  it("ignores a season or the whole show from its ⋯", async () => {
+  it("ignores the whole show from its ⋯", async () => {
     const onIgnore = vi.fn();
-    render(
-      <MissingTable shows={[{ item: dark, seasons: [season(2)], count: 1 }]} loading={false} onIgnore={onIgnore} />,
-    );
+    render(<MissingTable shows={[{ item: dark, seasons: [season(2)], count: 1 }]} onIgnore={onIgnore} />);
     await userEvent.click(screen.getAllByRole("button", { name: "More for Dark Season 2" })[0]);
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore season 2" }));
-    expect(onIgnore).toHaveBeenLastCalledWith({ showId: "70523", season: 2 });
-    await userEvent.click(screen.getAllByRole("button", { name: "More for Dark Season 2" })[0]);
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore entire show" }));
-    expect(onIgnore).toHaveBeenLastCalledWith({ showId: "70523", season: null });
+    expect(await screen.findAllByRole("menuitem")).toHaveLength(1);
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore show" }));
+    expect(onIgnore).toHaveBeenLastCalledWith({ showId: "70523" });
   });
 
-  it("says when nothing is missing", () => {
-    render(<MissingTable shows={[]} loading={false} onIgnore={vi.fn()} />);
-    expect(screen.getByText("Nothing missing")).toBeInTheDocument();
+  it("isn't there when nothing is incomplete", () => {
+    const { container } = render(<MissingTable shows={[]} onIgnore={vi.fn()} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

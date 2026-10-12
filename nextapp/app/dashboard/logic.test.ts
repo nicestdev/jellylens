@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import type { MissingSeason, OrganizeMoved, RequestItem, ShowItem } from "@/lib/api-types";
+import type {
+  DownloadFileItem,
+  DownloadPackageItem,
+  MissingSeason,
+  OrganizeMoved,
+  RequestItem,
+  OrganizeItem,
+  ShowItem,
+} from "@/lib/api-types";
+import type { MoveProgress } from "@/lib/library-move";
 import { show } from "@/test/fixtures";
-import { diskLow, freeShare, missingShows, openWishlist, recentImports, totalFree } from "./logic";
+import {
+  diskLow,
+  freeShare,
+  missingShows,
+  openWishlist,
+  pendingNote,
+  queueRows,
+  recentImports,
+  totalFree,
+} from "./logic";
 
 const season = (n: number, over: Partial<MissingSeason> = {}): MissingSeason => ({
   season: n,
@@ -29,7 +47,6 @@ const moved = (id: number, movedAt: string): OrganizeMoved => ({
   files: [],
   bytes: 0,
   replaced: false,
-  move: null,
 });
 
 const request = (tmdbId: number, requestedAt: string, owned = false) =>
@@ -50,13 +67,11 @@ describe("missingShows", () => {
     ]);
   });
 
-  it("leaves out ignored seasons and shows", () => {
+  it("leaves out ignored shows", () => {
     const shows = [item("a", [season(1), season(2)]), item("b", [season(1)])];
-    const ignored = [
-      { showId: "a", season: 1 },
-      { showId: "b", season: null },
-    ];
-    expect(missingShows(shows, ignored).map((m) => [m.item.id, m.seasons.map((s) => s.season)])).toEqual([["a", [2]]]);
+    expect(missingShows(shows, [{ showId: "b" }]).map((m) => [m.item.id, m.seasons.map((s) => s.season)])).toEqual([
+      ["a", [1, 2]],
+    ]);
   });
 });
 
@@ -88,5 +103,115 @@ describe("recentImports", () => {
       moved(4, "2026-10-11T08:00:00Z"),
     ];
     expect(recentImports(list, now).map((m) => m.id)).toEqual([4, 2, 1]);
+  });
+});
+
+describe("pendingNote", () => {
+  const part: DownloadFileItem = {
+    id: 1,
+    name: "a.mkv",
+    url: "",
+    size: 1,
+    received: 0,
+    status: "queued",
+    error: null,
+    speed: null,
+    checked: "online",
+  };
+  const lib = (over: Partial<NonNullable<DownloadPackageItem["library"]>>) => ({
+    old: [],
+    new: ["S01E05"],
+    exact: false,
+    skip: 0,
+    choices: [],
+    disks: ["nvme02"],
+    ...over,
+  });
+  const wait = (over: Partial<DownloadPackageItem>) =>
+    pendingNote({
+      status: "pending",
+      media: { type: "tv", tmdbId: 1 },
+      library: null,
+      files: [part],
+      ...over,
+    } as DownloadPackageItem);
+
+  it("says Error for a part that can't be fetched or is missing, Needs attention when it needs a hand", () => {
+    expect(wait({ files: [{ ...part, status: "failed", error: "No account for its hoster" }] })).toEqual({
+      line: ["Error"],
+      tone: "error",
+    });
+    expect(
+      wait({
+        files: [
+          { ...part, name: "a.part1.rar" },
+          { ...part, name: "a.part3.rar" },
+        ],
+      }),
+    ).toEqual({
+      line: ["Error"],
+      tone: "error",
+    });
+    expect(wait({ media: null })).toEqual({ line: ["Needs attention"], tone: "warning" });
+    expect(wait({ library: lib({}) })).toEqual({ line: ["Needs attention"], tone: "warning" });
+  });
+
+  it("leaves one out while it's checked, or when it only waits for a hoster", () => {
+    expect(wait({ files: [{ ...part, checked: null }] })).toBeNull();
+    expect(wait({})).toBeNull();
+  });
+});
+
+describe("queueRows", () => {
+  const progress: MoveProgress = {
+    target: "",
+    done: 1,
+    total: 4,
+    phase: "copying",
+    speed: 0,
+    running: true,
+    error: null,
+  };
+  const item = (id: number, move: Partial<MoveProgress> | null, error: string | null = null) =>
+    ({
+      id,
+      name: `Item.${id}`,
+      media: null,
+      error,
+      files: ["a", "b"],
+      owned: [],
+      move: move && { ...progress, ...move },
+    }) as unknown as OrganizeItem;
+  const pkg = (id: number, status: DownloadPackageItem["status"], error: string | null = null) =>
+    ({ id, name: `Pkg.${id}`, media: null, status, error, files: [] }) as unknown as DownloadPackageItem;
+
+  it("says where each is at: a failure's reason, a download's state, Ready, a move's phase", () => {
+    const rows = queueRows([
+      {
+        title: "Needs attention",
+        packages: [pkg(1, "failed", "Wrong archive password")],
+        items: [item(2, null, "No video in it.")],
+        moved: [],
+        pending: [],
+      },
+      { title: "Downloading", packages: [pkg(3, "downloading"), pkg(4, "paused")], items: [], moved: [], pending: [] },
+      {
+        title: "Ready to organize",
+        packages: [],
+        items: [item(5, null), item(6, {}), item(7, { phase: "verifying" }), item(8, { running: false })],
+        moved: [],
+        pending: [],
+      },
+    ]);
+    expect(rows.map((r) => [r.line.join("·"), r.tone])).toEqual([
+      ["Error", "error"],
+      ["Error", "error"],
+      ["Loading·0\u202f%", "success"],
+      ["Paused·0\u202f%", undefined],
+      ["Ready to organize", undefined],
+      ["Moving·25\u202f%", "success"],
+      ["Verifying·25\u202f%", "info"],
+      ["Waiting·25\u202f%", undefined],
+    ]);
   });
 });

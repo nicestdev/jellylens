@@ -22,7 +22,7 @@ import {
 } from "@/components/library-table";
 import { TableFrame } from "@/components/section-frame";
 import type { IgnoreEntry, MissingSeason, ShowItem } from "@/lib/api-types";
-import { plural, seasonCode, seasonLabel, showName } from "@/lib/format";
+import { seasonCode, seasonLabel, showName } from "@/lib/format";
 import { titlePath } from "@/lib/title-path";
 import { cn } from "@/lib/utils";
 import type { MissingShow } from "./logic";
@@ -31,12 +31,16 @@ const showPath = (item: ShowItem) => titlePath(`tv:${item.id}`);
 
 // A season's episodes as dots: a square per episode TMDB knows, red when
 // missing, outlined when not aired yet, plain when owned.
-function EpisodeDots({ season }: { season: MissingSeason }) {
-  const states = season.episodeStates.length
+const statesOf = (season: MissingSeason) =>
+  season.episodeStates.length
     ? season.episodeStates
     : Array.from({ length: season.count }, (_, i) => ({ n: i + 1, state: "missing" as const }));
+
+function EpisodeDots({ season }: { season: MissingSeason }) {
+  const states = statesOf(season);
   return (
-    <div className="flex flex-wrap gap-0.5 whitespace-normal">
+    // At most 10 a line, so a long season wraps into a block.
+    <div className="flex max-w-[7.375rem] flex-wrap gap-0.5">
       {states.map((e) => (
         <span
           key={e.n}
@@ -53,7 +57,7 @@ function EpisodeDots({ season }: { season: MissingSeason }) {
   );
 }
 
-// A season's ⋯: ignore the season, or the whole show.
+// A season's ⋯: ignore the whole show (all its seasons go).
 function IgnoreMenu({
   item,
   season,
@@ -63,31 +67,32 @@ function IgnoreMenu({
   season: number;
   onIgnore: (entry: IgnoreEntry) => void;
 }) {
-  const ignore = (s: number | null) => onIgnore({ showId: item.id, season: s });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label={`More for ${item.name} ${seasonLabel(season)}`} className={iconButton}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-auto">
-        <DropdownMenuItem onClick={() => ignore(season)}>
+        <DropdownMenuItem onClick={() => onIgnore({ showId: item.id })}>
           <EyeOff />
-          Ignore {seasonLabel(season).toLowerCase()}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => ignore(null)}>
-          <EyeOff />
-          Ignore entire show
+          Ignore show
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-const missingColumns: Column[] = [
+// Episodes as wide as the most dots in a line (up to 10, a dot 0.625rem
+// and a gap 0.125rem, the cell's 1.5rem padding), not under its heading's.
+const missingColumns = (dots: number): Column[] => [
   { label: "Title" },
-  { label: "Season", width: "w-20", phone: false },
-  { label: "Episodes", width: "w-64", phone: false },
-  { label: "Missing", align: "right", width: "w-20", phone: false },
+  { label: "Season", width: "w-17", phone: false },
+  {
+    label: "Episodes",
+    style: { width: `${Math.max(5, Math.min(10, dots) * 0.75 - 0.125 + 1.5)}rem` },
+    phone: false,
+  },
+  { label: "Missing", align: "right", width: "w-19", phone: false },
   { label: "Actions", hidden: true, width: "w-14", phone: false },
 ];
 
@@ -95,61 +100,45 @@ const missingColumns: Column[] = [
 // most missing first): the show, the season, its episodes as dots, how
 // many are missing, and its ⋯. On a phone the season and dots go under
 // the title.
-export function MissingTable({
-  shows,
-  loading,
-  onIgnore,
-}: {
-  shows: MissingShow[];
-  loading: boolean;
-  onIgnore: (entry: IgnoreEntry) => void;
-}) {
-  const episodes = shows.reduce((sum, s) => sum + s.count, 0);
+export function MissingTable({ shows, onIgnore }: { shows: MissingShow[]; onIgnore: (entry: IgnoreEntry) => void }) {
   const rows = shows.flatMap((s) => s.seasons.map((season) => ({ item: s.item, season })));
+  // Only with something in it.
+  if (!rows.length) return null;
   return (
     <TableFrame
-      title="Missing shows"
-      count={shows.length ? `${shows.length} · ${plural(episodes, "episode")}` : loading ? undefined : 0}
-      columns={missingColumns}
+      title="Incomplete shows"
+      count={shows.length}
+      columns={missingColumns(Math.max(0, ...rows.map(({ season }) => statesOf(season).length)))}
       minWidth="sm:min-w-[36rem]"
-      busy={loading}
     >
-      {rows.length ? (
-        rows.map(({ item, season }) => {
-          const menu = <IgnoreMenu item={item} season={season.season} onIgnore={onIgnore} />;
-          return (
-            <tr key={`${item.id}-${season.season}`} className={cn(ROW, "h-auto")}>
-              <td className={cn(TITLE_CELL, "py-2")}>
-                <div className="flex items-center gap-2">
-                  <Link href={showPath(item)} className="min-w-0 flex-1 truncate font-medium">
-                    {showName(item)}
-                  </Link>
-                  <span className="text-muted-foreground tabular-nums sm:hidden">{season.count}</span>
-                  <span className={PHONE_MENU}>{menu}</span>
-                </div>
-                <div className="mt-1 flex items-center gap-2 sm:hidden">
-                  <span className="w-7 shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {seasonCode(season.season)}
-                  </span>
-                  <EpisodeDots season={season} />
-                </div>
-              </td>
-              <td className={cn(MUTED_CELL, "py-2", NOT_ON_PHONE)}>{seasonCode(season.season)}</td>
-              <td className={cn(CELL, "py-2", NOT_ON_PHONE)}>
+      {rows.map(({ item, season }) => {
+        const menu = <IgnoreMenu item={item} season={season.season} onIgnore={onIgnore} />;
+        return (
+          <tr key={`${item.id}-${season.season}`} className={cn(ROW, "h-auto")}>
+            <td className={cn(TITLE_CELL, "py-2")}>
+              <div className="flex items-center gap-2">
+                <Link href={showPath(item)} className="min-w-0 flex-1 truncate font-medium">
+                  {showName(item)}
+                </Link>
+                <span className="font-mono text-xs text-muted-foreground sm:hidden">{season.count}</span>
+                <span className={PHONE_MENU}>{menu}</span>
+              </div>
+              <div className="mt-1 flex items-center gap-2 sm:hidden">
+                <span className="w-7 shrink-0 font-mono text-xs text-muted-foreground">
+                  {seasonCode(season.season)}
+                </span>
                 <EpisodeDots season={season} />
-              </td>
-              <td className={cn(NUMBER_CELL, "py-2", NOT_ON_PHONE)}>{season.count}</td>
-              <td className={MENU_CELL}>{menu}</td>
-            </tr>
-          );
-        })
-      ) : (
-        <tr className={ROW}>
-          <td colSpan={5} className={MUTED_CELL}>
-            {loading ? "Loading" : "Nothing missing"}
-          </td>
-        </tr>
-      )}
+              </div>
+            </td>
+            <td className={cn(MUTED_CELL, "py-2 font-mono text-xs", NOT_ON_PHONE)}>{seasonCode(season.season)}</td>
+            <td className={cn(CELL, "py-2", NOT_ON_PHONE)}>
+              <EpisodeDots season={season} />
+            </td>
+            <td className={cn(NUMBER_CELL, "py-2", NOT_ON_PHONE)}>{season.count}</td>
+            <td className={MENU_CELL}>{menu}</td>
+          </tr>
+        );
+      })}
     </TableFrame>
   );
 }

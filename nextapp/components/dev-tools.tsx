@@ -44,7 +44,6 @@ const SAMPLES: [
   ["Download failed", { description: "Anora (2024): Wrong archive password", mono: true, tone: "error" }],
   ["Not moved", { description: "Conclave (2024): the library has it already", tone: "warning" }],
   ["Move failed", { description: "Wicked (2024): No space left on device", tone: "error" }],
-  ["Undo failed", { description: "Wicked (2024): The file is gone", tone: "error" }],
   ["TMDB sync failed", { description: "fetch failed", tone: "error" }],
   ["Couldn't check its mirrors", { description: "Request timed out", tone: "error" }],
   ["Couldn't change the match", { description: "TMDB has no movie 974576", tone: "error" }],

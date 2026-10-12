@@ -83,17 +83,17 @@ describe("library", () => {
 });
 
 describe("ignored rows", () => {
-  const show: IgnoreEntry = { showId: "s1", season: 2 };
-  const wholeShow: IgnoreEntry = { showId: "s1", season: null };
+  const one: IgnoreEntry = { showId: "s1" };
+  const two: IgnoreEntry = { showId: "s2" };
 
-  it("adds each entry once and removes exactly that one", () => {
-    addIgnored(show);
-    addIgnored(show);
-    addIgnored(wholeShow);
-    expect(listIgnored()).toEqual([show, wholeShow]);
+  it("adds each show once and removes exactly that one", () => {
+    addIgnored(one);
+    addIgnored(one);
+    addIgnored(two);
+    expect(listIgnored()).toEqual([one, two]);
 
-    removeIgnored(wholeShow);
-    expect(listIgnored()).toEqual([show]);
+    removeIgnored(one);
+    expect(listIgnored()).toEqual([two]);
   });
 });
 

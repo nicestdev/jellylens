@@ -89,7 +89,7 @@ describe("GET /api/config", () => {
       passwords: ["example.com"],
     });
     expect(JSON.stringify(body)).not.toContain("env-one");
-    expect(body.intervals).toEqual({ library: 6, tmdb: 24, missing: 24, releases: 6 });
+    expect(body.intervals).toEqual({ library: 6, tmdb: 24, releases: 6 });
   });
 
   it("is kept from users who aren't admins (proxy.ts)", async () => {

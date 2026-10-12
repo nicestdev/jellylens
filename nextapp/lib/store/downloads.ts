@@ -32,7 +32,7 @@ export type DownloadPackage = {
   matched: boolean;
   // Moved into the library: the folder its files went to, and which went
   // where (from: in the package, to: in that folder); null if not.
-  // replaced: by Replace, what the library had of it taken out (no Undo).
+  // replaced: by Replace, what the library had of it taken out.
   movedTo: string | null;
   movedAt: string | null;
   movedFiles: MovedFile[] | null;

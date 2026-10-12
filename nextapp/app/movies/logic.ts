@@ -5,10 +5,10 @@ import { libraryView, type LibraryFilters, type SortDir } from "@/lib/facets";
 // for its filter menus. No React here, so it's tested on its own
 // (logic.test.ts).
 
-// "2010 · 148 min" under the poster.
-export function movieMeta(item: MovieItem): string {
+// "2010 · 148 min" under the poster, as values shown with Dots.
+export function movieMeta(item: MovieItem): (string | number | null | undefined)[] {
   const minutes = item.runtime ? Math.round(item.runtime / 60) : null;
-  return [item.year, minutes ? `${minutes}\u202fmin` : null].filter(Boolean).join(" · ");
+  return [item.year, minutes ? `${minutes}\u202fmin` : null];
 }
 
 // Title sorts A→Z first; the numeric keys start with the longest/newest,

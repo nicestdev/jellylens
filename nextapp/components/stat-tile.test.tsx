@@ -6,7 +6,7 @@ import { StatTile } from "./stat-tile";
 
 describe("StatTile", () => {
   it("shows a number with its label and hint", () => {
-    render(<StatTile label="Movies" value="649" hint="in the library" />);
+    render(<StatTile label="Movies" value="649" hint={["in the library"]} />);
     expect(screen.getByText("Movies")).toBeInTheDocument();
     expect(screen.getByText("649")).toBeInTheDocument();
     expect(screen.getByText("in the library")).toBeInTheDocument();
@@ -14,7 +14,7 @@ describe("StatTile", () => {
   });
 
   it("holds its place while loading", () => {
-    render(<StatTile label="Movies" value="649" hint="in the library" loading />);
+    render(<StatTile label="Movies" value="649" hint={["in the library"]} loading />);
     expect(screen.getByText("Movies")).toBeInTheDocument();
     expect(screen.queryByText("649")).toBeNull();
     expect(screen.queryByText("in the library")).toBeNull();

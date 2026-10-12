@@ -2,11 +2,10 @@ import type { OrganizeItem, OrganizeResponse } from "@/lib/api-types";
 import type { LibraryTarget } from "@/lib/library-move";
 
 // The disk an item goes to unless another is picked: the one that has the
-// title already, else the first (in disk order) it fits on; null if none
-// does. Not the one with the most room: that may be one left out of the
-// backup.
+// title already; else none, a disk for a new title is always picked by
+// hand.
 export function defaultTarget(item: OrganizeItem): LibraryTarget | null {
-  return item.targets.find((t) => t.existing) ?? item.targets.find((t) => fits(item, t)) ?? null;
+  return item.targets.find((t) => t.existing) ?? null;
 }
 
 // The disk an item goes to: the one it's being moved to, else the one
@@ -33,5 +32,5 @@ export function destination(item: OrganizeItem, target: LibraryTarget | null): {
 export const ownedInFolder = (item: OrganizeItem) =>
   item.owned.flatMap((o) => [o.path, ...o.extras]).map((p) => p.split("/").slice(3).join("/"));
 
-// Fast polling while a move (or an Undo) waits or runs.
-export const isMoving = (data: OrganizeResponse) => [...data.items, ...data.moved].some((i) => i.move && !i.move.error);
+// Fast polling while a move waits or runs.
+export const isMoving = (data: OrganizeResponse) => data.items.some((i) => i.move && !i.move.error);

@@ -27,7 +27,7 @@ vi.mock("@/lib/sync-manager", async (original) => ({
   startByHand: sync.startByHand,
 }));
 
-// What happens while the page looks at the library (a move or Undo ending
+// What happens while the page looks at the library (a move ending
 // meanwhile): run once, from inside the route's ownedFiles.
 const meanwhile = vi.hoisted(() => ({ run: null as null | (() => void) }));
 vi.mock("@/lib/library-move", async (original) => {
@@ -93,16 +93,6 @@ describe("/api/organize", () => {
     expect(data.moved.map((m) => m.id)).toEqual([id]);
   });
 
-  it("lists a package an Undo brought back meanwhile in New", async () => {
-    const id = heat();
-    setPackageMoved(id, { folder: `nvme01/movies/${FOLDER}`, files: [] });
-    const other = heat();
-    meanwhile.run = () => setPackageMoved(id, null);
-    const data = await page();
-    expect(data.items.map((i) => i.id).sort()).toEqual([id, other].sort());
-    expect(data.moved).toEqual([]);
-  });
-
   it("lists a finished package with where it goes, and the disks", async () => {
     const id = heat();
     const data = await page();
@@ -117,36 +107,22 @@ describe("/api/organize", () => {
     expect(data.moved).toEqual([]);
   });
 
-  it("moves one in, lists it as moved, moves it back on Undo, and forgets it on Clear", async () => {
+  it("moves one in, lists it as moved, and forgets it on Clear", async () => {
     refresh();
     const id = heat();
     expect((await send("POST", { id, target: MOVIES() })).status).toBe(200);
     await settled();
-    let data = await page();
+    const data = await page();
     expect(data.items).toEqual([]);
     expect(data.moved).toEqual([
       expect.objectContaining({ id, movedTo: `nvme01/movies/${FOLDER}`, files: ["Heat.1995.mkv"], bytes: 5 }),
     ]);
 
-    expect((await send("POST", { id, undo: true })).status).toBe(200);
-    await settled();
-    data = await page();
-    expect(data.items.map((i) => i.id)).toEqual([id]);
-    expect(fs.existsSync(path.join(MOVIES(), FOLDER))).toBe(false);
-
-    await send("POST", { id, target: MOVIES() });
-    await settled();
     expect(((await (await send("DELETE")).json()) as OrganizeResponse).moved).toEqual([]);
     expect(getPackage(id)).toBeNull();
     expect(fs.existsSync(path.join(MOVIES(), FOLDER, "Heat.1995.mkv"))).toBe(true);
-    // Each time the queue was through, the library was scanned again.
-    await vi.waitFor(() =>
-      expect(sync.startByHand.mock.calls).toEqual([
-        ["library", true],
-        ["library", true],
-        ["library", true],
-      ]),
-    );
+    // Once the queue was through, the library was scanned again.
+    await vi.waitFor(() => expect(sync.startByHand.mock.calls).toEqual([["library", true]]));
   });
 
   it("refuses an unknown package, a missing target, or a folder that isn't one of its targets", async () => {

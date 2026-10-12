@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Poster } from "@/components/poster";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, titleIfCut } from "@/lib/utils";
+import { Dots } from "@/components/dot";
 
 // The translucent badge gets a hairline edge; without it it melts into
 // dark posters and reads smaller than it is.
@@ -37,7 +38,7 @@ export function PosterCard({
   onClick?: () => void;
   imageSrc?: string | null;
   title: string;
-  meta?: string;
+  meta?: ReactNode[];
   badge?: PosterBadge;
   leftBadge?: PosterBadge;
   filterBadge?: PosterBadge;
@@ -92,7 +93,11 @@ export function PosterCard({
         <div className="mt-2 truncate text-sm font-medium" onMouseEnter={titleIfCut}>
           {title}
         </div>
-        {meta ? <div className="truncate text-xs text-muted-foreground">{meta}</div> : null}
+        {meta?.some(Boolean) ? (
+          <div className="truncate text-xs text-muted-foreground">
+            <Dots parts={meta} spaced />
+          </div>
+        ) : null}
       </Tile>
       {action ? (
         // Same box as the poster, so the button lands on its corner; the
@@ -104,8 +109,10 @@ export function PosterCard({
 }
 
 // Two across on phones, then as many as fit at 10.5rem, as in the design.
+// Two on a phone, four on a phone on its side (short and wide; else three
+// would fit), as many as fit from sm up.
 export const POSTER_GRID =
-  "grid grid-cols-2 gap-x-3.5 gap-y-5.5 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] sm:gap-x-5 sm:gap-y-8";
+  "grid grid-cols-2 gap-x-3.5 gap-y-5.5 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] sm:gap-x-5 sm:gap-y-8 phone-landscape:grid-cols-4";
 
 export function PosterGridSkeleton() {
   return (

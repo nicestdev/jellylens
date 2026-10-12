@@ -38,11 +38,9 @@ function shortDate(iso: string): string {
 
 // Year, then the next release date if one is coming (e.g. "Digital 28 Sep"),
 // or else Movie/Show.
-function metaLine(item: Result): string {
+function metaLine(item: Result): (string | number | null | undefined)[] {
   const next = item.availability?.next;
-  return [item.year, next ? `${next.kind} ${shortDate(next.date)}` : TYPE_LABEL[item.mediaType]]
-    .filter(Boolean)
-    .join(" · ");
+  return [item.year, next ? `${next.kind} ${shortDate(next.date)}` : TYPE_LABEL[item.mediaType]];
 }
 
 // A poster's In library mark, top right where the heart would be (what's
@@ -336,7 +334,7 @@ export function WishlistTile({ item, ctx }: { item: Request; ctx: TileContext })
       href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
       imageSrc={tmdbImage(item.posterPath)}
       title={item.title}
-      meta={overview ? [item.year, requesterNames(item)].filter(Boolean).join(" · ") : metaLine(item)}
+      meta={overview ? [item.year, requesterNames(item)] : metaLine(item)}
       action={
         <HeartToggle
           on={!leaving}

@@ -13,9 +13,9 @@ export function SectionTitle({
 }) {
   return (
     <div className="mb-3 flex min-h-5 items-center gap-4">
-      <h2 className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
+      <h2 className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1 font-mono text-sm font-medium">
         {children}
-        {hint ? <span className="text-xs font-normal text-muted-foreground">{hint}</span> : null}
+        {hint ? <span className="text-[0.8125rem] font-normal text-muted-foreground">{hint}</span> : null}
       </h2>
       {action}
     </div>

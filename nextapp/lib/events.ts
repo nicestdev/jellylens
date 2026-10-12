@@ -1,7 +1,7 @@
 // What happened in the background that an admin wants to hear about, shown
 // as notes on whatever page is open (components/event-toasts.tsx): only
 // what needs a hand, a download done (ready to organize) or failed, a move
-// or Undo failed or not done, a sync failed. The last MAX_EVENTS, each with a rising id
+// failed or not done, a sync failed. The last MAX_EVENTS, each with a rising id
 // to ask for what came after. State lives on globalThis (see
 // test/state.ts); a restart forgets them and counts from 1 again, under a
 // new boot id, so a page open across it asks from the start.

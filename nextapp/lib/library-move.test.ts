@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { eventsAfter } from "./events";
 import { DOWNLOAD_DIR, LIBRARY_DIR } from "./env";
-import { libraryTargets, moveOf, movePlan, ownedFiles, startMove, startUndo } from "./library-move";
+import { libraryTargets, moveOf, movePlan, ownedFiles, startMove } from "./library-move";
 import { db } from "./db";
 import { addPackage, getPackage, setPackageMedia, setPackageStatus } from "./store";
 
@@ -115,44 +115,12 @@ describe("moving into the library", () => {
     });
   });
 
-  it("Undo copies them back, then takes them and the emptied folder out", async () => {
+  it("leaves no note for a move done, and scans the library again after it", async () => {
     const id = vectorPackage();
     await startMove(getPackage(id)!, MOVIES());
-    await settled();
-
-    expect(startUndo(getPackage(id)!)).toBeNull();
-    await settled();
-
-    expect(moveOf(id)).toBeNull();
-    expect(getPackage(id)).toMatchObject({ movedTo: null, movedFiles: null });
-    expect(fs.readFileSync(path.join(DOWNLOAD_DIR, RELEASE, RELEASE, "Maze Runner (2014).mkv"), "utf8")).toBe(
-      "video".repeat(1000),
-    );
-    expect(fs.existsSync(path.join(MOVIES(), FOLDER))).toBe(false);
-    expect(movePlan(getPackage(id)!).error).toBeNull();
-  });
-
-  it("Undo leaves a title's folder that has other files", async () => {
-    const id = vectorPackage();
-    const title = path.join(MOVIES(), FOLDER);
-    fs.mkdirSync(title);
-    fs.writeFileSync(path.join(title, "poster.jpg"), "jpg");
-    await startMove(getPackage(id)!, MOVIES());
-    await settled();
-    startUndo(getPackage(id)!);
-    await settled();
-
-    expect(fs.readdirSync(title)).toEqual(["poster.jpg"]);
-  });
-
-  it("leaves no note for a move or Undo done, and scans the library again after each", async () => {
-    const id = vectorPackage();
-    await startMove(getPackage(id)!, MOVIES());
-    await settled();
-    startUndo(getPackage(id)!);
     await settled();
     expect(eventsAfter(0).events).toEqual([]);
-    await vi.waitFor(() => expect(rescan.rescan).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(rescan.rescan).toHaveBeenCalledOnce());
   });
 
   it("puts a show's episodes into their season's folder", () => {
@@ -215,15 +183,6 @@ describe("moving into the library", () => {
     return settled();
   });
 
-  it("won't undo what isn't in the library anymore, or a move without its files known", async () => {
-    const id = vectorPackage();
-    await startMove(getPackage(id)!, MOVIES());
-    await settled();
-    fs.rmSync(path.join(MOVIES(), FOLDER, `${RELEASE}.de.srt`));
-    expect(startUndo(getPackage(id)!)).toBe(`${RELEASE}.de.srt isn't in the library anymore.`);
-    expect(startUndo({ ...getPackage(id)!, movedFiles: null })).toBe("Nothing to undo.");
-  });
-
   it("fails a move whose library folder is gone, keeping the package's files", async () => {
     const id = vectorPackage();
     // The queue held up until the folder is gone.
@@ -265,7 +224,7 @@ describe("moving into the library", () => {
     expect(moveOf(id)).toBeNull();
   });
 
-  it("Add as version keeps what the library had, and can be undone", async () => {
+  it("Add as version keeps what the library had", async () => {
     const id = vectorPackage();
     const title = owned();
     expect(await startMove(getPackage(id)!, MOVIES(), false)).toBeNull();
@@ -277,18 +236,15 @@ describe("moving into the library", () => {
       `${RELEASE}.mkv`,
     ]);
     expect(getPackage(id)).toMatchObject({ replaced: false });
-    expect(startUndo(getPackage(id)!)).toBeNull();
-    await settled();
   });
 
-  it("Replace takes out what the library had once the new files are in, with no Undo", async () => {
+  it("Replace takes out what the library had once the new files are in", async () => {
     const id = vectorPackage();
     const title = owned();
     expect(await startMove(getPackage(id)!, MOVIES(), true)).toBeNull();
     await settled();
     expect(fs.readdirSync(title).sort()).toEqual([`${RELEASE}.de.srt`, `${RELEASE}.mkv`]);
     expect(getPackage(id)).toMatchObject({ replaced: true });
-    expect(startUndo(getPackage(id)!)).toBe("It replaced what the library had: no Undo.");
     expect(eventsAfter(0).events).toEqual([]);
   });
 

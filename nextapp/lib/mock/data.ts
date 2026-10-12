@@ -144,7 +144,6 @@ const targets = (kind: "movies" | "shows", folder: string, existingOn?: string) 
 
 const move = (target: string, more: Partial<MoveProgress>): MoveProgress => ({
   target,
-  back: false,
   done: 0,
   total: 0,
   phase: "copying",
@@ -164,22 +163,18 @@ type Finished = {
   files: string[];
   bytes: number;
   item?: Partial<OrganizeItem>;
-  moved?: { disk: string; minutes: number; replaced?: boolean; move?: MoveProgress; noFiles?: boolean };
+  moved?: { disk: string; minutes: number; replaced?: boolean };
 };
 
 const INTERSTELLAR = "Interstellar.2014.German.DL.1080p.BluRay.x264-DETAiLS";
-const HERETIC = "Heretic.2024.German.DL.1080p.WEB.H264-WAYNE";
 const BEAR = "The.Bear.S03.German.DL.1080p.WEB.H264-WvF";
-const LOTR = "The.Lord.of.the.Rings.The.Return.of.the.King.2003.EXTENDED.German.DL.2160p.UHD.BluRay.REMUX-WAYNE";
 
 function finished(): Finished[] {
   const interstellar = movie(157336, "Interstellar", 2014);
-  const heretic = movie(1138194, "Heretic", 2024);
   const bear = show(136315, "The Bear", 2022);
   const bearEpisode = (e: number) => `Season 03/${BEAR.replace(".S03.", `.S03E${String(e).padStart(2, "0")}.`)}.mkv`;
   return [
-    // Ready to organize: shows and movies new to the library; one too big
-    // for nvme03 (red in the disk menu).
+    // Ready to organize: a show new to the library; one that fits on no disk.
     {
       id: 20,
       name: "Fallout.S01.German.DL.1080p.WEB.H265-GROUP",
@@ -189,38 +184,14 @@ function finished(): Finished[] {
     },
     // A pack of two seasons: a folder each.
     {
-      id: 38,
-      name: "Arcane.S01-S02.German.DL.1080p.WEB.H264-WvF",
-      media: show(94605, "Arcane", 2021),
-      files: [1, 2].flatMap((s) =>
-        Array.from({ length: 9 }, (_, i) => `Season 0${s}/Arcane.S0${s}E0${i + 1}.German.DL.1080p.WEB.H264-WvF.mkv`),
-      ),
-      bytes: 21.3 * GB,
-    },
-    // Fits on no disk: "Pick" for a disk, only Delete in its ⋯.
-    {
       id: 39,
       name: "The.Sopranos.S01-S06.German.DL.2160p.UHD.BluRay.REMUX-WAYNE",
       media: show(1398, "The Sopranos", 1999),
       files: [`Season 01/The.Sopranos.S01E01.German.DL.2160p.UHD.BluRay.REMUX-WAYNE.mkv`],
       bytes: 2900 * GB,
     },
-    {
-      id: 21,
-      name: "Flow.2024.German.DL.1080p.BluRay.x264-ROCKEFELLER",
-      media: movie(823219, "Flow", 2024),
-      files: ["Flow.2024.German.DL.1080p.BluRay.x264-ROCKEFELLER.mkv"],
-      bytes: 8.4 * GB,
-    },
-    {
-      id: 22,
-      name: LOTR,
-      media: movie(122, "The Lord of the Rings: The Return of the King", 2003),
-      files: [`${LOTR}.mkv`],
-      bytes: 142 * GB,
-    },
-    // The library has it: another release (with its subtitles), the very
-    // same release, two of a show's ten episodes.
+    // The library has it: another release (with its subtitles), two of a
+    // show's ten episodes.
     {
       id: 23,
       name: INTERSTELLAR,
@@ -241,17 +212,6 @@ function finished(): Finished[] {
       },
     },
     {
-      id: 24,
-      name: HERETIC,
-      media: heretic,
-      files: [`${HERETIC}.mkv`],
-      bytes: 5.8 * GB,
-      item: {
-        targets: targets("movies", folderOf(heretic), "nvme01"),
-        owned: [{ path: `nvme01/movies/${folderOf(heretic)}/${HERETIC}.mkv`, size: 5.8 * GB, extras: [] }],
-      },
-    },
-    {
       id: 25,
       name: BEAR,
       media: bear,
@@ -266,15 +226,7 @@ function finished(): Finished[] {
         })),
       },
     },
-    // Moving: waiting for the one before, copying, verifying.
-    {
-      id: 26,
-      name: "Moana.2.2024.German.DL.1080p.WEB.H264-ZeroTwo",
-      media: movie(1241982, "Moana 2", 2024),
-      files: ["Moana.2.2024.German.DL.1080p.WEB.H264-ZeroTwo.mkv"],
-      bytes: 6.2 * GB,
-      item: { move: move("/library/nvme02/movies", { total: 6.2 * GB, running: false }) },
-    },
+    // Moving: copying, verifying.
     {
       id: 27,
       name: "Nosferatu.2024.German.DL.1080p.WEB.H264-ZeroTwo",
@@ -293,8 +245,7 @@ function finished(): Finished[] {
         move: move("/library/nvme01/movies", { done: 4.1 * GB, total: 9.2 * GB, phase: "verifying", speed: 980e6 }),
       },
     },
-    // Needs attention: a move that failed, and ones that can't be moved (not
-    // matched, a show's file without a season, no video).
+    // Needs attention: a move that failed, one that can't be moved.
     {
       id: 29,
       name: "Conclave.2024.German.DL.1080p.WEB.H264-SAUERKRAUT",
@@ -319,24 +270,7 @@ function finished(): Finished[] {
       bytes: 3.3 * GB,
       item: { error: "It isn't matched to a movie or show on TMDB." },
     },
-    {
-      id: 31,
-      name: "Slow.Horses.Complete.German.DL.1080p.WEB.H264-RUBBiSH",
-      media: show(95480, "Slow Horses", 2022),
-      files: [],
-      bytes: 21.7 * GB,
-      item: { error: "No season in Slow.Horses.E01.German.DL.1080p.mkv." },
-    },
-    {
-      id: 32,
-      name: "Wallace.and.Gromit.Vengeance.Most.Fowl.2024.German.DL.1080p.WEB-SUBS",
-      media: movie(929204, "Wallace & Gromit: Vengeance Most Fowl", 2024),
-      files: [],
-      bytes: 0.1 * GB,
-      item: { error: "No video in it." },
-    },
-    // Done: moved, replaced, one whose files aren't known (no Undo); an
-    // Undo running; an Undo that failed (Needs attention).
+    // Done: moved, replaced.
     {
       id: 33,
       name: "The.Wild.Robot.2024.German.DL.2160p.WEB.H265-ZeroTwo",
@@ -357,42 +291,12 @@ function finished(): Finished[] {
       moved: { disk: "nvme02", minutes: 180, replaced: true },
     },
     {
-      id: 35,
-      name: "Civil.War.2024.German.DL.1080p.BluRay.x264-DETAiLS",
-      media: movie(929590, "Civil War", 2024),
-      files: ["Civil.War.2024.German.DL.1080p.BluRay.x264-DETAiLS.mkv"],
-      bytes: 9.6 * GB,
-      moved: { disk: "nvme01", minutes: 60 * 26, noFiles: true },
-    },
-    {
       id: 36,
       name: "Gladiator.II.2024.German.DL.1080p.BluRay.x265-VECTOR",
       media: movie(558449, "Gladiator II", 2024),
       files: ["Gladiator.II.2024.German.DL.1080p.BluRay.x265-VECTOR.mkv"],
       bytes: 10.1 * GB,
-      moved: {
-        disk: "nvme01",
-        minutes: 15,
-        move: move("/library/nvme01/movies", { back: true, done: 3.3 * GB, total: 10.1 * GB, speed: 380e6 }),
-      },
-    },
-    {
-      id: 37,
-      name: "Anora.2024.German.DL.1080p.WEB.H265-FuN",
-      media: movie(1064213, "Anora", 2024),
-      files: ["Anora.2024.German.DL.1080p.WEB.H265-FuN.mkv"],
-      bytes: 7.3 * GB,
-      moved: {
-        disk: "nvme03",
-        minutes: 95,
-        move: move("/library/nvme03/movies", {
-          back: true,
-          done: 1.8 * GB,
-          total: 7.3 * GB,
-          running: false,
-          error: "Anora.2024.German.DL.1080p.WEB.H265-FuN.mkv: only 1.80 GB of 7.30 GB were copied",
-        }),
-      },
+      moved: { disk: "nvme01", minutes: 15 },
     },
   ];
 }
@@ -401,24 +305,17 @@ const movedTo = (f: Finished) =>
   `${f.moved!.disk}/${f.media?.type === "tv" ? "shows" : "movies"}/${f.media ? folderOf(f.media) : f.name}`;
 const base = (file: string) => file.split("/").pop()!;
 
-const DUNE = "Dune.Part.Two.2024.German.DL.2160p.UHD.BluRay.HDR.x265-WAYNE";
 const SEVERANCE = "Severance.S02.German.DL.1080p.WEB.H264-WvF";
 const ARRIVAL = "Arrival.2016.German.DL.1080p.BluRay.x264-SPiCY";
 const PERFECT = "Perfect.Days.2023.German.DL.1080p.BluRay.x264-DETAiLS";
-const WICKED = "Wicked.2024.German.DL.2160p.WEB.H265-SPiCY";
 const UNMATCHED = "Kleine.Schweinereien.2024.German.1080p.WEB.x264-NOGRP";
 const BLADE = "Blade.Runner.2049.2017.German.DL.2160p.UHD.BluRay.x265-ZQ";
-const SUBSTANCE = "The.Substance.2024.German.DL.1080p.BluRay.x265-FuN";
 const SHOGUN = "Shogun.2024.S01.German.DL.2160p.DSNP.WEB.H265-TVARCHiV";
 const FURIOSA = "Furiosa.A.Mad.Max.Saga.2024.German.DL.1080p.BluRay.AVC-HDMP";
 const ALIEN = "Alien.Romulus.2024.German.DL.1080p.WEB.H264-ZeroTwo";
 const ANDOR = "Andor.S02E01.German.DL.1080p.WEB.H264-SAUERKRAUT";
-const TLOU = "The.Last.of.Us.S02.German.DL.1080p.WEB.H265-GROUP";
 const OPPENHEIMER = "Oppenheimer.2023.German.DL.2160p.UHD.BluRay.x265-WAYNE";
-const SILO = "Silo.S02.German.DL.1080p.WEB.x265-w00t";
-const SLOW = "Slow.Horses.S04.German.DL.1080p.WEB.H264-WvF";
 const PASTLIVES = "Past.Lives.2023.German.DL.1080p.BluRay.x264-DETAiLS";
-const TWISTERS = "Twisters.2024.German.DL.1080p.WEB.H264-ZeroTwo";
 
 export function mockDownloads(): DownloadsResponse {
   fileId = 1;
@@ -432,10 +329,9 @@ export function mockDownloads(): DownloadsResponse {
       // Needs attention, new: only what waits for a hand, since anything the
       // library has nothing of starts right away (startIfNew). A show some
       // of whose episodes of this very release the library has (Skip),
-      // still being checked; movies it has another version of (Replace)
-      // with parts no account can fetch, a part missing from the numbering
-      // (both red over the diffstat), one the hoster didn't answer for;
-      // one TMDB found nothing for.
+      // still being checked; movies it has another version of (Replace),
+      // all of (Remove); parts no account can fetch, a part missing from the
+      // numbering (both red); one TMDB found nothing for.
       pkg(
         2,
         SEVERANCE,
@@ -456,10 +352,6 @@ export function mockDownloads(): DownloadsResponse {
           },
         },
       ),
-      // The library has another version: a movie (Replace), a show's
-      // episodes, archived one per episode under short names (Replace, all
-      // coming); a season pack in one archive of the very release (Skip,
-      // the pack coming whole); the very release of a movie (only Remove).
       pkg(14, OPPENHEIMER, "pending", movie(872585, "Oppenheimer", 2023), parts(OPPENHEIMER, 6, 4 * GB, "queued"), {
         library: {
           old: [
@@ -470,41 +362,6 @@ export function mockDownloads(): DownloadsResponse {
           skip: 1,
           choices: ["replace"],
           disks: ["nvme03"],
-        },
-      }),
-      pkg(
-        15,
-        SILO,
-        "pending",
-        show(125988, "Silo", 2023),
-        Array.from({ length: 10 }, (_, i) => ({
-          ...parts(SILO, 1, 1.6 * GB, "queued")[0],
-          name: `Silo1080S02E${String(i + 1).padStart(2, "0")}.rar`,
-        })),
-        {
-          library: {
-            old: [1, 2, 3].map(
-              (e) => `nvme01/shows/Silo (2023) [tmdbid-125988]/Season 02/Silo.S02E0${e}.German.720p.WEB.h264-OLD.mkv`,
-            ),
-            new: Array.from({ length: 10 }, (_, i) => `Season 02/S02E${String(i + 1).padStart(2, "0")}`),
-            exact: false,
-            skip: 3,
-            choices: ["replace"],
-            disks: ["nvme01"],
-          },
-        },
-      ),
-      pkg(16, SLOW, "pending", show(95480, "Slow Horses", 2022), parts(SLOW, 5, 3 * GB, "queued"), {
-        library: {
-          old: [1, 2].map(
-            (e) =>
-              `nvme04/shows/Slow Horses (2022) [tmdbid-95480]/Season 04/${SLOW.replace(".S04.", `.S04E0${e}.Titel.`)}.mkv`,
-          ),
-          new: [`Season 04/${SLOW}`],
-          exact: true,
-          skip: 2,
-          choices: ["skip"],
-          disks: ["nvme04"],
         },
       }),
       pkg(17, PASTLIVES, "pending", movie(666277, "Past Lives", 2023), parts(PASTLIVES, 3, 3 * GB, "queued"), {
@@ -554,25 +411,9 @@ export function mockDownloads(): DownloadsResponse {
           ),
         },
       ),
-      pkg(
-        5,
-        WICKED,
-        "pending",
-        movie(402431, "Wicked", 2024),
-        parts(WICKED, 5, 4 * GB, "queued", [{}, {}, {}, {}, { checked: "unknown" }]),
-        {
-          sources: ["rapidgator.net via Real-Debrid"],
-          library: otherMovie(
-            "nvme04",
-            "Wicked (2024) [tmdbid-402431]",
-            "Wicked.2024.German.DL.1080p.WEB.H264-OLD.mkv",
-            WICKED,
-          ),
-        },
-      ),
       pkg(6, UNMATCHED, "pending", null, parts(UNMATCHED, 2, 2 * GB, "queued")),
       // Needs attention, failed: a part gone and another that failed for
-      // another reason (+1), a wrong archive password.
+      // another reason (+1).
       pkg(
         7,
         BLADE,
@@ -589,13 +430,7 @@ export function mockDownloads(): DownloadsResponse {
           ].join("\n"),
         },
       ),
-      pkg(8, SUBSTANCE, "failed", movie(933260, "The Substance", 2024), parts(SUBSTANCE, 3, 3 * GB, "done"), {
-        error: `${SUBSTANCE.toLowerCase()}.part01.rar: Wrong archive password`,
-      }),
-      // Failed without a reason: just "Failed".
-      pkg(19, TWISTERS, "failed", movie(718821, "Twisters", 2024), parts(TWISTERS, 2, 3 * GB, "done")),
-      // Downloading: loading, extracting, waiting (two), paused, and a show
-      // started with Skip (the episodes the library has skipped).
+      // Downloading: loading, extracting, waiting, paused.
       pkg(9, SHOGUN, "downloading", show(126308, "Shōgun", 2024), [
         ...parts(SHOGUN, 4, 5 * GB, "done"),
         ...parts(SHOGUN, 2, 5 * GB, "downloading", [
@@ -616,37 +451,7 @@ export function mockDownloads(): DownloadsResponse {
         },
       ),
       pkg(11, ALIEN, "queued", movie(945961, "Alien: Romulus", 2024), parts(ALIEN, 3, 3 * GB, "queued")),
-      pkg(1, DUNE, "queued", movie(693134, "Dune: Part Two", 2024), parts(DUNE, 8, 4 * GB, "queued")),
       pkg(12, ANDOR, "paused", show(83867, "Andor", 2022), parts(ANDOR, 2, 2 * GB, "queued", [{ received: 0.7 * GB }])),
-      pkg(
-        13,
-        TLOU,
-        "downloading",
-        show(100088, "The Last of Us", 2023),
-        episodes(TLOU, 2, 7, 2.4 * GB, "queued", (i) =>
-          i < 3
-            ? { status: "skipped" }
-            : i === 3
-              ? { status: "done", received: 2.4 * GB }
-              : i === 4
-                ? { status: "downloading", received: 0.9 * GB, speed: 41.5e6 }
-                : {},
-        ),
-        {
-          choice: "skip",
-          library: {
-            old: [1, 2, 3].map(
-              (e) =>
-                `nvme01/shows/The Last of Us (2023) [tmdbid-100088]/Season 02/${TLOU.replace(".S02.", `.S02E0${e}.`)}.mkv`,
-            ),
-            new: [4, 5, 6, 7].map((e) => `Season 02/S02E0${e}`),
-            exact: true,
-            skip: 3,
-            choices: ["skip"],
-            disks: ["nvme01"],
-          },
-        },
-      ),
       // Finished: Ready to organize and Done (above).
       ...finished().map((f) =>
         pkg(f.id, f.name, "done", f.media, [], {
@@ -655,7 +460,7 @@ export function mockDownloads(): DownloadsResponse {
             ? {
                 movedTo: movedTo(f),
                 movedAt: ago(f.moved.minutes),
-                movedFiles: f.moved.noFiles ? null : f.files.map((to) => ({ from: `${f.name}/${base(to)}`, to })),
+                movedFiles: f.files.map((to) => ({ from: `${f.name}/${base(to)}`, to })),
                 replaced: f.moved.replaced ?? false,
               }
             : {}),
@@ -690,10 +495,9 @@ export function mockOrganize(): OrganizeResponse {
       media: f.media,
       movedTo: movedTo(f),
       movedAt: ago(f.moved!.minutes),
-      files: f.moved!.noFiles ? [] : f.files,
+      files: f.files,
       bytes: f.bytes,
       replaced: f.moved!.replaced ?? false,
-      move: f.moved!.move ?? null,
     }))
     .sort((a, b) => b.movedAt.localeCompare(a.movedAt));
   return { ready: true, libraryDir: "/library", disks, items, moved };

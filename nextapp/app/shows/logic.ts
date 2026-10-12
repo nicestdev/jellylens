@@ -40,11 +40,11 @@ export function showView(shows: ShowItem[], filters: LibraryFilters, sortKey: So
 }
 
 // Year plus seasons under the poster; episodes instead while sorting by
-// them — all three don't fit on a tile.
-export function showMeta(item: ShowItem, sortKey: SortKey): string {
+// them — all three don't fit on a tile. As values, shown with Dots.
+export function showMeta(item: ShowItem, sortKey: SortKey): (string | number | null | undefined)[] {
   const count =
     sortKey === "episodes"
       ? item.episodeCount && plural(item.episodeCount, "episode")
       : item.seasonCount && plural(item.seasonCount, "season");
-  return [item.year, count].filter(Boolean).join(" · ");
+  return [item.year, count || null];
 }

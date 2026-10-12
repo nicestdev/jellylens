@@ -14,7 +14,6 @@ import {
   Replace,
   RotateCcw,
   Trash2,
-  Undo2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -182,16 +181,14 @@ function moveState(move: MoveProgress): RowState {
   const left = move.running ? timeLeft(move.total - move.done, move.speed) : null;
   const speed = move.running && move.speed ? formatSpeed(move.speed) : null;
   return {
-    line: [moveLabel(move), speed, speed ? left : null].filter(Boolean).join(" · "),
+    line: [moveLabel(move), speed, speed ? left : null],
     bar: { fraction, color: !move.running ? "bg-warning" : move.phase === "copying" ? "bg-success" : "bg-info" },
   };
 }
 
-// What a move is doing: Waiting, Moving, Verifying, or Undoing for an Undo
-// in either phase.
+// What a move is doing: Waiting, Moving or Verifying.
 function moveLabel(move: MoveProgress): string {
   if (!move.running) return "Waiting";
-  if (move.back) return "Undoing";
   return move.phase === "copying" ? "Moving" : "Verifying";
 }
 
@@ -255,25 +252,22 @@ function DiskMenu({
       <DropdownMenuTrigger
         className={cn(
           "inline-flex w-full cursor-pointer items-baseline gap-1.5 rounded-md text-left text-muted-foreground outline-none hover:text-primary",
+          // Nothing picked yet: it waits for a hand.
+          !target && "text-warning",
           className,
         )}
         aria-label={`Disk: ${label ?? target?.disk ?? "Pick"}`}
       >
-        <span className="truncate">{label ?? target?.disk ?? "Pick"}</span>
+        <span className="truncate font-mono text-xs">{label ?? target?.disk ?? "Pick"}</span>
         <ChevronDown className="size-3 self-center text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-auto min-w-56">
         {item.targets.map((t) => (
           <DropdownMenuItem key={t.path} disabled={!fits(item, t)} onClick={() => onPick(t)} className="gap-3">
             <Check className={cn("size-3.5", t.path !== target?.path && "invisible")} />
-            <span className="flex-1">{t.disk}</span>
+            <span className="flex-1 font-mono text-xs">{t.disk}</span>
             {t.existing ? <span className="text-xs text-muted-foreground">has it</span> : null}
-            <span
-              className={cn(
-                "font-num text-xs tabular-nums",
-                fits(item, t) ? "text-muted-foreground" : "text-destructive",
-              )}
-            >
+            <span className={cn("font-mono text-xs", fits(item, t) ? "text-muted-foreground" : "text-destructive")}>
               {t.freeBytes !== null ? `${formatBytes(t.freeBytes)} free` : "?"}
             </span>
           </DropdownMenuItem>
@@ -323,7 +317,7 @@ export function OrganizeRow({
       : old.length
         ? {
             line: (
-              <span className="font-num">
+              <span className="font-mono">
                 <span className="text-destructive">−{old.length}</span>{" "}
                 <span className="text-success">+{item.files.length}</span>
               </span>
@@ -392,7 +386,7 @@ export function OrganizeRow({
       />
       <td className={cn(CELL, NOT_ON_PHONE)}>
         {!pickable ? (
-          <span className="text-muted-foreground">{target?.disk ?? "—"}</span>
+          <span className="font-mono text-xs text-muted-foreground">{target?.disk ?? "—"}</span>
         ) : (
           <DiskMenu item={item} target={target} onPick={(t) => onPick(t.path)} />
         )}
@@ -405,39 +399,24 @@ export function OrganizeRow({
 }
 
 // A download moved into the library: its title over the folder it went to
-// (not its files), the disk, when it was moved or replaced (while Undo runs its
-// bar, red if it failed), its size, the ⋯ menu (Undo: back to Ready to
-// organize, or Retry; nothing for one that replaced what the library had).
-export function MovedRow({ item, onUndo }: { item: OrganizeMoved; onUndo: () => void }) {
+// and its files, as a tree like Organize's, the disk, when it was moved or
+// replaced, its size.
+export function MovedRow({ item }: { item: OrganizeMoved }) {
   const cut = item.movedTo.lastIndexOf("/");
-  const move = item.move;
-  const moving = move && !move.error ? move : null;
-  const state: RowState = moving
-    ? moveState(moving)
-    : move?.error
-      ? { line: errorLine(move.error), tone: "error" }
-      : { line: `${item.replaced ? "Replaced" : "Moved"} ${relativeTime(item.movedAt)}` };
+  const state: RowState = { line: `${item.replaced ? "Replaced" : "Moved"} ${relativeTime(item.movedAt)}` };
   const size = item.bytes ? formatBytes(item.bytes) : "—";
-  const actions =
-    moving || !item.files.length || item.replaced ? null : move?.error ? (
-      <ActionItem icon={RotateCcw} label="Retry" onClick={onUndo} />
-    ) : (
-      <ActionItem icon={Undo2} label="Undo" onClick={onUndo} />
-    );
-  const menu = actions ? <ActionMenu name={item.name}>{actions}</ActionMenu> : null;
   return (
     <tr className={cn(ROW, "h-17")}>
       <TitleCell
         media={item.media}
         name={item.name}
-        line={<FileTree root={item.movedTo.slice(0, cut)} folder={item.movedTo.slice(cut + 1)} files={[]} />}
-        below={<PhoneStatus state={state} right={state.bar ? undefined : size} />}
-        menu={menu}
+        line={<FileTree root={item.movedTo.slice(0, cut)} folder={item.movedTo.slice(cut + 1)} files={item.files} />}
+        below={<PhoneStatus state={state} right={size} />}
       />
-      <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{item.movedTo.split("/")[0]}</td>
+      <td className={cn(MUTED_CELL, NOT_ON_PHONE, "font-mono text-xs")}>{item.movedTo.split("/")[0]}</td>
       <StatusCell state={state} />
       <td className={cn(NUMBER_CELL, NOT_ON_PHONE)}>{size}</td>
-      <td className={MENU_CELL}>{menu}</td>
+      <td className={MENU_CELL} />
     </tr>
   );
 }

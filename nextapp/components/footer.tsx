@@ -18,7 +18,9 @@ export function Footer() {
     <footer className="mt-auto shrink-0">
       <div className="flex w-full items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground sm:px-6">
         <span className="tabular-nums">Jellylens {pkg.version}</span>
-        <span aria-hidden="true">·</span>
+        <span aria-hidden="true" className="opacity-50">
+          ·
+        </span>
         <a
           href={REPO_URL}
           target="_blank"

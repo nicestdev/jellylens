@@ -1,6 +1,6 @@
 import { stageTriggers, startByHand, type SyncStage } from "@/lib/sync-manager";
 
-// POST /api/sync/<library|tmdb|missing|releases> — starts that stage and
+// POST /api/sync/<library|tmdb|releases> — starts that stage and
 // answers right away (202); a long sync would outlast a reverse proxy's
 // timeout. /api/status says when it's done and how it failed. A stage
 // already running isn't started twice; it leaves a note only if it fails

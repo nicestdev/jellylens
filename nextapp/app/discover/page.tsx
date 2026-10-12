@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Inbox, Loader2, PackageSearch, SearchX } from "lucide-react";
+import { Compass, Loader2, SearchX } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { FacetMenu, FilterChips, type Facet } from "@/components/filter-menu";
 import { LoadMore } from "@/components/load-more";
@@ -204,7 +204,7 @@ export default function DiscoverPage() {
             q ? (
               <EmptyState icon={SearchX} title="Nothing found" hint={`TMDB has no movie or show matching “${q}”.`} />
             ) : (
-              <EmptyState icon={Inbox} title="Nothing trending" hint="Search for a movie or show instead." />
+              <EmptyState icon={Compass} title="Nothing trending" hint="Search for a movie or show instead." />
             )
           ) : (
             tmdbGrid
@@ -233,7 +233,7 @@ export default function DiscoverPage() {
               </>
             ) : noGroups && !q ? (
               <EmptyState
-                icon={Inbox}
+                icon={Compass}
                 title="No release groups yet"
                 hint="Add your favorite groups under Settings → Release groups, or search TMDB for a movie or show."
               />
@@ -243,39 +243,17 @@ export default function DiscoverPage() {
                 title="Loading releases"
                 hint="A group's first sync fetches its whole list from xREL, which takes a moment."
               />
-            ) : !showTmdb ? (
-              <EmptyState
-                icon={PackageSearch}
-                title="No releases found"
-                hint="Try a different search or remove a filter."
-              />
+            ) : !showTmdb || (!discover.loading && !tmdbItems.length) ? (
+              <EmptyState icon={SearchX} title="Nothing found" hint="Try a different search or remove a filter." />
             ) : null}
 
-            {showTmdb ? (
+            {/* Only with something in it (or while it loads). */}
+            {showTmdb && (discover.loading || tmdbItems.length > 0) ? (
               <section className={releases.items.length ? "mt-10" : undefined}>
                 <SectionTitle>More on TMDB</SectionTitle>
-                {discover.loading ? (
-                  <PosterGridSkeleton />
-                ) : tmdbItems.length ? (
-                  tmdbGrid
-                ) : (
-                  <p className="text-sm text-muted-foreground">Nothing else on TMDB matches “{q}”.</p>
-                )}
+                {discover.loading ? <PosterGridSkeleton /> : tmdbGrid}
               </section>
             ) : null}
-
-            <p className="mt-6 text-xs text-muted-foreground">
-              Release info from{" "}
-              <a
-                href="https://www.xrel.to"
-                target="_blank"
-                rel="noreferrer"
-                className="transition-colors hover:text-primary"
-              >
-                xREL
-              </a>
-              , posters from TMDB.
-            </p>
           </>
         )}
       </div>

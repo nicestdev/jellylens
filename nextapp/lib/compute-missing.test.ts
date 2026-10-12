@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { episode, movie } from "@/test/fixtures";
 import { computeMissing, diffShow, formatEpisodeRanges, ownedEpisodes } from "./compute-missing";
-import { getMissingShows, replaceLibrary, replaceTmdb, syncedAt } from "./store";
+import { getMissingShows, replaceLibrary, replaceTmdb } from "./store";
 
 const ep = episode;
 
@@ -103,10 +103,8 @@ describe("computeMissing", () => {
       "2026-06-15T00:00:00Z",
     );
 
-    const result = computeMissing(new Date("2026-06-15T12:00:00Z"));
+    computeMissing();
 
-    expect(result).toMatchObject({ incompleteCount: 1 });
     expect(getMissingShows().s.seasons[0].episodes).toBe("2");
-    expect(syncedAt("missing")).toBe("2026-06-15T12:00:00.000Z");
   });
 });

@@ -10,22 +10,19 @@ import {
   TMDB_LANGUAGE,
   LIBRARY_SCAN_INTERVAL_HOURS,
   TMDB_SYNC_INTERVAL_HOURS,
-  MISSING_RECHECK_INTERVAL_HOURS,
   XREL_SYNC_INTERVAL_HOURS,
 } from "./env";
-
-const triggerMissingRecheck = makeTrigger("missing-recheck", async () => computeMissing());
 
 export const triggerLibraryScan = makeTrigger("library-scan", async () => {
   const tmdb = TMDB_API_KEY ? { apiKey: TMDB_API_KEY, language: TMDB_LANGUAGE } : null;
   const result = await scanLibrary(tmdb);
   pruneTmdbPosters();
-  // What just arrived is no longer missing; the recheck needs no network,
-  // only a TMDB sync to compare against. A show new since that sync gets its
-  // seasons first, or the recheck skips it.
+  // Then which shows are incomplete (computeMissing: no network, only a
+  // TMDB sync to compare against): what just arrived no longer counts. A
+  // show new since that sync gets its seasons first, or it's skipped.
   if (syncedAt("tmdb")) {
     if (tmdb) await syncNewTmdb(tmdb.apiKey);
-    await triggerMissingRecheck();
+    computeMissing();
   }
   return result;
 });
@@ -39,8 +36,9 @@ function pruneTmdbPosters() {
 export const triggerTmdbSync = makeTrigger("tmdb-sync", async () => {
   if (!TMDB_API_KEY) throw new Error("TMDB_API_KEY is not configured on the backend.");
   const result = await syncTmdb({ tmdbApiKey: TMDB_API_KEY, language: TMDB_LANGUAGE });
-  // Keep the missing cache from silently drifting out of date after a fresh TMDB sync.
-  await triggerMissingRecheck();
+  // Then which shows are incomplete, against the fresh seasons (and what
+  // aired since the last run: this daily sync is what catches that).
+  computeMissing();
   pruneTmdbPosters();
   return result;
 });
@@ -57,7 +55,6 @@ export const triggerReleasesSync = makeTrigger("releases-sync", async () => {
 export const stageTriggers = {
   library: triggerLibraryScan,
   tmdb: triggerTmdbSync,
-  missing: triggerMissingRecheck,
   releases: triggerReleasesSync,
 };
 export type SyncStage = keyof typeof stageTriggers;
@@ -66,7 +63,6 @@ export type SyncStage = keyof typeof stageTriggers;
 export function applySchedules() {
   setSchedule("library-scan", LIBRARY_SCAN_INTERVAL_HOURS, triggerLibraryScan);
   setSchedule("tmdb-sync", TMDB_SYNC_INTERVAL_HOURS, triggerTmdbSync);
-  setSchedule("missing-recheck", MISSING_RECHECK_INTERVAL_HOURS, triggerMissingRecheck);
   setSchedule("releases-sync", XREL_SYNC_INTERVAL_HOURS, triggerReleasesSync);
 }
 

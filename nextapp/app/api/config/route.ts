@@ -7,7 +7,6 @@ import {
   TMDB_LANGUAGE,
   LIBRARY_SCAN_INTERVAL_HOURS,
   TMDB_SYNC_INTERVAL_HOURS,
-  MISSING_RECHECK_INTERVAL_HOURS,
   XREL_SYNC_INTERVAL_HOURS,
   DDOWNLOAD_LOGIN,
   DDOWNLOAD_PASSWORD,
@@ -44,7 +43,6 @@ export async function GET() {
     intervals: {
       library: LIBRARY_SCAN_INTERVAL_HOURS,
       tmdb: TMDB_SYNC_INTERVAL_HOURS,
-      missing: MISSING_RECHECK_INTERVAL_HOURS,
       releases: XREL_SYNC_INTERVAL_HOURS,
     },
     downloadSlots: getDownloadSettings().slots,

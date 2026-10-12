@@ -27,7 +27,7 @@ export function SlotsMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Parallel downloads: ${plural(slots, "file")}`}
-        className="-mr-1.5 flex h-7 cursor-pointer items-center gap-1 rounded-md pr-1.5 pl-2 text-sm tabular-nums transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-muted"
+        className="-mr-1.5 flex h-7 cursor-pointer items-center gap-1 rounded-md pr-1.5 pl-2 text-[0.8125rem] tabular-nums transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-muted"
       >
         {plural(slots, "file")}
         <ChevronDownIcon className="size-3.5 text-muted-foreground" strokeWidth={1.8} />

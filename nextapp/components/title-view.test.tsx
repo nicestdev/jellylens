@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import "@/test/dom";
+import { wholeText } from "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import { RELEASES_CHANGED } from "@/lib/api-client";
 import type { MatchInfo, ReleaseDetail, ReleaseDetailTitle, ReleaseHead, WcxRelease } from "@/lib/api-types";
@@ -201,7 +201,12 @@ describe("TitleView", () => {
     render(<TitleView tileKey="movie:949" />);
     expect(await screen.findByText("None of your favorite groups has released this.")).toBeInTheDocument();
     expect(shownCount()).toBe(0);
-    expect(meta()).toHaveTextContent(/^1995·Movie·TMDB$/);
+    // xREL links to the title's page there even without releases.
+    expect(meta()).toHaveTextContent(/^1995·Movie·TMDB·xREL$/);
+    expect(screen.getByRole("link", { name: "xREL" })).toHaveAttribute(
+      "href",
+      "/api/xrel-link?tmdbId=movie%3A949&title=Heat",
+    );
   });
 
   it("lists a show's releases as a table per season, the newest open, the rest folded", async () => {
@@ -384,7 +389,7 @@ describe("TitleView", () => {
       expect(shownCount()).toBe(3);
       expect(meta()).toHaveTextContent("1995·Movie·3 releases");
       expect(screen.queryByText(/No releases match/)).not.toBeInTheDocument();
-      expect(screen.getByText("WAYNE · 1080p · x264 · DL")).toBeInTheDocument();
+      expect(screen.getByText(wholeText(/^WAYNE·1080p·x264·DL/))).toBeInTheDocument();
       // Its Check button in the Mirror column, and again under the name for a phone.
       expect(screen.getByRole("columnheader", { name: "Mirror" })).toBeInTheDocument();
       expect(within(row(/x264-WAYNE/)).getAllByRole("button", { name: /^Check its mirrors/ })).toHaveLength(2);

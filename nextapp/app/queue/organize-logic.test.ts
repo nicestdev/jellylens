@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { OrganizeItem, OrganizeMoved, OrganizeResponse } from "@/lib/api-types";
+import type { OrganizeItem, OrganizeResponse } from "@/lib/api-types";
 import type { LibraryTarget, MoveProgress } from "@/lib/library-move";
 import { defaultTarget, destination, fits, isMoving, targetOf } from "./organize-logic";
 
@@ -25,7 +25,6 @@ const item = (id: number, over: Partial<OrganizeItem> = {}): OrganizeItem => ({
 });
 const progress = (over: Partial<MoveProgress> = {}): MoveProgress => ({
   target: "/library/nvme02/movies",
-  back: false,
   done: 0,
   total: GB,
   phase: "copying",
@@ -34,32 +33,19 @@ const progress = (over: Partial<MoveProgress> = {}): MoveProgress => ({
   error: null,
   ...over,
 });
-const moved = (id: number, over: Partial<OrganizeMoved> = {}): OrganizeMoved => ({
-  id,
-  name: `Heat.${id}`,
-  media: null,
-  movedTo: "nvme01/movies/Heat (1995) [tmdbid-949]",
-  movedAt: "2026-10-09T10:00:00.000Z",
-  files: ["Heat.mkv"],
-  bytes: GB,
-  replaced: false,
-  move: null,
-  ...over,
-});
-const response = (items: OrganizeItem[], movedItems: OrganizeMoved[] = []): OrganizeResponse => ({
+const response = (items: OrganizeItem[]): OrganizeResponse => ({
   ready: true,
   libraryDir: "/library",
   disks: [],
   items,
-  moved: movedItems,
+  moved: [],
 });
 
 describe("defaultTarget", () => {
-  it("is the disk that has the title, else the first it fits on, not the roomiest", () => {
-    expect(defaultTarget(item(1))?.disk).toBe("nvme02");
+  it("is the disk that has the title, else none: a new title's is picked by hand", () => {
+    expect(defaultTarget(item(1))).toBeNull();
     const has = item(1, { targets: [target("nvme01", 50 * GB), target("nvme02", 1 * GB, "Heat (1995) [tmdbid-949]")] });
     expect(defaultTarget(has)?.disk).toBe("nvme02");
-    expect(defaultTarget(item(1, { targets: [target("nvme01", GB)] }))).toBeNull();
   });
 
   it("counts a disk whose free space can't be read as fitting", () => {
@@ -71,7 +57,7 @@ describe("targetOf", () => {
   it("is the disk being moved to, else the one picked, else the default", () => {
     expect(targetOf(item(1), "/library/nvme03/movies")?.disk).toBe("nvme03");
     expect(targetOf(item(1, { move: progress() }), "/library/nvme03/movies")?.disk).toBe("nvme02");
-    expect(targetOf(item(1), "/library/gone/movies")?.disk).toBe("nvme02");
+    expect(targetOf(item(1), "/library/gone/movies")).toBeNull();
   });
 });
 
@@ -87,10 +73,9 @@ describe("destination", () => {
 });
 
 describe("isMoving", () => {
-  it("is true while a move or an Undo waits or runs, not after it failed", () => {
+  it("is true while a move waits or runs, not after it failed", () => {
     expect(isMoving(response([item(1)]))).toBe(false);
     expect(isMoving(response([item(1, { move: progress({ running: false }) })]))).toBe(true);
-    expect(isMoving(response([], [moved(1, { move: progress({ back: true }) })]))).toBe(true);
     expect(isMoving(response([item(1, { move: progress({ error: "x" }) })]))).toBe(false);
   });
 });

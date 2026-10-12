@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import {
   Check,
   Link2,
@@ -31,6 +31,7 @@ import { matchActions, NO_GROUP, withoutTitle } from "@/lib/release-labels";
 import { toast } from "@/lib/toast";
 import { formatFacet, type LibraryMark, type ReleaseRow } from "@/lib/title-rows";
 import { cn } from "@/lib/utils";
+import { Dot, Dots } from "@/components/dot";
 
 // The title page's tables (components/title-view.tsx): xREL's releases and
 // WCX's, the columns after the name at the same widths, so they line up.
@@ -76,11 +77,15 @@ export function MatchMenu({
   );
 }
 
-// What the name says, as one line under it: group, quality, codec, audio.
-const attributeLine = (r: ReleaseRow, disks?: string | null) =>
-  [r.group ?? NO_GROUP, r.resolution ? formatFacet("resolution", r.resolution) : null, r.codec || null, r.audio, disks]
-    .filter(Boolean)
-    .join(" · ");
+// What the name says, as one line under it (values, shown with Dots):
+// group, quality, codec, audio.
+const attributeLine = (r: ReleaseRow, disks?: string | null) => [
+  r.group ?? NO_GROUP,
+  r.resolution ? formatFacet("resolution", r.resolution) : null,
+  r.codec || null,
+  r.audio,
+  disks,
+];
 
 // One table: the release's name (linking to href's page) over its group,
 // quality, codec and audio; its mirror to take in a column of its own (when
@@ -144,8 +149,8 @@ export function ReleaseTable<R extends ReleaseRow>({
       onToggle={onToggle}
       columns={[
         { label: "Release", stretch: true },
-        ...(hasMirrors ? [{ label: "Mirror", width: "w-20", phone: false as const }] : []),
-        ...(hasEpisodes ? [{ label: "Episodes", align: "right" as const, width: "w-22", phone: false as const }] : []),
+        ...(hasMirrors ? [{ label: "Mirror", align: "center" as const, width: "w-20", phone: false as const }] : []),
+        ...(hasEpisodes ? [{ label: "Episodes", align: "center" as const, width: "w-22", phone: false as const }] : []),
         { label: "Size", align: "right", width: "w-[6.875rem]", phone: false },
         { label: "Date", align: "right", width: "w-[7.875rem]", phone: false },
       ]}
@@ -191,35 +196,40 @@ export function ReleaseTable<R extends ReleaseRow>({
                     )}
                     {diskIcon("max-sm:hidden")}
                   </div>
-                  <div className="mt-0.75 truncate text-[0.8125rem] text-muted-foreground max-sm:whitespace-normal">
-                    {attributeLine(r, disks)}
+                  <div className="mt-0.75 truncate font-mono text-xs text-muted-foreground max-sm:whitespace-normal">
+                    <Dots parts={attributeLine(r, disks)} />
                     <span className="sm:hidden">
-                      {episodes ? (
-                        <>
-                          {" · "}
-                          {of ? (
+                      {/* After the attributes, so each with a Dot before it. */}
+                      {[
+                        episodes ? (
+                          of ? (
                             <>
                               <span className={cn(tone)}>{episodes}</span> /{" "}
                               <span className={cn(episodesTone(of, aired))}>{of} episodes</span>
                             </>
                           ) : (
                             <span className={cn(tone)}>{plural(episodes, "episode")}</span>
-                          )}
-                        </>
-                      ) : null}
-                      {[r.size ? formatBytes(r.size) : null, r.date ? formatDate(r.date) : null]
+                          )
+                        ) : null,
+                        r.size ? formatBytes(r.size) : null,
+                        r.date ? formatDate(r.date) : null,
+                      ]
                         .filter(Boolean)
-                        .map((v) => ` · ${v}`)
-                        .join("")}
+                        .map((v, i) => (
+                          <Fragment key={i}>
+                            <Dot />
+                            {v}
+                          </Fragment>
+                        ))}
                     </span>
                   </div>
                 </div>
                 {buttons ? <div className="shrink-0 sm:hidden">{buttons}</div> : null}
               </div>
             </td>
-            {hasMirrors ? <td className={cn(CELL, NOT_ON_PHONE)}>{buttons}</td> : null}
+            {hasMirrors ? <td className={cn(CELL, NOT_ON_PHONE, "text-center")}>{buttons}</td> : null}
             {hasEpisodes ? (
-              <td className={cn(NUMBER_CELL, NOT_ON_PHONE, tone)}>
+              <td className={cn(NUMBER_CELL, NOT_ON_PHONE, "text-center", tone)}>
                 {episodes ? (
                   <span className="inline-flex gap-1">
                     <span className={BADGE}>{episodes}</span>

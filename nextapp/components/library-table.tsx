@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,15 +12,17 @@ import { cn } from "@/lib/utils";
 // (at least 48rem wide in all, so on a phone it scrolls rather than
 // squeezing that column to nothing). phone: false drops a column below sm
 // (its rows fold it into the title cell); then the table fits a phone
-// instead of scrolling.
+// instead of scrolling. style: a width worked out from the rows (inline,
+// as a class can't be made up at runtime).
 // label: a string, or (a section's heading in the first column) any
 // content, "Running · 4 · 30.6 MB/s" with its last part lighter.
 export type Column = {
   label: ReactNode;
-  align?: "right";
+  align?: "right" | "center";
   hidden?: boolean;
   stretch?: boolean;
   width?: string;
+  style?: CSSProperties;
   phone?: false;
 };
 
@@ -30,7 +32,7 @@ export const NOT_ON_PHONE = "max-sm:hidden";
 // 12px a side.
 export const CELL = "px-3 py-2 whitespace-nowrap";
 export const MUTED_CELL = cn(CELL, "text-muted-foreground");
-export const NUMBER_CELL = cn(CELL, "text-right text-sub-foreground tabular-nums");
+export const NUMBER_CELL = cn(CELL, "text-right font-mono text-xs text-sub-foreground");
 // The stretched first cell: max-w-0 lets it truncate instead of growing.
 export const TITLE_CELL = cn(CELL, "max-w-0 truncate");
 // A row's ⋯ menu: from sm up in a column of its own at the row's end,
@@ -63,7 +65,7 @@ export function DataTable({
     0,
     columns.findIndex((c) => c.stretch),
   );
-  const fixed = columns.some((c) => c.width);
+  const fixed = columns.some((c) => c.width || c.style);
   const fits = columns.some((c) => c.phone === false);
   return (
     // relative: a hidden column's sr-only header is absolute; without it,
@@ -71,7 +73,7 @@ export function DataTable({
     <div className={cn("relative overflow-x-auto overflow-y-hidden", flat ? "-mx-3" : "rounded-lg border bg-table")}>
       <table
         className={cn(
-          "w-full border-collapse text-sm",
+          "w-full border-collapse text-[0.8125rem]",
           fixed ? "table-fixed" : "",
           minWidth ??
             (fixed ? (fits ? "sm:min-w-[48rem]" : "min-w-[48rem]") : fits ? "sm:min-w-[40rem]" : "min-w-[40rem]"),
@@ -80,18 +82,24 @@ export function DataTable({
         {/* On a phone only the first: there each row folds its values under
             the title, so the other column names say nothing. Squeezed to
             nothing rather than hidden, since a fixed table takes its column
-            widths from it. The first is the section's heading ("Needs you · 3"). */}
+            widths from it. The first is the section's heading ("Needs attention · 3"). */}
         <thead className="max-sm:[&_th:not(:first-child)]:h-0 max-sm:[&_th:not(:first-child)]:py-0 max-sm:[&_th:not(:first-child)]:text-[0px] max-sm:[&_th:not(:first-child)]:leading-[0]">
-          <tr className={cn("h-9 border-b text-left text-sm text-sub-foreground", !flat && "bg-card")}>
+          <tr
+            className={cn("h-9 border-b text-left font-mono text-[0.8125rem] text-sub-foreground", !flat && "bg-card")}
+          >
             {columns.map((c, i) => (
               <th
                 key={i}
+                style={c.style}
                 className={cn(
                   CELL,
-                  "py-0 font-semibold",
-                  i === stretched && !fixed && "w-full",
+                  "py-0 font-medium",
+                  // Too narrow, the stretched column's heading runs on over the
+                  // next (on a phone their names are hidden), not widening the table.
+                  i === stretched && !fixed && "w-full max-w-0",
                   c.width,
                   c.align === "right" && "text-right",
+                  c.align === "center" && "text-center",
                   c.phone === false && NOT_ON_PHONE,
                 )}
               >

@@ -25,15 +25,15 @@ export function pollDelay({
   return running ? FAST_POLL_MS : SLOW_POLL_MS;
 }
 
-// The last columns of Sync and the two group tables, the same widths so
-// they line up down the page: Schedule or Releases, Last sync, the button.
+// The last columns of the two group tables, the same widths so they line
+// up: Releases, Last sync, the button.
 export const SETTINGS_COLUMNS = { middle: "w-32", lastSync: "w-24", action: "w-12" };
 
-// Ignored Settings lists: the missing episodes' ignores, each with its
-// show's name and year, by name, the whole show before its seasons.
+// Ignored Settings lists: the ignored shows, each with its name and year,
+// by name.
 export function ignoredList(shows: ShowItem[], ignored: IgnoreEntry[]) {
   const byId = new Map(shows.map((s) => [s.id, s]));
   return ignored
     .map((entry) => ({ entry, name: showName(byId.get(entry.showId)) }))
-    .sort((a, b) => a.name.localeCompare(b.name) || (a.entry.season ?? -1) - (b.entry.season ?? -1));
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

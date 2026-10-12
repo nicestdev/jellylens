@@ -247,6 +247,15 @@ const MIGRATIONS: string[] = [
   -- The queue's settings (parallel downloads, archive passwords); value is JSON.
   CREATE TABLE download_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `,
+  `
+  -- Only whole shows are ignored: a season's ignore goes, the shows stay.
+  CREATE TABLE ignored_shows (show_id TEXT PRIMARY KEY);
+  INSERT OR IGNORE INTO ignored_shows SELECT show_id FROM ignored WHERE season IS NULL ORDER BY rowid;
+  DROP TABLE ignored;
+  ALTER TABLE ignored_shows RENAME TO ignored;
+  -- The incomplete shows are no sync stage of their own anymore.
+  DELETE FROM sync_state WHERE stage = 'missing';
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

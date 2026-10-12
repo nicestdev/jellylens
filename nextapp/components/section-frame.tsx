@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { type Column, DataTable } from "@/components/library-table";
 import { cn } from "@/lib/utils";
+import { Dot, shown } from "@/components/dot";
 
 // A page section as a dark framed area (Settings, Analytics): its heading
 // inside, an action on the right of it, its table or list edge to edge
@@ -16,7 +17,7 @@ export function SectionFrame({
   className,
 }: {
   title: string;
-  count?: ReactNode;
+  count?: ReactNode | ReactNode[];
   action?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -24,9 +25,14 @@ export function SectionFrame({
   return (
     <section aria-label={title} className={cn("min-w-0 overflow-hidden rounded-lg border bg-card", className)}>
       <div className="flex min-h-9 items-center gap-4 border-b px-3">
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium">
           {title}
-          {count !== undefined ? <span className="font-normal text-muted-foreground"> · {count}</span> : null}
+          {count !== undefined ? (
+            <span className="text-[0.8125rem] font-normal text-muted-foreground">
+              {" "}
+              <Dot /> {shown(count, true)}
+            </span>
+          ) : null}
         </h2>
         {action}
       </div>
@@ -59,7 +65,7 @@ export function TableFrame({
   className,
 }: {
   title: string;
-  count?: ReactNode;
+  count?: ReactNode | ReactNode[];
   columns: Column[];
   minWidth?: string;
   busy?: boolean;
@@ -72,8 +78,13 @@ export function TableFrame({
   const [first, ...rest] = columns;
   const label = (
     <>
-      {title}
-      {count !== undefined ? <span className="font-normal text-muted-foreground"> · {count}</span> : null}
+      <span className="text-sm">{title}</span>
+      {count !== undefined ? (
+        <span className="text-[0.8125rem] font-normal text-muted-foreground">
+          {" "}
+          <Dot /> {shown(count, true)}
+        </span>
+      ) : null}
     </>
   );
   const heading = onToggle ? (

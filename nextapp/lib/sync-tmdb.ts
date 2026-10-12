@@ -57,7 +57,7 @@ export async function syncTmdb({ tmdbApiKey, language }: { tmdbApiKey: string; l
   return { shows: Object.keys(byShowId).length, failed, syncedAt: at };
 }
 
-// After a library scan: seasons for shows that came in since the last TMDB sync, so the missing recheck sees them
+// After a library scan: seasons for shows that came in since the last TMDB sync, so the incomplete shows take them in
 // without waiting for the next. One that fails is left for that sync.
 export async function syncNewTmdb(tmdbApiKey: string) {
   const { today } = releaseWindow();

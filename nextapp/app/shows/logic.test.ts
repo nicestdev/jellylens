@@ -4,6 +4,9 @@ import { show } from "@/test/fixtures";
 import { showMeta, showView } from "./logic";
 import type { LibraryFilters } from "@/lib/facets";
 
+// The values as the poster shows them, with its spaced dots.
+const shownMeta = (parts: unknown[]) => parts.filter(Boolean).join(" · ");
+
 const item = (over: Partial<ShowItem> & { id: string }): ShowItem => ({
   missingEpisodes: null,
   languages: null,
@@ -57,8 +60,8 @@ describe("showMeta", () => {
   const dark = item({ id: "1", year: 2017, seasonCount: 3, episodeCount: 26 });
 
   it("shows seasons, or episodes while sorting by them", () => {
-    expect(showMeta(dark, "title")).toBe("2017 · 3 seasons");
-    expect(showMeta(dark, "episodes")).toBe("2017 · 26 episodes");
-    expect(showMeta(item({ id: "2" }), "title")).toBe("");
+    expect(shownMeta(showMeta(dark, "title"))).toBe("2017 · 3 seasons");
+    expect(shownMeta(showMeta(dark, "episodes"))).toBe("2017 · 26 episodes");
+    expect(shownMeta(showMeta(item({ id: "2" }), "title"))).toBe("");
   });
 });

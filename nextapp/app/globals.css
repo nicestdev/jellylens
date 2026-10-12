@@ -14,6 +14,9 @@
 @custom-variant max-sm (@media (width < 40rem) or (height < 30rem));
 @custom-variant sm (@media (width >= 40rem) and (height >= 30rem));
 @custom-variant md (@media (width >= 48rem) and (height >= 30rem));
+/* That phone on its side, for what still uses its width: the desktop's
+   columns (Dashboard, Analytics, Settings), four posters a row. */
+@custom-variant phone-landscape (@media (height < 30rem) and (orientation: landscape));
 
 /* Clear of the notch and the rounded corners (viewportFit in app/layout.tsx). */
 @utility px-safe {
@@ -25,11 +28,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-bright: var(--bright);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  /* Numbers (sizes, years, counts): the text font with even digits
-     (tabular-nums), as in the design; codes stay font-mono. */
-  --font-num: var(--font-geist-sans);
+  --font-sans: var(--font-ui-sans);
+  --font-mono: var(--font-ui-mono);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar: var(--sidebar);
   --color-ring: var(--ring);

@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
 import { movie, show } from "@/test/fixtures";
 import {
-  fileSummary,
+  filesByAudio,
   filesByCodec,
   filesByGroup,
-  filesByLanguage,
+  filesByQuality,
   filesByResolution,
-  queryFiles,
+  libraryTotals,
   replaceLibrary,
-  type FileFilters,
 } from ".";
 
 const file = (name: string, size: number, over: Partial<MediaFile> = {}): MediaFile => ({
@@ -70,140 +69,59 @@ function library() {
   );
 }
 
-const filters = (over: Partial<FileFilters> = {}): FileFilters => ({
-  words: [],
-  groups: [],
-  resolutions: [],
-  codecs: [],
-  languages: [],
-  ...over,
-});
-const names = (f: Partial<FileFilters>, sort: "title" | "size" | "group" = "title", asc = true) =>
-  queryFiles("movies", filters(f), sort, asc, 0, 50).items.map((r) => r.fileName);
-
 describe("library files", () => {
   it("sums up each library's files", () => {
     library();
-    expect(fileSummary("movies")).toEqual({ titles: 5, withFiles: 4, files: 5, size: 70, pending: false });
+    expect(libraryTotals("movies")).toEqual({ titles: 5, files: 5, size: 70, seconds: 0, pending: false });
     // Two shows, one with episodes.
-    expect(fileSummary("shows")).toEqual({ titles: 2, withFiles: 1, files: 2, size: 5, pending: false });
+    expect(libraryTotals("shows")).toEqual({ titles: 2, files: 2, size: 5, seconds: 0, pending: false });
   });
 
   it("is pending while there are titles but no files", () => {
     replaceLibrary({ movies: [movie({ id: "m1" })], shows: [], episodes: [] }, null);
-    expect(fileSummary("movies")).toMatchObject({ files: 0, pending: true });
-    expect(fileSummary("shows")).toMatchObject({ titles: 0, pending: false });
+    expect(libraryTotals("movies")).toMatchObject({ files: 0, pending: true });
+    expect(libraryTotals("shows")).toMatchObject({ titles: 0, pending: false });
   });
 
-  it("splits files and bytes by group, resolution and codec, most files first", () => {
+  it("splits both libraries' files and bytes by group, resolution, codec and audio, the largest first", () => {
     library();
-    expect(filesByGroup("movies")).toEqual([
-      // Two files each: the larger first. FuN and fun are one group.
-      { value: "GRP", files: 2, size: 45 },
-      { value: "FuN", files: 2, size: 18 },
-      { value: null, files: 1, size: 7 },
+    // FuN and fun are one group; an episode's group can come from its folder.
+    expect(filesByGroup()).toEqual([
+      { value: "GRP", movies: 2, episodes: 0, size: 45 },
+      { value: "FuN", movies: 2, episodes: 0, size: 18 },
+      { value: null, movies: 1, episodes: 1, size: 9 },
+      { value: "cnhd", movies: 0, episodes: 1, size: 3 },
     ]);
-    expect(filesByResolution("movies")).toEqual([
-      { value: "1080p", files: 3, size: 23 },
-      { value: "4K", files: 1, size: 40 },
-      { value: "", files: 1, size: 7 },
+    expect(filesByResolution()).toEqual([
+      { value: "4K", movies: 1, episodes: 0, size: 40 },
+      { value: "1080p", movies: 3, episodes: 2, size: 28 },
+      { value: "", movies: 1, episodes: 0, size: 7 },
     ]);
-    expect(filesByCodec("movies").map((p) => [p.value, p.files])).toEqual([
-      ["x265", 2],
-      ["x264", 2],
-      ["", 1],
+    expect(filesByCodec().map((p) => [p.value, p.movies, p.episodes])).toEqual([
+      ["x265", 2, 2],
+      ["x264", 2, 0],
+      ["", 1, 0],
     ]);
-    // A file counts for each of its languages; untagged ones last.
-    expect(filesByLanguage("movies")).toEqual([
-      { value: "DE", files: 4, size: 63 },
-      { value: "EN", files: 1, size: 10 },
-      { value: "", files: 1, size: 7 },
+    // Both, one, none tagged.
+    expect(filesByAudio().sort((a, b) => b.size - a.size)).toEqual([
+      { value: "DE", movies: 3, episodes: 2, size: 58 },
+      { value: "DE+EN", movies: 1, episodes: 0, size: 10 },
+      { value: "", movies: 1, episodes: 0, size: 7 },
     ]);
-    // The episodes on their own; one's group comes from its folder.
-    expect(filesByGroup("shows")).toEqual([
-      { value: "cnhd", files: 1, size: 3 },
-      { value: null, files: 1, size: 2 },
-    ]);
-  });
-
-  it("searches titles and file names, umlauts either way", () => {
-    library();
-    expect(names({ words: ["brucke"] })).toEqual(["Die.Bruecke.1959.1080p.x264-GRP.mkv"]);
-    expect(names({ words: ["bruecke", "1959"] })).toEqual(["Die.Bruecke.1959.1080p.x264-GRP.mkv"]);
-    // A LIKE wildcard is just a character.
-    expect(names({ words: ["%"] })).toEqual([]);
-  });
-
-  it("filters by group (any spelling, or none), resolution and codec", () => {
-    library();
-    expect(names({ groups: ["fun"] })).toEqual(["Alien.1979.1080p.x264-fun.mkv", "Heat.1995.1080p.x265-FuN.mkv"]);
-    expect(names({ groups: ["GRP", null] })).toEqual([
-      "Alien.1979.2160p.x265-GRP.mkv",
-      "Brazil (1985).mkv",
-      "Die.Bruecke.1959.1080p.x264-GRP.mkv",
-    ]);
-    expect(names({ resolutions: ["4K", ""] })).toEqual(["Alien.1979.2160p.x265-GRP.mkv", "Brazil (1985).mkv"]);
-    expect(names({ codecs: ["x264"], groups: ["GRP"] })).toEqual(["Die.Bruecke.1959.1080p.x264-GRP.mkv"]);
-  });
-
-  it("filters by audio language: any of them, or none tagged", () => {
-    library();
-    expect(names({ languages: ["EN"] })).toEqual(["Heat.1995.1080p.x265-FuN.mkv"]);
-    expect(names({ languages: ["EN", ""] })).toEqual(["Brazil (1985).mkv", "Heat.1995.1080p.x265-FuN.mkv"]);
-    expect(names({ languages: ["DE"], codecs: ["x264"] })).toEqual([
-      "Alien.1979.1080p.x264-fun.mkv",
-      "Die.Bruecke.1959.1080p.x264-GRP.mkv",
-    ]);
-  });
-
-  it("sorts by title (versions together), size, or group with files without one last", () => {
-    library();
-    expect(names({}, "size", false)[0]).toBe("Alien.1979.2160p.x265-GRP.mkv");
-    expect(names({}, "group", true).at(-1)).toBe("Brazil (1985).mkv");
-    expect(names({}, "group", false).at(-1)).toBe("Brazil (1985).mkv");
-    expect(names({}, "title", false)[0]).toBe("Heat.1995.1080p.x265-FuN.mkv");
-  });
-
-  it("lists a show's episodes in order, findable by their number or title", () => {
-    library();
-    const shows = (f: Partial<FileFilters> = {}) => queryFiles("shows", filters(f), "title", true, 0, 50).items;
-    expect(shows().map((r) => [r.season, r.episode, r.episodeTitle])).toEqual([
-      [1, 1, "Episode 1"],
-      [1, 2, "Episode 2"],
-    ]);
-    expect(shows({ words: ["s01e02"] }).map((r) => r.key)).toEqual(["e2:0"]);
-    expect(shows({ words: ["episode", "1"] }).map((r) => r.key)).toEqual(["e1:0", "e2:0"]);
-    expect(shows({ groups: [null] }).map((r) => r.key)).toEqual(["e2:0"]);
-  });
-
-  it("pages, counting every match", () => {
-    library();
-    const page = queryFiles("movies", filters(), "title", true, 2, 2);
-    expect(page).toMatchObject({ matched: 5, items: [{ title: "Brazil" }, { title: "Die Brücke" }] });
-    expect(page.items[0]).toEqual({
-      key: "m4:0",
-      title: "Brazil",
-      year: 1985,
-      tmdbId: null,
-      season: null,
-      episode: null,
-      episodeEnd: null,
-      episodeTitle: null,
-      fileName: "Brazil (1985).mkv",
-      group: null,
-      size: 7,
-      resolution: "",
-      codec: "",
-      languages: [],
-    });
-    // Past the last page there are no rows, but still a count.
-    expect(queryFiles("movies", filters(), "title", true, 10, 2)).toEqual({ matched: 5, items: [] });
+    expect(filesByQuality()).toEqual(
+      expect.arrayContaining([
+        { resolution: "4K", codec: "x265", files: 1, size: 40 },
+        { resolution: "1080p", codec: "x265", files: 3, size: 15 },
+        { resolution: "1080p", codec: "x264", files: 2, size: 13 },
+        { resolution: "", codec: "", files: 1, size: 7 },
+      ]),
+    );
   });
 
   it("is replaced with the library at every sync", () => {
     library();
     replaceLibrary({ movies: [], shows: [], episodes: [] }, null);
-    expect(fileSummary("movies")).toMatchObject({ titles: 0, files: 0 });
-    expect(fileSummary("shows")).toMatchObject({ titles: 0, files: 0 });
+    expect(libraryTotals("movies")).toMatchObject({ titles: 0, files: 0 });
+    expect(libraryTotals("shows")).toMatchObject({ titles: 0, files: 0 });
   });
 });

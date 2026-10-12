@@ -16,7 +16,7 @@ export default function NotFound() {
             <Logo className="size-12" />
           </Link>
           <h1 className="sr-only">Page not found</h1>
-          <p className="mt-4 font-num text-7xl font-medium text-muted-foreground/40 tabular-nums">404</p>
+          <p className="mt-4 font-mono text-7xl font-medium text-muted-foreground/40">404</p>
           <Link href="/" className={buttonVariants({ variant: "outline", className: "mt-8 w-full" })}>
             <House />
             Go to home

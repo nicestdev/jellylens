@@ -6,7 +6,7 @@ import type { IgnoreEntry, LibraryMovie, LibraryShow, MissingEntry, Preferences,
 import type { MatchInfo, ReleaseFacets, ReleaseGroup, TitleRelease, TitleRow } from "./store";
 import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
-import type { FileListRow, FilePart, FileTotals } from "./store";
+import type { AudioMix, FilePart, LibraryTotals, QualityCell } from "./store";
 import type { DownloadFile, DownloadMedia, DownloadPackage, LibraryChoice, LibraryCopy } from "./store";
 export type { LibraryChoice };
 import type { SeasonAiring } from "./tmdb";
@@ -48,7 +48,6 @@ export type StageStatus = { syncedAt: string | null; running: boolean; error: st
 export type StatusResponse = {
   library: StageStatus & { movies: number; shows: number };
   tmdb: StageStatus & { movies: number; shows: number };
-  missing: StageStatus & { incompleteCount: number };
   releases: StageStatus & { groups: number; releases: number };
 };
 export type SyncStageName = keyof StatusResponse;
@@ -134,28 +133,22 @@ export type ReleaseGroupsResponse = { items: ReleaseGroupItem[]; matching: boole
 // A missing season as the Dashboard shows it.
 export type { MissingSeason } from "./store";
 
-// GET /api/analytics — per library, the totals for the tiles and the share
-// chart, from the library scan at syncedAt. titles: the movies or shows;
-// withFiles: those with files stored; pending: files not stored yet (until
-// the next sync). groups, resolutions, codecs: files and bytes per value,
-// most files first (group null: files without one; resolution or codec
-// "": unknown). languages: per audio language the same, "" for none
-// tagged; a file can have several, so these overlap.
-export type LibraryAnalytics = FileTotals & {
-  titles: number;
-  withFiles: number;
-  pending: boolean;
-  groups: FilePart<string | null>[];
+// GET /api/analytics — from the library scan at syncedAt: per library the
+// totals for the tiles (LibraryTotals), and over both the files and bytes
+// per resolution, codec, audio mix and release group, largest first
+// (group null: files without one; resolution or codec "": unknown), and
+// per resolution and codec together (quality).
+export type AnalyticsResponse = {
+  movies: LibraryTotals;
+  shows: LibraryTotals;
   resolutions: FilePart[];
   codecs: FilePart[];
-  languages: FilePart[];
+  quality: QualityCell[];
+  audio: FilePart<AudioMix>[];
+  groups: FilePart<string | null>[];
 };
-export type AnalyticsResponse = { movies: LibraryAnalytics; shows: LibraryAnalytics; syncedAt: string | null };
 
-// GET /api/analytics/files — one page of a library's file list (pageSize
-// files at most); matched: how many files the search and filters leave.
-export type FilesResponse = { matched: number; pageSize: number; items: FileListRow[] };
-export type { FileListRow, FilePart };
+export type { AudioMix, FilePart, QualityCell };
 
 // GET /api/wcx-search?q=&tmdbId= — WCX detail URL for a release, or null.
 export type WcxSearchResponse = { url: string | null };
@@ -275,9 +268,8 @@ export type OrganizeItem = {
   owned: OwnedFile[];
   move: MoveProgress | null;
 };
-// A moved one: files, each one's path in its folder (none known: it can't
-// be moved back), bytes (theirs, as they are now); move, while it's moved
-// back (Undo).
+// A moved one: files, each one's path in its folder, bytes (theirs, as
+// they are now).
 export type OrganizeMoved = {
   id: number;
   name: string;
@@ -286,9 +278,8 @@ export type OrganizeMoved = {
   movedAt: string;
   files: string[];
   bytes: number;
-  // Moved in by Replace: no Undo.
+  // Moved in by Replace.
   replaced: boolean;
-  move: MoveProgress | null;
 };
 // GET/POST /api/organize/scan — the library scan: running, and how far its probing is
 // (0–100; null while idle).

@@ -2,16 +2,18 @@ import type { ReactNode } from "react";
 import { Bar } from "@/components/progress-bar";
 import { MUTED_CELL, NOT_ON_PHONE } from "@/components/library-table";
 import { cn, titleIfCut } from "@/lib/utils";
+import { shown } from "@/components/dot";
 
 // Where a Downloads or Organize row is at, in its Status column and on a
 // phone under its title: while it moves a bar over a line that starts with
 // the state ("Loading · 45 MB/s · 3 min") and the share done on the right;
 // otherwise the line alone, red for an error, peach for something still
 // open (parts the hoster didn't answer for), or colored itself (Organize's
-// "−1 +1"). Cut off, its whole text on hover (only then: no tooltips
-// otherwise).
+// "−1 +1"). An error wraps; anything else cut off has its whole text on
+// hover (only then: no tooltips otherwise). line: one piece, or values
+// shown with Dots.
 export type RowState = {
-  line: ReactNode;
+  line: ReactNode | ReactNode[];
   tone?: "error" | "warning";
   bar?: { fraction: number; color: string };
 };
@@ -21,19 +23,21 @@ function Body({ state, right }: { state: RowState; right?: string }) {
     <span
       onMouseEnter={titleIfCut}
       className={cn(
-        "min-w-0 flex-1 truncate",
-        state.tone === "error" && "text-destructive",
+        "min-w-0 flex-1 font-mono text-xs",
+        // An error wraps: its reason is what to read.
+        state.tone === "error" ? "[overflow-wrap:anywhere] whitespace-normal text-destructive" : "truncate",
         state.tone === "warning" && "text-warning",
       )}
     >
-      {state.line}
+      {/* Tight under a bar, the line beside its share; spaced otherwise. */}
+      {shown(state.line, !state.bar)}
     </span>
   );
   if (!state.bar)
     return (
       <span className="flex min-w-0 items-baseline gap-2">
         {line}
-        {right ? <span className="shrink-0 font-num text-xs tabular-nums">{right}</span> : null}
+        {right ? <span className="shrink-0 font-mono text-xs">{right}</span> : null}
       </span>
     );
   return (
@@ -41,7 +45,7 @@ function Body({ state, right }: { state: RowState; right?: string }) {
       <Bar fraction={state.bar.fraction} color={state.bar.color} className="mt-1 h-1.5" />
       <span className="mt-1.5 flex items-baseline gap-2 text-xs tabular-nums">
         {line}
-        <span className="shrink-0 font-num">{`${Math.floor(state.bar.fraction * 100)}\u202f%`}</span>
+        <span className="shrink-0 font-mono">{`${Math.floor(state.bar.fraction * 100)}\u202f%`}</span>
       </span>
     </>
   );

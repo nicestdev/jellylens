@@ -17,7 +17,7 @@ export const MB = 1024 * 1024;
 // decimals: "512.00 MB", "45.60 GB", "1.23 TB" (plain bytes have none).
 // The next unit from 1000 on, so it's never four digits ("0.98 GB", not
 // "1010.00 MB") and columns of sizes stay narrow. A narrow no-break space
-// before the unit: in Geist Mono a plain one is as wide as a digit.
+// before the unit: in a mono font a plain one is as wide as a digit.
 export function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   let value = bytes;

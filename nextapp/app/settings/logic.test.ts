@@ -7,7 +7,6 @@ const stage = { syncedAt: "2026-10-01T00:00:00Z", running: false, error: null };
 const status = (running: Partial<Record<keyof StatusResponse, boolean>> = {}): StatusResponse => ({
   library: { ...stage, running: Boolean(running.library), movies: 1, shows: 1 },
   tmdb: { ...stage, running: Boolean(running.tmdb), movies: 1, shows: 1 },
-  missing: { ...stage, running: Boolean(running.missing), incompleteCount: 0 },
   releases: { ...stage, running: Boolean(running.releases), groups: 1, releases: 1 },
 });
 const group = (over: Partial<ReleaseGroupItem> = {}): ReleaseGroupItem => ({
@@ -30,7 +29,7 @@ describe("pollDelay", () => {
 
   it("follows along while a sync runs, wherever it started", () => {
     expect(pollDelay({ ...idle, busy: true })).toBe(FAST_POLL_MS);
-    for (const s of ["library", "tmdb", "missing", "releases"] as const) {
+    for (const s of ["library", "tmdb", "releases"] as const) {
       expect(pollDelay({ ...idle, status: status({ [s]: true }) }), s).toBe(FAST_POLL_MS);
     }
   });
@@ -43,7 +42,7 @@ describe("pollDelay", () => {
 });
 
 describe("ignoredList", () => {
-  it("names each ignored show, by name, the whole show before its seasons", () => {
+  it("names each ignored show, by name", () => {
     const shows = [
       {
         ...show({ id: "a", name: "Dark", year: 2017 }),
@@ -52,17 +51,7 @@ describe("ignoredList", () => {
       },
       { ...show({ id: "b", name: "Andor" }), missingEpisodes: null, languages: null },
     ];
-    const list = ignoredList(shows, [
-      { showId: "a", season: 2 },
-      { showId: "a", season: null },
-      { showId: "b", season: 1 },
-      { showId: "gone", season: 1 },
-    ]);
-    expect(list.map((e) => [e.name, e.entry.season])).toEqual([
-      ["Andor", 1],
-      ["Dark (2017)", null],
-      ["Dark (2017)", 2],
-      ["Unknown show", 1],
-    ]);
+    const list = ignoredList(shows, [{ showId: "a" }, { showId: "gone" }, { showId: "b" }]);
+    expect(list.map((e) => e.name)).toEqual(["Andor", "Dark (2017)", "Unknown show"]);
   });
 });

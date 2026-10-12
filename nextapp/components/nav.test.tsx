@@ -17,7 +17,6 @@ const stage = { syncedAt: null, running: false, error: null };
 const status: StatusResponse = {
   library: { ...stage, movies: 649, shows: 88 },
   tmdb: { ...stage, movies: 120, shows: 80 },
-  missing: { ...stage, incompleteCount: 12 },
   releases: { ...stage, groups: 4, releases: 900 },
 };
 const request = (tmdbId: number, over: Partial<RequestItem> = {}): RequestItem => ({
@@ -143,7 +142,8 @@ describe("Sidebar", () => {
     act(() => {
       window.dispatchEvent(new Event(COUNTS_STALE));
     });
-    expect(await sidebar().findByRole("link", { name: "Queue 0" })).toBeInTheDocument();
+    // None left: no count at all.
+    expect(await sidebar().findByRole("link", { name: "Queue" })).toBeInTheDocument();
   });
 
   it("shows users only their pages, and Sign out", async () => {

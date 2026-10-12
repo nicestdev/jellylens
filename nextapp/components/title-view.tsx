@@ -38,6 +38,7 @@ import {
 } from "@/lib/title-rows";
 import { SortMenu } from "@/components/sort-menu";
 import { type SortDir } from "@/lib/facets";
+import { Dot, Dots } from "@/components/dot";
 
 // The menus after Quality: a show's seasons.
 const FACET_KEYS: RowFacetKey[] = ["season"];
@@ -219,7 +220,7 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
   const countOf = (key: string, releases: number) => {
     const a = airedIn(key);
     const aired = a && (a.total > a.aired ? `${a.aired} of ${a.total} aired` : `${a.aired} aired`);
-    return [plural(releases, "release"), aired].filter(Boolean).join(" · ");
+    return [plural(releases, "release"), aired];
   };
   // The library's files for a table (its gray rows first): a season's ("2-2", a pack's "1-3")
   // episodes, a movie's all; none for the releases without a season.
@@ -275,9 +276,15 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
         }
       : null;
   const tmdb = head?.tmdbId && head.mediaType ? tmdbUrl(head.mediaType, head.tmdbId) : undefined;
-  const links = [tmdb ? { label: "TMDB", href: tmdb } : null, wcxUrl ? { label: "WCX", href: wcxUrl } : null].filter(
-    (l): l is { label: string; href: string } => l !== null,
-  );
+  const xrelLink =
+    head?.tmdbId && head.mediaType
+      ? "/api/xrel-link?" + new URLSearchParams({ tmdbId: `${head.mediaType}:${head.tmdbId}`, title: head.title })
+      : undefined;
+  const links = [
+    tmdb ? { label: "TMDB", href: tmdb } : null,
+    xrelLink ? { label: "xREL", href: xrelLink } : null,
+    wcxUrl ? { label: "WCX", href: wcxUrl } : null,
+  ].filter((l): l is { label: string; href: string } => l !== null);
 
   const page = (
     <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
@@ -329,13 +336,13 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
                     combined.length ? <span key="r">{plural(combined.length, "release")}</span> : null,
                   ]
                     .filter(Boolean)
-                    .flatMap((el, i) => (i ? [<span key={`s${i}`}>·</span>, el] : [el]))}
+                    .flatMap((el, i) => (i ? [<Dot key={`s${i}`} />, el] : [el]))}
                   {links.length ? (
                     <>
-                      <span className="max-sm:hidden">·</span>
+                      <Dot className="max-sm:hidden" />
                       <span className="flex items-baseline gap-x-1.5 max-sm:basis-full">
                         {links.flatMap((l, i) => [
-                          i ? <span key={`s${i}`}>·</span> : null,
+                          i ? <Dot key={`s${i}`} /> : null,
                           <a
                             key={l.label}
                             href={l.href}
@@ -434,8 +441,8 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
                     <p className="min-w-0 flex-1 text-sm">
                       <span className="font-medium">{t.label}</span>
                       <span className="text-muted-foreground">
-                        {" · "}
-                        {[plural(t.rows.length, "release"), matchNote(t.match)].filter(Boolean).join(" · ")}
+                        {" "}
+                        <Dot /> <Dots parts={[plural(t.rows.length, "release"), matchNote(t.match)]} spaced />
                       </span>
                     </p>
                     <MatchMenu

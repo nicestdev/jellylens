@@ -8,8 +8,9 @@ import {
   type TmdbShowEntry,
 } from "./store";
 
-// The missing recheck: no network, just the Jellyfin library diffed against
-// what the TMDB sync stored. The diffs are pure functions; computeMissing
+// Which shows are incomplete, the last step of every library scan and TMDB
+// sync: no network, just the library's episodes diffed against what the
+// TMDB sync stored. The diffs are pure functions; computeMissing
 // reads their input from the database and writes their results back.
 
 // Groups a sorted list of episode numbers into "3, 5-7, 9" style ranges.
@@ -81,15 +82,7 @@ export function diffShow(
   return missing;
 }
 
-export function computeMissing(now = new Date()) {
+export function computeMissing() {
   if (!syncedAt("tmdb")) throw new Error("Sync TMDB first — nothing to compare against yet.");
-
-  const missing = diffShow(getTmdbShows(), ownedEpisodes(getEpisodes()));
-  const at = now.toISOString();
-  replaceMissing(missing, at);
-
-  return {
-    incompleteCount: Object.keys(missing).length,
-    syncedAt: at,
-  };
+  replaceMissing(diffShow(getTmdbShows(), ownedEpisodes(getEpisodes())));
 }

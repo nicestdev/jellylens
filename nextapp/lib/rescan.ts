@@ -4,8 +4,8 @@ import { scanProgress } from "./library-scan";
 import { startByHand, triggerLibraryScan } from "./sync-manager";
 import type { OrganizeScan } from "./api-types";
 
-// The library scan started from the Queue (Rescan library) or after a move
-// or Undo: Jellylens scans the disks, and Jellyfin is asked to scan its
+// The library scan started from the Queue (Rescan library) or after a
+// move: Jellylens scans the disks, and Jellyfin is asked to scan its
 // libraries too, so it plays what came in (it does that on its own; a
 // Jellyfin that can't be reached doesn't hold the scan up).
 export function rescan() {

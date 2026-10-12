@@ -14,15 +14,16 @@ import { ConfirmItem } from "@/components/confirm-item";
 import { SETTINGS_COLUMNS } from "./logic";
 import { TableFrame } from "@/components/section-frame";
 import { AddButton, AddRow } from "./add-row";
+import { Dot } from "@/components/dot";
 
 type Group = ReleaseGroupItem;
 type GroupKind = Group["kind"];
 
 // P2P: their whole list on xREL, kept in sync. Scene: their latest
 // releases on xREL; older ones pile up with each sync.
-const KINDS: { kind: GroupKind; title: string }[] = [
-  { kind: "p2p", title: "P2P groups" },
-  { kind: "scene", title: "Scene groups" },
+const KINDS: { kind: GroupKind; title: string; addLabel: string }[] = [
+  { kind: "p2p", title: "P2P groups", addLabel: "Add P2P group" },
+  { kind: "scene", title: "Scene groups", addLabel: "Add scene group" },
 ];
 
 // A group's Last sync cell: syncing now, its first list too (Sync with its
@@ -81,6 +82,7 @@ export function ReleaseGroups({
 
 function GroupList({
   title,
+  addLabel,
   groups,
   add,
   remove,
@@ -119,7 +121,7 @@ function GroupList({
         { label: "Releases", align: "right", width: SETTINGS_COLUMNS.middle, phone: false },
         { label: "Last sync", width: SETTINGS_COLUMNS.lastSync, phone: false },
         {
-          label: <AddButton label="Add group" onClick={() => setOpen(true)} disabled={groups === null} />,
+          label: <AddButton label={addLabel} onClick={() => setOpen(true)} disabled={groups === null} />,
           width: SETTINGS_COLUMNS.action,
         },
       ]}
@@ -134,16 +136,18 @@ function GroupList({
       {(groups ?? []).map((g) => (
         <tr key={g.id} className={ROW}>
           <td className={TITLE_CELL}>
-            <span className="font-medium">{g.name}</span>
+            <span className="font-mono text-xs font-medium">{g.name}</span>
             {/* On a phone its releases and last sync are a line under it. */}
             <div className="truncate text-xs text-muted-foreground sm:hidden">
-              {plural(g.count, "release")} · {groupStatus(g)}
+              {plural(g.count, "release")} <Dot /> {groupStatus(g)}
             </div>
           </td>
           <td className={cn(NUMBER_CELL, NOT_ON_PHONE)}>{formatNumber(g.count)}</td>
           <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>
             {/* Syncing, as faint as the disabled Sync button above. */}
-            <span className={cn("inline-flex items-center gap-1 align-top", g.syncing && "opacity-50")}>
+            <span
+              className={cn("inline-flex items-center gap-1 align-top font-mono text-xs", g.syncing && "opacity-50")}
+            >
               {g.syncing ? <RefreshCw className="size-3 animate-spin" /> : null}
               {groupStatus(g)}
             </span>
@@ -175,7 +179,7 @@ function GroupList({
           onChange={setName}
           onSubmit={submit}
           onClose={() => setOpen(false)}
-          placeholder="Add group"
+          placeholder={addLabel}
           columns={4}
           adding={adding}
           className="font-medium"

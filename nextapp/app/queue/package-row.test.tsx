@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import "@/test/dom";
+import { wholeText } from "@/test/dom";
 import type { DownloadFileItem, DownloadPackageItem } from "@/lib/api-types";
 import { PackageRow } from "./package-row";
 
@@ -62,7 +62,7 @@ describe("PackageRow", () => {
     expect(screen.getByText("1995")).toBeInTheDocument();
     expect(screen.getByText("Heat.1995.German.DL.1080p.BluRay.x264-WAYNE")).toBeInTheDocument();
     // In its column and under the title for phones.
-    expect(screen.getAllByText("Online · 2/2")).toHaveLength(2);
+    expect(screen.getAllByText(wholeText("Online · 2/2"))).toHaveLength(2);
     expect(screen.getAllByText("1.00 GB")).toHaveLength(2);
     // No parts to open.
     expect(screen.queryByText("Heat.1995.part1.rar")).toBeNull();
@@ -75,15 +75,15 @@ describe("PackageRow", () => {
       files: [file(1, { status: "downloading", received: 256 * 1024 ** 2, speed: 12 * 1024 ** 2 }), file(2)],
     });
     expect(document.body.textContent).toContain("25\u202f%");
-    expect(screen.getAllByText(/^Loading · 12.00 MB\/s · \d+ min$/)).toHaveLength(2);
+    expect(screen.getAllByText(wholeText(/^Loading·12.00 MB\/s·\d+ min$/))).toHaveLength(2);
   });
 
   it("shows its state as plain text, what to do about it first in its menu", async () => {
     const cases: [DownloadPackageItem["status"], RegExp, string][] = [
       ["pending", /^Online · 1\/1$/, "Start"],
-      ["queued", /^Waiting · /, "Pause"],
-      ["downloading", /^Loading · /, "Pause"],
-      ["paused", /^Paused · /, "Resume"],
+      ["queued", /^Waiting$/, "Pause"],
+      ["downloading", /^Loading·/, "Pause"],
+      ["paused", /^Paused$/, "Resume"],
       ["failed", /^Failed$/, "Retry"],
     ];
     const actions = { Start: "start", Pause: "pause", Resume: "resume", Retry: "retry" };
@@ -92,7 +92,7 @@ describe("PackageRow", () => {
       const { unmount } = renderRow({ ...pkg, status: state, files: [file(1)] }, vi.fn(), onAction);
       // In its column and under the title for phones (a failed one without
       // an error says Failed); nothing to click.
-      expect(screen.getAllByText(label).length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText(wholeText(label)).length).toBeGreaterThanOrEqual(2);
       // Only the ⋯, once for phones and once in its column.
       expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
         `More for ${pkg.name}`,
@@ -181,20 +181,21 @@ describe("PackageRow", () => {
 
   it("counts a new package's parts online while the hoster is asked, red when one is missing, why when one failed", () => {
     const { unmount } = renderRow({ ...pkg, files: [file(1), file(2, { checked: null })] });
-    expect(screen.getAllByText("Checking · 1/2")).toHaveLength(2);
+    expect(screen.getAllByText(wholeText("Checking · 1/2"))).toHaveLength(2);
     unmount();
     // part2 missing: 2 of 3 online.
     const missing = renderRow({ ...pkg, files: [file(1), file(3)] });
-    for (const line of screen.getAllByText("Online · 2/3")) expect(line).toHaveClass("text-destructive");
+    for (const line of screen.getAllByText(wholeText("Online · 2/3"))) expect(line).toHaveClass("text-destructive");
     missing.unmount();
     // part1 offline: why, rather than how many are online.
     renderRow({ ...pkg, files: [file(1, { status: "failed", error: "File not found" }), file(2), file(3)] });
-    for (const line of screen.getAllByText("File not found · 1 part")) expect(line).toHaveClass("text-destructive");
+    for (const line of screen.getAllByText(wholeText("File not found · 1 part")))
+      expect(line).toHaveClass("text-destructive");
   });
 
   it("is peach for parts the hoster didn't answer for", () => {
     renderRow({ ...pkg, files: [file(1), file(2, { checked: "unknown" })] });
-    for (const line of screen.getAllByText("Online · 1/2")) expect(line).toHaveClass("text-warning");
+    for (const line of screen.getAllByText(wholeText("Online · 1/2"))) expect(line).toHaveClass("text-warning");
   });
 
   it("removes a new package from its menu on a second click, the first one only arming it", async () => {

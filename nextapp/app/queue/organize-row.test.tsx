@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import "@/test/dom";
+import { wholeText } from "@/test/dom";
 import type { OrganizeItem, OrganizeMoved } from "@/lib/api-types";
 import type { MoveProgress } from "@/lib/library-move";
 import { OrganizeRow, MovedRow } from "./organize-row";
@@ -25,7 +25,6 @@ const item: OrganizeItem = {
 };
 const progress = (over: Partial<MoveProgress> = {}): MoveProgress => ({
   target: "/library/nvme02/shows",
-  back: false,
   done: 1.5 * GB,
   total: 3 * GB,
   phase: "copying",
@@ -43,7 +42,6 @@ const moved: OrganizeMoved = {
   files: ["Heat.1995.mkv"],
   bytes: 8 * GB,
   replaced: false,
-  move: null,
 };
 
 const table = (row: React.ReactNode) =>
@@ -72,8 +70,8 @@ describe("OrganizeRow", () => {
     expect(season).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Gen.V.S01E01.mkv")).toBeNull();
     expect(screen.getByText("Gen.V.S02E01.mkv")).toBeInTheDocument();
-    // The first disk it fits on, not the first.
-    expect(disk()).toHaveTextContent("nvme02");
+    // A new title's disk is picked by hand.
+    expect(disk()).toHaveTextContent("Pick");
     // Nothing to say about it in Status; on a phone the size alone says it.
     expect(screen.getAllByText("—")).toHaveLength(1);
   });
@@ -102,7 +100,7 @@ describe("OrganizeRow", () => {
 
   it("shows how far a move is, with nothing to pick or do meanwhile", () => {
     table(<OrganizeRow item={{ ...item, move: progress() }} onPick={vi.fn()} onMove={vi.fn()} onDelete={vi.fn()} />);
-    expect(screen.getAllByText(/^Moving · [\d.]+ MB\/s · /)).toHaveLength(2);
+    expect(screen.getAllByText(wholeText(/^Moving·[\d.]+ MB\/s·/))).toHaveLength(2);
     expect(document.body.textContent).toContain("50\u202f%");
     expect(screen.queryByRole("button", { name: /^Disk: / })).toBeNull();
     expect(screen.queryByRole("button", { name: /^More for / })).toBeNull();
@@ -143,6 +141,7 @@ describe("OrganizeRow", () => {
     const onDelete = vi.fn();
     const owned = {
       ...item,
+      targets: [item.targets[0], { ...item.targets[1], existing: "Gen V (2023) [tmdbid-205715]" }],
       files: ["Season 01/Gen.V.S01E01.mkv"],
       owned: [
         {
@@ -168,28 +167,16 @@ describe("OrganizeRow", () => {
 });
 
 describe("MovedRow", () => {
-  it("shows the folder it went to, not its files, and when, and moves it back from its menu", async () => {
-    const onUndo = vi.fn();
-    table(<MovedRow item={moved} onUndo={onUndo} />);
+  it("shows the folder it went to with its files, and when, with no menu", () => {
+    table(<MovedRow item={moved} />);
     expect(screen.getByText("Heat (1995) [tmdbid-949]")).toBeInTheDocument();
-    expect(screen.queryByText("Heat.1995.mkv")).toBeNull();
+    expect(screen.getByText("Heat.1995.mkv")).toBeInTheDocument();
     expect(screen.getAllByText(/^Moved /)).toHaveLength(2);
-    await userEvent.click(more());
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Undo" }));
-    expect(onUndo).toHaveBeenCalledOnce();
-  });
-
-  it("calls an Undo running Undoing, and offers nothing for a move without its files known", () => {
-    const { unmount } = table(<MovedRow item={{ ...moved, move: progress({ back: true }) }} onUndo={vi.fn()} />);
-    expect(screen.getAllByText(/^Undoing · /)).toHaveLength(2);
-    unmount();
-    table(<MovedRow item={{ ...moved, files: [] }} onUndo={vi.fn()} />);
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("says Replaced for one that replaced what the library had, with no Undo", () => {
-    table(<MovedRow item={{ ...moved, replaced: true }} onUndo={vi.fn()} />);
+  it("says Replaced for one that replaced what the library had", () => {
+    table(<MovedRow item={{ ...moved, replaced: true }} />);
     expect(screen.getAllByText(/^Replaced /)).toHaveLength(2);
-    expect(screen.queryByRole("button")).toBeNull();
   });
 });

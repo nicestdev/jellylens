@@ -15,15 +15,14 @@ describe("IgnoredShows", () => {
       if (url.pathname === "/api/shows") return json({ items: [dark] });
       if (url.pathname !== "/api/ignored") return undefined;
       if (init?.method === "DELETE") return json({ items: [] });
-      return json({ items: [{ showId: "s1", season: 2 }] });
+      return json({ items: [{ showId: "s1" }] });
     });
     render(<IgnoredShows onError={vi.fn()} />);
     expect(await screen.findByText("Dark (2017)")).toBeInTheDocument();
-    expect(screen.getByText("Season 2")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "More options for Dark (2017)" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Unignore" }));
     expect(await screen.findByText("None yet")).toBeInTheDocument();
     const del = fetch.mock.calls.find(([, init]) => init?.method === "DELETE")!;
-    expect(JSON.parse(String(del[1]!.body))).toEqual({ showId: "s1", season: 2 });
+    expect(JSON.parse(String(del[1]!.body))).toEqual({ showId: "s1" });
   });
 });

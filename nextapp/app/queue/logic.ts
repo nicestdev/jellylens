@@ -68,11 +68,10 @@ export function displayName(pkg: Pick<DownloadPackageItem, "media" | "name">): {
   return { title: parsed.title || pkg.name, year: parsed.year };
 }
 
-// The line above the list: the speed now, what's left to download and
+// The Stats above the list: the speed now, what's left to download and
 // how long at this speed, while anything comes in or waits to; the free
-// space in DOWNLOAD_DIR always. Each a number and, if it needs one, a word
-// after it: "120.74 MB/s · 36.41 GB left · 6 min · 756.61 GB free".
-type QueueStat = { value: string; word?: string };
+// space in DOWNLOAD_DIR always. Each its label and value.
+type QueueStat = { label: "Speed" | "Left" | "Time left" | "Free"; value: string };
 export function queueLine(data: { packages: DownloadPackageItem[]; freeBytes: number | null }): QueueStat[] {
   const { packages } = data;
   const speed = packages.reduce((n, p) => n + p.files.reduce((m, f) => m + (f.speed ?? 0), 0), 0);
@@ -84,10 +83,10 @@ export function queueLine(data: { packages: DownloadPackageItem[]; freeBytes: nu
   }
   const eta = timeLeft(left, speed);
   return [
-    ...(speed ? [{ value: formatSpeed(speed) }] : []),
-    ...(left ? [{ value: formatBytes(left), word: "left" }] : []),
-    ...(eta ? [{ value: eta }] : []),
-    { value: data.freeBytes !== null ? formatBytes(data.freeBytes) : "?", word: "free" },
+    ...(speed ? [{ label: "Speed" as const, value: formatSpeed(speed) }] : []),
+    ...(left ? [{ label: "Left" as const, value: formatBytes(left) }] : []),
+    ...(eta ? [{ label: "Time left" as const, value: eta }] : []),
+    { label: "Free", value: data.freeBytes !== null ? formatBytes(data.freeBytes) : "?" },
   ];
 }
 
@@ -126,7 +125,7 @@ export function sections(packages: DownloadPackageItem[], organize: OrganizeResp
       title: "Needs attention",
       packages: packages.filter((p) => p.status === "failed").sort(byStart),
       items: items.filter((i) => i.error || stuck(i)),
-      moved: moved.filter(stuck),
+      moved: [],
       pending: packages.filter((p) => p.status === "pending").sort(byStart),
     },
     {
@@ -145,7 +144,7 @@ export function sections(packages: DownloadPackageItem[], organize: OrganizeResp
       moved: [],
       pending: [],
     },
-    { title: "Done", packages: [], items: [], moved: moved.filter((m) => !stuck(m)), pending: [] },
+    { title: "Done", packages: [], items: [], moved, pending: [] },
   ];
   return list.filter((s) => sizeOf(s));
 }
@@ -169,17 +168,19 @@ export function errorLine(error: string | null): string {
 // numbering count; it can't be extracted then); red when one is missing,
 // peach when the hoster didn't answer for one. One that failed (offline, or
 // no account for its hoster) says why instead, red, and how many ("No
-// account for its hoster · 2 parts"; "+1" for another reason).
-export function partCheck(pkg: DownloadPackageItem): { line: string; tone?: "error" | "warning" } {
+// account for its hoster·2 parts"; "+1" for another reason). Its line as
+// values (shown with Dots); checking while the hoster is asked.
+export type PartCheck = { line: string[]; tone?: "error" | "warning"; checking?: true };
+export function partCheck(pkg: DownloadPackageItem): PartCheck {
   const parts = pkg.files.filter((f) => f.status !== "skipped");
   const open = parts.filter((f) => f.status === "queued");
   const asked = open.filter((f) => f.checked !== null).length;
-  if (asked < open.length) return { line: `Checking · ${asked}/${open.length}` };
+  if (asked < open.length) return { line: ["Checking", `${asked}/${open.length}`], checking: true };
   const offline = parts.filter((f) => f.status === "failed");
   if (offline.length) {
     const reasons = [...new Set(offline.map((f) => errorLine(f.error)))];
     const more = reasons.length > 1 ? ` +${reasons.length - 1}` : "";
-    return { line: `${reasons[0]}${more} · ${plural(offline.length, "part")}`, tone: "error" };
+    return { line: [`${reasons[0]}${more}`, plural(offline.length, "part")], tone: "error" };
   }
   const unknown = open.filter((f) => f.checked !== "online");
   const sets = new Map<string, Set<number>>();
@@ -193,7 +194,7 @@ export function partCheck(pkg: DownloadPackageItem): { line: string; tone?: "err
   for (const nums of sets.values())
     for (let n = 1; n <= Math.max(...nums); n++) if (!nums.has(n)) missing.push(`part${n}`);
   // Missing parts count as parts too, so a gap shows in the numbers.
-  const line = `Online · ${open.length - unknown.length}/${parts.length + missing.length}`;
+  const line = ["Online", `${open.length - unknown.length}/${parts.length + missing.length}`];
   const tone = missing.length ? "error" : unknown.length ? "warning" : undefined;
   return { line, tone };
 }

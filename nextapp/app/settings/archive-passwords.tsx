@@ -63,7 +63,7 @@ export function ArchivePasswords({
       columns={[
         { label: "Password" },
         {
-          label: <AddButton label="Add password" onClick={() => setOpen(true)} disabled={passwords === null} />,
+          label: <AddButton label="Add archive password" onClick={() => setOpen(true)} disabled={passwords === null} />,
         },
       ]}
     >
@@ -110,7 +110,7 @@ export function ArchivePasswords({
           onChange={setValue}
           onSubmit={submit}
           onClose={() => setOpen(false)}
-          placeholder="Add password"
+          placeholder="Add archive password"
           columns={2}
           adding={saving && value.trim() !== ""}
           className="font-mono text-xs"

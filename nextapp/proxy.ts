@@ -22,6 +22,7 @@ const ADMIN_ONLY = [
   "/title",
   "/api/wcx-search",
   "/api/wcx-releases",
+  "/api/xrel-link",
 ];
 const PUBLIC = ["/login", "/api/auth"];
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];

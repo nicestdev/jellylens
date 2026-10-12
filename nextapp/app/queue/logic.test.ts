@@ -134,7 +134,6 @@ const moved = (id: number, over: Partial<OrganizeMoved> = {}): OrganizeMoved => 
   files: ["Heat.mkv"],
   bytes: 1e9,
   replaced: false,
-  move: null,
   ...over,
 });
 const organize = (items: OrganizeItem[], movedItems: OrganizeMoved[] = []) => ({
@@ -159,10 +158,9 @@ describe("sections", () => {
     expect(sections([pkg(1, "downloading")], null).map((s) => s.title)).toEqual(["Downloading"]);
   });
 
-  it("puts a move that failed under Needs attention, the item or the move back", () => {
+  it("puts a move that failed under Needs attention", () => {
     const error = {
       target: "/library/nvme02/movies",
-      back: false,
       done: 0,
       total: 1,
       phase: "copying" as const,
@@ -170,8 +168,8 @@ describe("sections", () => {
       running: false,
       error: "Disk full",
     };
-    const list = sections([], organize([item(1, { move: error })], [moved(2, { move: { ...error, back: true } })]));
-    expect(list.map((s) => [s.title, ids(s.items), ids(s.moved)])).toEqual([["Needs attention", [1], [2]]]);
+    const list = sections([], organize([item(1, { move: error })]));
+    expect(list.map((s) => [s.title, ids(s.items)])).toEqual([["Needs attention", [1]]]);
   });
 
   it("starts Downloading in queue order, by when each started", () => {
@@ -195,12 +193,12 @@ describe("queueLine", () => {
       pkg(2, "failed"),
     ];
     expect(queueLine({ packages, freeBytes: 500 * 1024 ** 3 })).toEqual([
-      { value: "2.00\u202fMB/s" },
-      { value: "160.00\u202fMB", word: "left" },
-      { value: "2\u202fmin" },
-      { value: "500.00\u202fGB", word: "free" },
+      { label: "Speed", value: "2.00\u202fMB/s" },
+      { label: "Left", value: "160.00\u202fMB" },
+      { label: "Time left", value: "2\u202fmin" },
+      { label: "Free", value: "500.00\u202fGB" },
     ]);
-    expect(queueLine({ packages: [], freeBytes: null })).toEqual([{ value: "?", word: "free" }]);
+    expect(queueLine({ packages: [], freeBytes: null })).toEqual([{ label: "Free", value: "?" }]);
   });
 });
 
@@ -231,13 +229,13 @@ describe("partCheck", () => {
 
   it("says Checking until the hoster was asked about every part", () => {
     const p = pkg(1, "pending", { files: [...parts(1, 2), file(3, { name: "Heat.1995.part3.rar", checked: null })] });
-    expect(partCheck(p)).toEqual({ line: "Checking · 2/3" });
+    expect(partCheck(p)).toEqual({ line: ["Checking", "2/3"], checking: true });
   });
 
   it("counts the parts online, plain when all are", () => {
-    expect(partCheck(pkg(1, "pending", { files: parts(1, 2, 3) }))).toEqual({ line: "Online · 3/3" });
+    expect(partCheck(pkg(1, "pending", { files: parts(1, 2, 3) }))).toEqual({ line: ["Online", "3/3"] });
     expect(partCheck(pkg(1, "pending", { files: [file(1, { name: "Heat.1995.mkv" })] }))).toEqual({
-      line: "Online · 1/1",
+      line: ["Online", "1/1"],
     });
   });
 
@@ -245,7 +243,7 @@ describe("partCheck", () => {
     const failed = (n: number, error: string | null) =>
       file(n, { name: `Heat.1995.part${n}.rar`, status: "failed", error });
     expect(partCheck(pkg(1, "pending", { files: [...parts(1, 2), failed(3, null)] }))).toEqual({
-      line: "Failed · 1 part",
+      line: ["Failed", "1 part"],
       tone: "error",
     });
     const files = [
@@ -255,31 +253,37 @@ describe("partCheck", () => {
       failed(4, "Heat.1995.part4.rar: file not found."),
     ];
     expect(partCheck(pkg(1, "pending", { files }))).toEqual({
-      line: "No account for its hoster +1 · 3 parts",
+      line: ["No account for its hoster +1", "3 parts"],
       tone: "error",
     });
   });
 
   it("counts gaps in a multi-part RAR's numbering as parts, red", () => {
-    expect(partCheck(pkg(1, "pending", { files: parts(1, 3, 4) }))).toEqual({ line: "Online · 3/4", tone: "error" });
-    expect(partCheck(pkg(1, "pending", { files: parts(2, 5) }))).toEqual({ line: "Online · 2/5", tone: "error" });
+    expect(partCheck(pkg(1, "pending", { files: parts(1, 3, 4) }))).toEqual({
+      line: ["Online", "3/4"],
+      tone: "error",
+    });
+    expect(partCheck(pkg(1, "pending", { files: parts(2, 5) }))).toEqual({
+      line: ["Online", "2/5"],
+      tone: "error",
+    });
   });
 
   it("is peach for parts the hoster didn't answer for, red winning", () => {
     const unknown = (n: number) => file(n, { name: `Heat.1995.part${n}.rar`, checked: "unknown" });
     expect(partCheck(pkg(1, "pending", { files: [...parts(1, 2), unknown(3)] }))).toEqual({
-      line: "Online · 2/3",
+      line: ["Online", "2/3"],
       tone: "warning",
     });
     expect(partCheck(pkg(1, "pending", { files: [...parts(1), unknown(3)] }))).toEqual({
-      line: "Online · 1/3",
+      line: ["Online", "1/3"],
       tone: "error",
     });
   });
 
   it("leaves out parts skipped at Start", () => {
     const p = pkg(1, "pending", { files: [...parts(1, 2), file(3, { name: "x.mkv", status: "skipped" })] });
-    expect(partCheck(p)).toEqual({ line: "Online · 2/2" });
+    expect(partCheck(p)).toEqual({ line: ["Online", "2/2"] });
   });
 });
 

@@ -1,8 +1,8 @@
 import type { LibraryCopy, TitleRelease, WcxRelease } from "./api-types";
-import { MB, plural, seasonCode, seasonLabel } from "./format";
+import { MB, seasonCode, seasonLabel } from "./format";
 import { rankIn, toggled, type SortDir } from "./facets";
 import { matchesWords } from "./text";
-import { copyLabel, fromRelease, resolutionOf, seasonsOf, withoutTitle } from "./release-labels";
+import { fromRelease, resolutionOf, seasonsOf, withoutTitle } from "./release-labels";
 import { audioOf, codecOf, episodesOf } from "./release-name";
 
 // The title page's releases (components/title-view.tsx), xREL's and WCX's
@@ -50,17 +50,15 @@ export const wcxRow = (r: WcxRelease): ReleaseRow => ({
   seasons: r.seasons ?? seasonsOf(r.name),
 });
 
-// What the library already has of a release, as its row on the title page
-// says it (the library icon, the disks): a movie's copies; for a show, of the seasons (or the
-// one episode) the release holds, how many episodes and in what. exact:
-// some of them are from this very release (fromRelease), not just the
-// same title. episodes: of a season pack, how many of its episodes the
+// What the library already has of a release, for its row on the title page
+// (the library icon, the disks): a movie's copies; for a show, those of the
+// seasons (or the one episode) the release holds. exact: some of them are
+// from this very release (fromRelease), not just the same title. episodes: of a season pack, how many of its episodes the
 // library has from it (a combined file counts each). disks: when exact,
 // the disks this release's files are on. null if nothing.
-export type LibraryMark = { label: string; hint: string; exact: boolean; episodes?: number; disks?: string };
+export type LibraryMark = { exact: boolean; episodes?: number; disks?: string };
 
 export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean): LibraryMark | null {
-  const have = (list: LibraryCopy[]) => [...new Set(list.map(copyLabel))].join(", ");
   const exact = (list: LibraryCopy[]) => list.filter((c) => fromRelease(c.fileName, r.name)).length;
   const disks = (list: LibraryCopy[]) => ({
     disks: [...new Set(list.filter((c) => fromRelease(c.fileName, r.name)).map((c) => c.path.split("/")[0]))]
@@ -70,12 +68,7 @@ export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean
   if (movie) {
     if (!copies.length) return null;
     const n = exact(copies);
-    return {
-      label: n ? "This release in library" : "In library",
-      hint: have(copies),
-      exact: n > 0,
-      ...(n ? disks(copies) : {}),
-    };
+    return { exact: n > 0, ...(n ? disks(copies) : {}) };
   }
   if (!r.seasons) return null;
   const [from, to] = r.seasons;
@@ -95,15 +88,7 @@ export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean
       Array.from({ length: (c.episodeEnd ?? c.episode!) - c.episode! + 1 }, (_, i) => `${c.season}:${c.episode! + i}`),
     ),
   ).size;
-  const what = ep
-    ? n
-      ? "This release in library"
-      : "In library"
-    : `${seasonCode(from, to)}: ${plural(mine.length, "episode")} in library` +
-      (n ? (n === mine.length ? ", all of this release" : `, ${n} of this release`) : "");
   return {
-    label: what,
-    hint: have(mine),
     exact: n > 0,
     ...(!ep && episodes ? { episodes } : {}),
     ...(n ? disks(mine) : {}),

@@ -1,30 +1,24 @@
-import type { AnalyticsResponse, LibraryAnalytics } from "@/lib/api-types";
+import type { AnalyticsResponse } from "@/lib/api-types";
 import {
-  fileSummary,
+  filesByAudio,
   filesByCodec,
   filesByGroup,
-  filesByLanguage,
+  filesByQuality,
   filesByResolution,
-  syncedAt,
-  type Library,
+  libraryTotals,
 } from "@/lib/store";
 
-const totals = (library: Library): LibraryAnalytics => ({
-  ...fileSummary(library),
-  groups: filesByGroup(library),
-  resolutions: filesByResolution(library),
-  codecs: filesByCodec(library),
-  languages: filesByLanguage(library),
-});
-
-// GET /api/analytics — the movies' and the episodes' files, sizes and their
-// split by release group, resolution, codec and audio language, for the Analytics page's
-// tiles and share charts; admin only (see proxy.ts). The files themselves
-// are paged by /api/analytics/files.
+// GET /api/analytics — both libraries' totals and their files split by
+// resolution, codec (also both together), audio mix and release group, for the Analytics page;
+// admin only (see proxy.ts).
 export async function GET() {
   return Response.json({
-    movies: totals("movies"),
-    shows: totals("shows"),
-    syncedAt: syncedAt("library"),
+    movies: libraryTotals("movies"),
+    shows: libraryTotals("shows"),
+    resolutions: filesByResolution(),
+    codecs: filesByCodec(),
+    quality: filesByQuality(),
+    audio: filesByAudio(),
+    groups: filesByGroup(),
   } satisfies AnalyticsResponse);
 }

@@ -52,10 +52,11 @@ describe("the library stage", () => {
     expect(getMissingShows()).toEqual({});
   });
 
-  it("skips the recheck before the first TMDB sync", async () => {
+  it("skips the incomplete shows before the first TMDB sync, rather than fail the scan", async () => {
     library([1]);
     await stageTriggers.library();
-    expect(syncedAt("missing")).toBeNull();
+    expect(stageTriggers.library.lastError()).toBeNull();
+    expect(getMissingShows()).toEqual({});
   });
 });
 

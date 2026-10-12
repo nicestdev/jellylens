@@ -1,27 +1,22 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
-import { AlertCircle, CircleArrowDown, FileDown, FolderInput, ListX, RefreshCcw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, CircleArrowDown, FileDown, ListX, RefreshCcw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { DOWNLOADS_CHANGED, apiFetch, jsonRequest, loadDownloads, loadOrganize } from "@/lib/api-client";
-import type {
-  DownloadPackageItem,
-  DownloadsResponse,
-  OrganizeItem,
-  OrganizeResponse,
-  OrganizeScan,
-} from "@/lib/api-types";
+import type { DownloadPackageItem, DownloadsResponse, OrganizeResponse, OrganizeScan } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { usePoll } from "@/hooks/use-poll";
 import { AddControls } from "./add-form";
 import { queueItems, type QueueChange } from "./queue-controls";
 import { PackageRow } from "./package-row";
 import { TableFrame } from "@/components/section-frame";
+import { StatTile } from "@/components/stat-tile";
 import { isActive, queueLine, sections, sizeOf } from "./logic";
 import { MovedRow, OrganizeRow, downloadColumns } from "./organize-row";
-import { isMoving, targetOf } from "./organize-logic";
+import { isMoving } from "./organize-logic";
 import { ErrorAlert } from "@/components/error-alert";
 
 const loadScan = () => apiFetch<OrganizeScan>("/api/organize/scan");
@@ -33,6 +28,8 @@ const loadScan = () => apiFetch<OrganizeScan>("/api/organize/scan");
 // (lib/downloader.ts); then each goes to the disk picked, into its title's
 // folder ("Name (Year) [tmdbid-N]", lib/library-move.ts). Sections in
 // logic.ts; Done folds away.
+const STATS = ["Speed", "Left", "Time left", "Free"] as const;
+
 export default function QueuePage() {
   const page = useLoad(loadDownloads);
   const data = page.data;
@@ -143,32 +140,15 @@ export default function QueuePage() {
       setError((e as Error).message);
     }
   }
-  // The disk picked per item (its path), so Move all takes it too.
+  // The disk picked per item (its path).
   const [picked, setPicked] = useState<Record<number, string>>({});
-  // Move all: each one ready that can be moved, to its disk, one after
-  // another; not what the library has already (Replace, one by one, even
-  // when it was started with Replace: what's moved is always a hand's).
-  const movable = (item: OrganizeItem) => !item.error && !item.owned.length && targetOf(item, picked[item.id]);
-  const fresh = organize?.items.filter((i) => !i.move) ?? [];
-  // Off while it goes through them; what failed is said once it's through.
-  const [movingAll, setMovingAll] = useState(false);
-  async function moveAll(items: OrganizeItem[]) {
-    setError("");
-    setMovingAll(true);
-    const errors: string[] = [];
-    for (const item of items) {
-      const target = movable(item);
-      const error = target ? await post(item.id, target.path) : "";
-      if (error) errors.push(`${item.name}: ${error}`);
-    }
-    setMovingAll(false);
-    setError(errors.join(" · "));
-  }
 
   const parts = data ? sections(data.packages, organize ?? null) : [];
-  // Done open on load only when it's all there is; a click decides then.
-  const [doneToggled, setDoneOpen] = useState<boolean | null>(null);
-  const doneOpen = doneToggled ?? parts.length === 1;
+  const stats = data ? queueLine(data) : [];
+  // Each section folds away under its heading on a click; open from the
+  // start but Done, which is only when it's all there is.
+  const [toggled, setToggled] = useState<Partial<Record<string, boolean>>>({});
+  const isOpen = (title: string) => toggled[title] ?? (title !== "Done" || parts.length === 1);
 
   return (
     <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
@@ -176,7 +156,7 @@ export default function QueuePage() {
           links open below it), Download all, Pause all and Resume all
           (how many come in at once is on Settings); Rescan library (the
           library scan, and Jellyfin's, lib/rescan.ts; it runs on its own
-          after moves too), Move all and Clear finished. */}
+          after moves too) and Clear done. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-3xl font-semibold max-md:sr-only">Queue</h1>
         <AddControls
@@ -205,19 +185,7 @@ export default function QueuePage() {
                       onClick: scan,
                       disabled: scanning,
                     },
-                    ...(fresh.length
-                      ? [
-                          {
-                            icon: FolderInput,
-                            label: "Move all",
-                            onClick: () => moveAll(fresh),
-                            disabled: movingAll || !fresh.some(movable),
-                          },
-                        ]
-                      : []),
-                    ...(organize?.moved.some((m) => !m.move)
-                      ? [{ icon: ListX, label: "Clear finished", onClick: clear }]
-                      : []),
+                    ...(organize?.moved.length ? [{ icon: ListX, label: "Clear done", onClick: clear }] : []),
                   ],
                 ]
               : []
@@ -229,7 +197,7 @@ export default function QueuePage() {
 
       {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       {data && !data.ready ? (
-        <Alert className="mt-6">
+        <Alert className="mt-4 sm:mt-6">
           <AlertCircle />
           <AlertDescription>
             Set DDOWNLOAD_LOGIN and DDOWNLOAD_PASSWORD (a premium account on ddownload.com) or REALDEBRID_TOKEN to fetch
@@ -238,7 +206,7 @@ export default function QueuePage() {
         </Alert>
       ) : null}
       {organize && !organize.ready ? (
-        <Alert className="mt-6">
+        <Alert className="mt-4 sm:mt-6">
           <AlertCircle />
           <AlertDescription>
             {organize.libraryDir
@@ -248,24 +216,19 @@ export default function QueuePage() {
         </Alert>
       ) : null}
 
-      {/* One muted line, the numbers bright: on a phone as on a desktop. */}
-      <div className="mt-6 text-sm text-muted-foreground">
-        {data ? (
-          queueLine(data).map((st, i) => (
-            <Fragment key={i}>
-              {i ? " · " : null}
-              <span className="font-num text-foreground tabular-nums">{st.value}</span>
-              {st.word ? ` ${st.word}` : null}
-            </Fragment>
-          ))
-        ) : (
-          <Skeleton className="h-5 w-72 max-w-full" />
-        )}
+      {/* Each stat its label over its value, two a row on a phone. */}
+      {/* The stats as tiles, like Analytics': all four always, "—" (muted)
+          for what isn't there while nothing comes in; two a row on a phone. */}
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:mt-6 sm:grid-cols-4 sm:gap-6 phone-landscape:grid-cols-4">
+        {STATS.map((label) => {
+          const value = stats.find((st) => st.label === label)?.value;
+          return <StatTile key={label} label={label} value={value ?? "—"} muted={!value} loading={!data} />;
+        })}
       </div>
 
-      <div className="mt-6 flex flex-col gap-3">
+      <div className="mt-4 flex flex-col gap-4 sm:mt-6 sm:gap-6">
         {!data ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4 sm:gap-6">
             {[0, 1].map((i) => (
               <Skeleton key={i} className="h-14 rounded-lg" />
             ))}
@@ -281,7 +244,8 @@ export default function QueuePage() {
               title={part.title}
               count={sizeOf(part)}
               columns={downloadColumns}
-              {...(part.title === "Done" ? { open: doneOpen, onToggle: () => setDoneOpen(!doneOpen) } : {})}
+              open={isOpen(part.title)}
+              onToggle={() => setToggled((t) => ({ ...t, [part.title]: !isOpen(part.title) }))}
             >
               {part.packages.map(packageRow)}
               {part.items.map((item) => (
@@ -295,11 +259,7 @@ export default function QueuePage() {
                 />
               ))}
               {part.moved.map((item) => (
-                <MovedRow
-                  key={`m${item.id}`}
-                  item={item}
-                  onUndo={() => send(jsonRequest("POST", { id: item.id, undo: true }))}
-                />
+                <MovedRow key={`m${item.id}`} item={item} />
               ))}
               {part.pending.map(packageRow)}
             </TableFrame>

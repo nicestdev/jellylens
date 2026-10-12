@@ -69,17 +69,17 @@ describe("ReleaseGroups", () => {
   it("shows a placeholder row until the first load, then adds from the heading's +", () => {
     const { view } = setup(null);
     expect(within(region("Scene groups")).getByRole("table").querySelector('[data-slot="skeleton"]')).not.toBeNull();
-    expect(within(region("Scene groups")).getByRole("button", { name: "Add group" })).toBeDisabled();
+    expect(within(region("Scene groups")).getByRole("button", { name: "Add scene group" })).toBeDisabled();
     view.rerender(<ReleaseGroups data={{ items: [], matching: false }} onData={vi.fn()} onError={vi.fn()} />);
-    expect(within(region("Scene groups")).getByRole("button", { name: "Add group" })).toBeEnabled();
+    expect(within(region("Scene groups")).getByRole("button", { name: "Add scene group" })).toBeEnabled();
   });
 
   it("adds a scene group from its own list", async () => {
     const fetch = api([]);
     const { onData } = setup([]);
     const scene = region("Scene groups");
-    await userEvent.click(within(scene).getByRole("button", { name: "Add group" }));
-    await userEvent.type(within(scene).getByRole("textbox", { name: "Add group" }), " WAYNE {Enter}");
+    await userEvent.click(within(scene).getByRole("button", { name: "Add scene group" }));
+    await userEvent.type(within(scene).getByRole("textbox", { name: "Add scene group" }), " WAYNE {Enter}");
     expect(await within(scene).findByText("WAYNE")).toBeInTheDocument();
     expect(within(scene).getByText("Waiting")).toBeInTheDocument();
     expect(within(scene).getByRole("textbox")).toHaveValue("");
@@ -92,7 +92,7 @@ describe("ReleaseGroups", () => {
     api([]);
     const { onError, onData } = setup([]);
     const scene = region("Scene groups");
-    await userEvent.click(within(scene).getByRole("button", { name: "Add group" }));
+    await userEvent.click(within(scene).getByRole("button", { name: "Add scene group" }));
     await userEvent.type(within(scene).getByRole("textbox"), "NOPE{Enter}");
     await vi.waitFor(() =>
       expect(onError).toHaveBeenLastCalledWith("Couldn't add NOPE: xREL doesn't list a scene group called NOPE."),

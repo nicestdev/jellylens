@@ -75,7 +75,7 @@ export function AddRow({
             aria-label={placeholder}
             disabled={adding}
             className={cn(
-              "w-full bg-transparent outline-none placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:text-muted-foreground disabled:opacity-60",
+              "w-full bg-transparent outline-none placeholder:font-sans placeholder:text-[0.8125rem] placeholder:font-normal placeholder:text-muted-foreground disabled:opacity-60",
               className,
             )}
           />

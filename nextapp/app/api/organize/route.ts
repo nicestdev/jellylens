@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { OrganizeDisk, OrganizeItem, OrganizeResponse } from "@/lib/api-types";
 import { LIBRARY_DIR } from "@/lib/env";
-import { libraryTargets, moveOf, movePlan, ownedFiles, startMove, startUndo } from "@/lib/library-move";
+import { libraryTargets, moveOf, movePlan, ownedFiles, startMove } from "@/lib/library-move";
 import { deletePackage, getPackage, listPackages, type DownloadPackage } from "@/lib/store";
 
 // The library's disks (LIBRARY_DIR's folders) with their free and total
@@ -69,8 +69,7 @@ async function organizePage(): Promise<OrganizeResponse> {
   );
   // Read again after those awaits: a move that ended meanwhile has its
   // files in the library already, so its package would show as New, owned
-  // by itself; one deleted meanwhile is gone; one an Undo brought back is
-  // looked at now.
+  // by itself; one deleted meanwhile is gone.
   const packages = done();
   const waiting = packages.filter((p) => !p.movedTo);
   const known = new Map(first.map((i) => [i.id, i]));
@@ -91,7 +90,6 @@ async function organizePage(): Promise<OrganizeResponse> {
         files: (p.movedFiles ?? []).map((f) => f.to),
         bytes: movedBytes(p.movedTo!, p.movedFiles ?? []),
         replaced: p.replaced,
-        move: moveOf(p.id),
       }))
       .sort((a, b) => b.movedAt.localeCompare(a.movedAt)),
   };
@@ -105,24 +103,22 @@ export async function GET() {
 // POST { id, target } — moves a finished package into the library folder
 // target (one of its targets' paths), in the background; one the library
 // has already needs replace: true (Replace; one version of everything,
-// so there's no adding it as another);
-// { id, undo: true } moves a moved one back. Answers with the page.
+// so there's no adding it as another). Answers with the page.
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const pkg = Number.isInteger(body?.id) ? getPackage(body.id) : null;
   if (!pkg) return Response.json({ error: "No such package." }, { status: 404 });
-  if (body.undo !== true && typeof body.target !== "string")
-    return Response.json({ error: "Expected { id, target } or { id, undo: true }." }, { status: 400 });
+  if (typeof body.target !== "string") return Response.json({ error: "Expected { id, target }." }, { status: 400 });
   const replace = body.replace === true ? true : undefined;
-  const error = body.undo === true ? startUndo(pkg) : await startMove(pkg, body.target, replace);
+  const error = await startMove(pkg, body.target, replace);
   if (error) return Response.json({ error }, { status: 409 });
   return Response.json((await organizePage()) satisfies OrganizeResponse);
 }
 
 // DELETE — clears Done: forgets the packages moved into the library (their
-// files are there, their download folders gone already), not one being
-// moved back; answers with the page.
+// files are there, their download folders gone already); answers with the
+// page.
 export async function DELETE() {
-  for (const p of listPackages()) if (p.movedTo && !moveOf(p.id)?.running) deletePackage(p.id);
+  for (const p of listPackages()) if (p.movedTo) deletePackage(p.id);
   return Response.json((await organizePage()) satisfies OrganizeResponse);
 }

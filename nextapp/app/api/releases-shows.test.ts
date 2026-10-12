@@ -136,7 +136,7 @@ describe("GET /api/shows", () => {
       "2026-10-01T00:00:00.000Z",
     );
     const missing = { count: 1, seasons: [] };
-    replaceMissing({ s1: missing }, "2026-10-01T00:00:00.000Z");
+    replaceMissing({ s1: missing });
     const [one, two] = await shows();
     expect(one).toMatchObject({ missingEpisodes: missing, languages: { total: 1, byLang: {} } });
     expect(two).toMatchObject({ missingEpisodes: null, languages: null });

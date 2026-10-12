@@ -83,7 +83,8 @@ scheduled or not, leaves one (see Notes).
    now are dropped (`dropFulfilledRequests` in `lib/store/requests.ts`), and
    once TMDB has synced, the shows new since that sync get their seasons
    (`syncNewTmdb` in `lib/sync-tmdb.ts`, one that
-   fails left for the next TMDB sync) before a missing recheck is chained.
+   fails left for the next TMDB sync) before the incomplete shows are
+   worked out (see below).
 2. **TMDB** (`lib/sync-tmdb.ts`, stage `tmdb`,
    `TMDB_SYNC_INTERVAL_HOURS`, default 24): every library title's details
    again (`refreshDetails`, written into the stored titles: a show ends, a
@@ -91,13 +92,16 @@ scheduled or not, leaves one (see Notes).
    `TMDB_LANGUAGE` (also what every other TMDB request uses). A show whose
    request fails keeps the last sync's
    data (a hiccup must not turn into missing episodes);
-   only a 404 drops it. Chains a missing recheck.
-3. **Missing recheck** (`lib/compute-missing.ts`, stage `missing`,
-   `MISSING_RECHECK_INTERVAL_HOURS`, default 24): no network. Pure diffs
-   (`ownedEpisodes`, `diffShow`) of the library against TMDB: aired
-   episodes not owned (combined files via `episodeEnd`).
-4. **Releases** (`lib/sync-releases.ts`, stage `releases`,
+   only a 404 drops it. Then the incomplete shows are worked out again,
+   which is also what catches episodes that aired since the last run.
+3. **Releases** (`lib/sync-releases.ts`, stage `releases`,
    `XREL_SYNC_INTERVAL_HOURS`, default 6), see below.
+
+The incomplete shows (`computeMissing` in `lib/compute-missing.ts`, the
+Dashboard's Incomplete shows) are no stage of their own: the last step of
+every library scan (once TMDB has synced) and every TMDB sync, no network.
+Pure diffs (`ownedEpisodes`, `diffShow`) of the library against TMDB:
+aired episodes not owned (combined files via `episodeEnd`).
 
 ## Releases (xREL)
 
@@ -109,11 +113,12 @@ searching P2P releases for `-NAME` (the API id is the group's), a scene
 name by searching scene releases for `NAME` (no API id: stored as
 `scene:NAME`; `findGroupOf` in `lib/release-groups.ts`); a name of the
 other kind gets a message pointing to the other list. `P2P_GROUPS` and
-`SCENE_GROUPS` (comma-separated) are added the same way at every start
-when the database doesn't have them yet (`addEnvGroups`, before the
-releases sync in `instrumentation.ts`; one xREL doesn't list is logged),
-so a new database comes with them; one removed on Settings is back after
-the next start while the variable names it. xREL allows 900 calls an hour: the client reads
+`SCENE_GROUPS` (comma-separated) are added the same way at the start of
+every releases sync when the database doesn't have them yet
+(`addEnvGroups`; one xREL doesn't list is logged), so a new database comes
+with them and one missed because xREL was out of calls comes in with a
+later sync; one removed on Settings is back after the next sync while the
+variable names it. xREL allows 900 calls an hour: the client reads
 `x-ratelimit-*` and a sync stops with 10 left; searches are spaced 2.5 s
 apart.
 
@@ -288,35 +293,33 @@ subtitles go, not samples or the rest; a movie whose one video is named
 with spaces (as VECTOR names them) gets the release's name instead
 (`releaseFileNames`; the release name is the folder the archive made, else
 the package's, made safe for a path, `safeName`). The disk defaults to the
-one that has the title, else the first it fits on (`defaultTarget` in
-`app/queue/organize-logic.ts`; not the roomiest, which may be one left out
-of the backup); a move is refused when what's queued for that disk leaves
-too little room (`startMove`).
+one that has the title (`defaultTarget` in `app/queue/organize-logic.ts`);
+a new title's is always picked by hand ("Pick" in peach until then); every
+move is started by hand, one at a time (there's no Move all); a move is
+refused when what's queued for that disk leaves too little room
+(`startMove`; a Replace too, since the new files are in before the old go).
 
 A move (`lib/library-move.ts`, one at a time, the rest wait) copies every
 file as "<name>.part", hashed on the way and flushed to the disk (fsync),
 then reads each back and hashes it again, and renames them only if every
 hash and size matches; then it marks the package moved (`moved_to`,
 `moved_at`, `moved_files`: which file went where), and only then deletes
-its download folder. Undo does the same the other way and takes the files
-(and the folders left empty) out of the library afterwards.
+its download folder. There's no Undo.
 
 A title the library has already (`ownedFiles`: a movie's videos in its
 `[tmdbid-N]` folder on any disk, or a show's that are one of the episodes
 the package brings by `SxxEyy`, each with its subtitles) isn't moved as
-it is: Move all leaves it out (even one started with Replace: what goes
-into the library is always moved by a hand), and its ⋯ offers Replace (the old files go
+it is: its ⋯ offers Replace (the old files go
 once the new ones are in, and the folders they leave empty;
-`moved_replaced`, so there's no Undo) or Delete (the download, files and
+`moved_replaced`) or Delete (the download, files and
 all). There's no adding it as another version: one version of everything,
 so `POST /api/organize` takes `replace: true` or nothing. A Retry keeps
 what was picked. Whether the library has it is asked again when a plain
 move starts: another package of the same title moved in meanwhile, it
 goes back to Ready to organize with a note ("Not moved") rather than become a
 second version. A second click on Move
-before the (slow) answer does nothing; Move all is off while it goes through
-them one by one and names what failed once it's through. `GET` reads the
-packages again after looking at the library, so a move or Undo that ended
+before the (slow) answer does nothing. `GET` reads the
+packages again after looking at the library, so a move that ended
 meanwhile is listed where it is now. Once the move queue is through, the
 library is scanned again (`rescan` in `lib/rescan.ts`, a fresh run: not one
 that listed the disks before the move) and Jellyfin asked
@@ -326,19 +329,20 @@ what came in counts as owned right away.
 The page (`app/queue/page.tsx`) loads the packages (`/api/downloads`) and
 what's to move (`/api/organize`, slow over sshfs: it reads the library's
 folders) on their own: the packages every second while one downloads or
-extracts, what's to move while a move runs, each every 10 s otherwise, the second again when how many are finished changes. One
-muted line on top, its numbers bright (`queueLine` in `app/queue/logic.ts`):
-the speed, what's still to download and how long at this speed while
-anything comes in or waits to, and the free space in `DOWNLOAD_DIR`
-always ("120.74 MB/s · 36.41 GB left · 6 min · 756.61 GB free"). Then the sections (`sections`), empty ones left out, a
+extracts, what's to move while a move runs, each every 10 s otherwise, the second again when how many are finished changes. Four stat
+tiles on top (`StatTile`, like Analytics'; `queueLine` in
+`app/queue/logic.ts`), two a row on a phone: Speed, Left (what's still to
+download) and Time left while anything comes in or waits to, "—" (muted)
+otherwise, and Free (in `DOWNLOAD_DIR`) always. Then the sections (`sections`), empty ones left out, a
 table each with the same fixed column widths so they line up
 (`downloadColumns` in `app/queue/organize-row.tsx`: Title, Disk, Status,
 Size, ⋯): Needs attention (what failed first, downloads, moves and
 finished ones that can't be moved; then new ones waiting for a start),
 Downloading (in the order they were started), Ready to organize (finished,
 to move, also while they move) and Done (in the library, newest first;
-folded away under its heading until it's clicked, open from the start
-only when it's the only section, `open` on `TableFrame`). A package is a `PackageRow` (`app/queue/package-row.tsx`):
+folded away from the start unless it's the only section). Each section
+folds away and back with a click on its heading (`open` and `onToggle` on
+`TableFrame`). A package is a `PackageRow` (`app/queue/package-row.tsx`):
 title over the release name; Status, size; on a phone Status and size
 are a line under the title. A new one the library has some of (`libraryOf`:
 a movie of it, or episodes it brings; a pack in one archive, its
@@ -361,15 +365,15 @@ Skip pack's move leaves out the episodes the library has (by the last
 scan, and still on the disk, since the download goes afterwards).
 Download all leaves such packages out.
 Parts aren't listed. Status (`components/row-status.tsx`) is
-muted text, nothing to click: a new one's parts (`partCheck`: "Checking ·
-3/8" while the hoster is asked, then "Online · 3/3", gaps in a
+muted text, nothing to click: a new one's parts (`partCheck`: "Checking·
+3/8" while the hoster is asked, then "Online·3/3", gaps in a
 `.partN.rar` set counting as parts; red when one is missing, peach when
 the hoster didn't answer for one; when some failed, why instead, red, and
-how many, "No account for its hoster · 2 parts", "+1" for another
+how many, "No account for its hoster·2 parts", "+1" for another
 reason); while it moves a bar (peach
 waiting, green coming in, sky extracting, muted paused) over the state
-and speed and time left or how much is here ("Loading · 45.00 MB/s · 2
-min"); a failed one's error (red,
+and, while it comes in, speed and time left ("Loading·45.00 MB/s·2
+min"; waiting, paused or extracting the state alone); a failed one's error (red,
 `errorLine`: without the file's name, as a sentence starts); "—" when finished. What to do about it comes
 first in the row's ⋯ menu (`RowMenu`: Start, or Download or Download missing, see
 above; Pause, Resume or Retry), then Reset,
@@ -386,13 +390,14 @@ on a phone the tree's root, with the size in the line under it),
 Status ("—", or with files the library has
 already how many go and come like a diffstat, "−1 +1" in red and green;
 while it's moved a bar per phase,
-peach waiting, green copying, sky verifying, with "Moving · speed · time
+peach waiting, green copying, sky verifying, with "Moving·speed·time
 left"; red why it failed or can't be moved, a crossed-out folder icon
 before its release name then), size, and the ⋯ (Move, or Replace;
 Retry; Delete, which takes its files too, `DELETE
 /api/downloads/<id>?files=delete`; only Delete for one that can't be
-moved). A moved one is a `MovedRow`: the folder it went to, the disk,
-when it was moved or replaced, and Undo in its ⋯ (none after a Replace).
+moved). A moved one is a `MovedRow`: the folder it went to with its files
+(the same tree), the disk,
+when it was moved or replaced, and no ⋯.
 A row's ⋯ is in a column of its own from sm up, centered, and on a phone
 at the end of the title's line (`MENU_CELL`, `PHONE_MENU` in
 `components/library-table.tsx`). The page's ⋯ at the top right
@@ -400,7 +405,7 @@ at the end of the title's line (`MENU_CELL`, `PHONE_MENU` in
 `app/queue/add-form.tsx`; below md in the phone bar, `PageActions`) has Upload DLC and Add links (a box under the
 heading), then Download all (when a new one the library has nothing of
 waits; it starts only those), Pause all and Resume all
-(`queueItems`), then Rescan library, Move all and Clear finished
+(`queueItems`), then Rescan library and Clear done
 (forgets the moved ones, their files stay). DLC files can be dropped
 anywhere on the page too, each added after the last one's answer (a DLC
 takes a moment to read). A package whose move is running can't be
@@ -414,7 +419,7 @@ library (`/api/organize/scan`) is the scan after a move by hand,
 What happens in the background that an admin wants to hear about is kept
 as events (`notify` in `lib/events.ts`, the last 50, on globalThis), only
 what needs a hand: a download done ("Ready to organize") or failed, a move
-or Undo failed, a move not done because the library has the title by now
+failed, a move not done because the library has the title by now
 ("Not moved"), any sync failed (one note per run, however many asked for
 it). What was asked for and is seen happening, a move done or a sync
 started by hand, gets none.
@@ -439,7 +444,8 @@ after a month (`tmdbPosterPaths()` in `lib/store/posters.ts` lists the
 referenced ones). A title matched before TMDB had a poster asks again
 through `GET /api/tmdb-poster/<movie|tv>/<id>` (at most once an hour,
 keeps what it finds and redirects to the cached image; `tmdbPoster()`).
-Titles link to TMDB (`tmdbUrl()`), never to Jellyfin. The
+Titles link to TMDB (`tmdbUrl()`), for admins to their title page, never
+to Jellyfin. The
 CSP in `next.config.ts` allows images and fonts only from Jellylens itself,
 so a new image source has to go through a route like these.
 
@@ -503,9 +509,10 @@ so a poll asked before an action and answered after it is dropped);
 skipping hidden tabs.
 Settings loads its status, config, preferences and groups together and
 polls them every 2 s while a sync runs, every 15 s otherwise (`pollDelay`
-in `app/settings/logic.ts`). Its Sync and the two group tables share their
-last columns' widths (`SETTINGS_COLUMNS`), so Last sync lines up down the
-page; a stage's Sync is an icon button like a group's ⋯, and a group's Last
+in `app/settings/logic.ts`). Its sync stages are a card each (`StatTile`):
+when it last synced, its schedule under it, and its Sync as an icon
+button at the top right, spinning while it runs. The two group tables
+share their last columns' widths (`SETTINGS_COLUMNS`), and a group's Last
 sync is the spinning icon with "Sync" while it syncs (its first list too),
 "Waiting" before its first sync. The group tables and Archive passwords
 add from a + in the heading's last column, above the rows' ⋯
@@ -518,8 +525,7 @@ works out from that data (filtering, sorting, counts, tile texts) is plain funct
 `logic.ts` next to it, tested without React; shared helpers are in
 `lib/facets.ts` (filter and sort, `rankIn` for an ordered list, `libraryView`
 for Movies and Shows), `lib/text.ts` (`matchesWords`: every search box,
-every word, umlauts folded), `lib/libraries.ts` (the Movies | Shows
-switch) and `lib/format.ts` (plurals; numbers with a decimal point and
+every word, umlauts folded), and `lib/format.ts` (plurals; numbers with a decimal point and
 no thousands separator, "11281", "4.21 GB"; dates German-style,
 "30.09.2026"; relative times, `seasonCode`). JSON bodies go through `jsonRequest`
 (`lib/api-client.ts`), the app's window events through `useWindowEvent`
@@ -528,9 +534,11 @@ dark blue-violet grey, lavender as the one accent, soft mint, sand, coral
 and sky for states; `app/themes.css`, a few
 `--p-*` colors that `app/globals.css` maps onto every UI token, so a new
 look is new values there; `viewport.themeColor` in `app/layout.tsx`
-repeats the sidebar's), Geist, numbers too (`font-num`, with
-`tabular-nums`), and Geist Mono only for file and release names and
-codes, never a whole row (both self-hosted by next/font), no tooltips (`title`)
+repeats the sidebar's), Google Sans for titles, text, buttons and menus,
+and Google Sans Code (drawn from it, so the two sit close) for what's
+data: table and section headings, file and release
+names, codes, disks, numbers in tables, Status lines and the Dashboard's
+big numbers; never under posters (both self-hosted by next/font), no tooltips (`title`)
 but a chart's values, where hovering is how a chart is read, and a
 Status line or a poster's title that's cut off (`titleIfCut` in
 `lib/utils.ts`, its whole text): what matters
@@ -541,12 +549,22 @@ has already, tables where a list reads better
 than a grid (`DataTable` in `components/library-table.tsx`: one stretched
 column, the rest as wide as they need or fixed by `width`; on a page of
 sections the first column's name is the section's heading with its count,
-"Downloading · 2", the only one shown on a phone; a second line
+"Downloading · 2", the only one shown on a phone; a "·" between values has
+half their color and a space each side ("Ready to organize · 6",
+"2001 · 9 seasons", "Loading · 54 %" on the Dashboard), except under a
+Queue Status bar and in a release's line on the title page, the dense Mono
+data, where it has none ("Loading·45 MB/s·2 min", "FuN·1080p·x265"; a
+Status line without a bar is spaced, "Online · 4/5"); the logic hands out the values as a list
+(a Status line, a poster's meta, a stat's hint), and only `Dots` in
+`components/dot.tsx` puts the dots between them, `spaced` or not; a second line
 under a title in `text-xs` Mono for a file or release name, while the title
-page's release names, its rows' main line, stay Geist; a `phone: false`
+page's release names, its rows' main line, stay Sans; a `phone: false`
 column is left out below sm, its value folded into the title cell, so
 the table fits a phone instead of scrolling). Movies, Shows, Discover and
-the Wishlist are poster grids only. Sizes switch units from
+the Wishlist are poster grids only. A phone on its side counts as a phone
+(`sm` and `md` need some height, `app/globals.css`), but `phone-landscape`
+gives it the desktop's columns on the Dashboard, Analytics and Settings and
+four posters a row. Sizes switch units from
 1000 on (`formatBytes`), so they're never four digits. A narrow no-break
 space (U+202F) goes between a number and its unit ("4.21 GB", "58.3 %",
 "12 min"): a plain one looked too wide. Every size is
@@ -571,20 +589,19 @@ page's ⋯ in the bar the same way),
 `filter-menu` (`FacetMenu`: one toolbar button per facet, multi-select or
 `single` with one always picked, which the button then names;
 `FilterChips` for what's picked; the buttons, chips and a page's search
-box are all equally dark, nothing lights up while it filters), `segmented` (joined buttons, one picked:
-Movies | Shows), `sort-menu` (the button names the key only, "⇅ Title",
+box are all equally dark, nothing lights up while it filters), `sort-menu` (the button names the key only, "⇅ Title",
 the direction is in its menu), `search-input`,
 `empty-state`, `error-alert` (what went wrong, red with its icon),
 `library-icon` (the peach disk for what the library has, no tooltip),
 `confirm-item` (a menu item that asks "Sure? Click again": the Queue's
 Reset, Remove, Delete and Replace, Settings' Remove),
-`stat-tile` (a number with a label and hint),
+`stat-tile` (a number with a label and, if any, a hint: Analytics, the Queue),
 `library-page` (`LibraryPage`: Movies and Shows, the poster grid under
 `library-toolbar`'s search, filters and sort; each page gives its load,
 view and tile),
 `sync-notice` (data still to come with a sync, and its Sync), `load-more`
-(the next page once a list is scrolled near its end: Discover's releases
-and Analytics' files; `test/intersection.ts` scrolls in tests),
+(the next page once a list is scrolled near its end: Discover's releases;
+`test/intersection.ts` scrolls in tests),
 `design-icons` (the design canvas's own stroke icons where lucide's
 differ: search, sort, a menu's chevron), `dev-tools` (see
 Development). `nav` is
@@ -592,7 +609,7 @@ the sidebar from md up (`Sidebar`: the Dashboard and the Queue on top
 without a heading, then Library (Movies, Shows, Discover, Wishlist) and
 Administration (Analytics, Settings), an icon before each, sections a
 user has nothing in left out; the logo goes to the user's start page;
-counts, all muted, from `/api/status`, the wishlist's open requests and
+counts, all muted and only when above 0, from `/api/status`, the wishlist's open requests and
 the Queue's packages not in the library yet (`DOWNLOADS_CHANGED` from
 the Queue page keeps that one current),
 Sign out at the bottom, there with sign-in off too, doing nothing, in
@@ -607,32 +624,34 @@ card: the logo, a big 404 and the way back to `/`). The sign-in page has no nav 
 card with a shadow, the logo and "Sign in to Jellylens" on top of the form.
 In `next dev` it stays open while signed in, to look at.
 The Dashboard (`app/dashboard/`) is the admins' start page: on top, when
-it has any, what in the Queue needs a hand (`QueueTable` in `rail.tsx`:
-Needs attention and Ready to organize in one table, a row per title with
-why it failed in red, Waiting, or the disk it goes to, a click opening the
-Queue); then Missing shows (`missing-table.tsx`), a row per season with
+it has any, what's in the Queue (`QueueTable` in `rail.tsx`, `queueRows` in
+`logic.ts`: every row but Done and a new one still checked, a row per
+title with where it's at in the Queue's words, Error in red, Needs
+attention in peach, a running download or move with its share, Ready to
+organize; the speed and time left in its heading; the details stay on the
+Queue, which a click opens); then Incomplete shows when there are any (`missing-table.tsx`, its
+heading counting the shows), a row per season with
 episodes missing, finished or airing (`missingShows`, most missing
 first), its episodes as dots (red missing, outlined not aired yet, plain
-owned) and a ⋯ to ignore the season or the whole show; under it the last
-7 days' imports as posters (`recentImports`, `ImportsTable`); beside them
+owned) and a ⋯ to ignore the show (a whole show only, never a single
+season); under it the last
+7 days' imports as posters, when there are any (`recentImports`, `ImportsTable`); beside them
 from xl up the wishlist's open titles, when it has any, and the library's
 disks with what's free, red under 5 %; below xl one column: the Queue,
-the wishlist, Missing shows, the imports, the disks. What's ignored is
-listed on Settings (Ignored shows, `app/settings/ignored-shows.tsx`,
-`ignoredList`), each with Unignore. Ignore entries are
-`{ showId, season }` (`null` = the whole show).
-Analytics (`app/analytics/`) has a tab each for the movies' and the
-episodes' files (a Movies | Shows switch, Shows first; the file list's
-`library=movies|shows`): `GET /api/analytics` has both
-libraries' totals for the tiles and the share charts (files and storage by
-group, files by resolution and by codec as donuts, and by audio language as
-radial bars, a ring each for German, English and Spanish out of every
-file, since a file can have several; in a sideways carousel), and
-`GET /api/analytics/files` searches, filters, sorts and pages a library's
-file list in SQL (`lib/store/files.ts`), like Discover's releases, since a
-show library has tens of thousands. The donuts count files, not titles, so
-their parts add up to the whole; hovering, focusing or tapping a piece
-picks it out, on its chart and in its legend. `releaseGroupOf` reads the group from the end of
+the wishlist, Incomplete shows, the imports, the disks. What's ignored is
+listed on Settings (Ignored incomplete shows,
+`app/settings/ignored-shows.tsx`, `ignoredList`), each with Unignore.
+Ignore entries are `{ showId }`.
+Analytics (`app/analytics/`, one page over both libraries; `GET
+/api/analytics`, `lib/store/files.ts`; the rows in `logic.ts`, the boxes in
+`charts.tsx`): three stat tiles (Storage, Movies, Shows), then German ×
+English (the share of files with both, a bar each for movies and episodes,
+the other mixes in its footer), Resolution × Codec (a heatmap of sizes and
+files) and Release groups (the ten largest by size as bars, the rest
+folded into one row, files without a group last; hovering or tapping one
+says its movies, episodes and share in the footer). Which files a title
+has shows on its page (an admin's poster click on Movies or Shows opens
+it). `releaseGroupOf` reads the group from the end of
 a scene-style or Sonarr/Radarr name, from the front of a lowercase scene
 short name ("pl3x-heman.s01e01"), or else from the file's folder (season
 packs); files without one are "n/a".
@@ -666,7 +685,7 @@ browser, a reload on each change): while it's on, the Queue and Settings show ma
 nothing reaches the database), every state they can show. The routes are
 mocked whoever asks, so the Dashboard's Queue, imports and disks are the
 mock's too, and so are `/api/status` (the sidebar's counts) and the
-library scan (`/api/organize/scan`, running); Settings' Ignored shows
+library scan (`/api/organize/scan`, running); Settings' Ignored incomplete shows
 stays real. Keep it current: a change to those pages or their responses
 (`DownloadsResponse`, `OrganizeResponse`, `StatusResponse`,
 `ConfigResponse`, `ReleaseGroupsResponse`, `Preferences`) updates the mock

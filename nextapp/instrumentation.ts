@@ -1,6 +1,6 @@
 // Next's documented hook for "run once when the server starts": open the
 // database (creating or migrating it), run the initial library scan -> tmdb
-// (-> missing, chained inside triggerTmdbSync) chain and, beside it, the
+// chain (each works out the incomplete shows at its end) and, beside it, the
 // xREL releases sync, then schedule each stage's own independent interval
 // (from the *_INTERVAL_HOURS env vars — see lib/sync-manager.ts).
 export async function register() {
@@ -22,12 +22,8 @@ export async function register() {
   triggerLibraryScan()
     .then(() => triggerTmdbSync())
     .catch(() => {}); // already logged by makeTrigger
-  // P2P_GROUPS and SCENE_GROUPS first, so the sync fetches theirs too.
-  const { addEnvGroups } = await import("./lib/release-groups");
-  addEnvGroups()
-    .catch(() => 0)
-    .then(() => triggerReleasesSync())
-    .catch(() => {});
+  // It adds P2P_GROUPS and SCENE_GROUPS first, so it fetches theirs too.
+  triggerReleasesSync().catch(() => {});
 
   applySchedules();
 

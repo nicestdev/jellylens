@@ -18,13 +18,13 @@ import { getPackage, libraryCopies, setPackageMoved, type DownloadPackage } from
 // releaseFileNames). All are written as "<name>.part", hashed on the way
 // and flushed to the disk (fsync); then all read back and hashed again; and
 // only if every hash and size matches renamed. Once all are in, the package
-// is marked moved, and only then its folder deleted. Undo is the same the
-// other way (moveBack). One move at a time, the rest wait. A title the disk
+// is marked moved, and only then its folder deleted. One move at a time,
+// the rest wait. A title the disk
 // has already (its "[tmdbid-N]" folder, whatever it's called) gets the
 // files in that folder. A title the library has already (a movie's video,
 // or one of the episodes a show's package brings, on any disk: ownedFiles)
 // isn't moved as it is: Replace takes what the library had out once the
-// new files are in (no Undo then): one version of everything. State lives on
+// new files are in: one version of everything. State lives on
 // globalThis (see test/state.ts); a restart drops a move half done (its
 // package keeps its files, the copied part stays to be overwritten).
 
@@ -40,7 +40,7 @@ type MovePlan = {
   bytes: number;
   error: string | null;
 };
-// A move in the queue or running (back: an Undo, out of the library):
+// A move in the queue or running:
 // what it's doing, bytes copied and read back (verified) of total each, its
 // speed (bytes a second, over the last second or so); error if it failed
 // (it stays listed until the next try).
@@ -49,7 +49,6 @@ type MovePlan = {
 // when it starts).
 type Move = {
   target: string;
-  back: boolean;
   replace: boolean | undefined;
   copied: number;
   verified: number;
@@ -203,7 +202,6 @@ export async function ownedFiles(pkg: DownloadPackage, plan: MovePlan): Promise<
 // phase it's in (copying, then verifying), so its bar fills once each.
 export type MoveProgress = {
   target: string;
-  back: boolean;
   done: number;
   total: number;
   phase: "copying" | "verifying";
@@ -216,7 +214,6 @@ export function moveOf(pkgId: number): MoveProgress | null {
   if (!m) return null;
   return {
     target: m.target,
-    back: m.back,
     done: m.phase === "copying" ? m.copied : m.verified,
     total: m.total,
     phase: m.phase,
@@ -247,12 +244,11 @@ export async function startMove(pkg: DownloadPackage, target: string, replace?: 
   if (now && now !== current && !now.error) return "It's being moved already.";
   // What's queued for the same disk takes its room first.
   const queued = [...s.moves.values()]
-    .filter((m) => !m.back && !m.error && diskOf(m.target) === to.disk)
+    .filter((m) => !m.error && diskOf(m.target) === to.disk)
     .reduce((n, m) => n + m.total - m.copied, 0);
   if (to.freeBytes !== null && to.freeBytes - queued < plan.bytes) return `Not enough space on ${to.disk}.`;
   s.moves.set(pkg.id, {
     target,
-    back: false,
     replace,
     copied: 0,
     verified: 0,
@@ -266,41 +262,9 @@ export async function startMove(pkg: DownloadPackage, target: string, replace?: 
   return null;
 }
 
-// Queues an Undo of a package's move; an error text if it can't.
-export function startUndo(pkg: DownloadPackage): string | null {
-  const s = state();
-  const current = s.moves.get(pkg.id);
-  if (current && !current.error) return "It's being moved already.";
-  if (!LIBRARY_DIR || !pkg.movedTo || !pkg.movedFiles?.length) return "Nothing to undo.";
-  if (pkg.replaced) return "It replaced what the library had: no Undo.";
-  const titleDir = path.join(LIBRARY_DIR, pkg.movedTo);
-  let total = 0;
-  for (const f of pkg.movedFiles) {
-    try {
-      total += fs.statSync(path.join(titleDir, f.to)).size;
-    } catch {
-      return `${f.to} isn't in the library anymore.`;
-    }
-  }
-  s.moves.set(pkg.id, {
-    target: path.dirname(titleDir),
-    back: true,
-    replace: false,
-    copied: 0,
-    verified: 0,
-    total,
-    phase: "copying",
-    speed: 0,
-    running: false,
-    error: null,
-  });
-  s.chain = s.chain.then(() => runMove(pkg.id));
-  return null;
-}
-
 // Reads a stream through, counting its bytes into move (and its speed);
 // the SHA-256 of what came by.
-async function hashing(read: fs.ReadStream, move: Move, count: "copied" | "verified", into?: fs.WriteStream) {
+async function hashing(read: fs.ReadStream, move: Move, count: "copied" | "verified", into?: Writable) {
   const hash = crypto.createHash("sha256");
   let windowStart = Date.now();
   let windowBytes = 0;
@@ -346,8 +310,28 @@ async function copyChecked(files: { src: string; dest: string; size: number }[],
       const part = `${dest}.part`;
       parts.push({ part, dest, hash: "" });
       const read = fs.createReadStream(src, { highWaterMark: 4 << 20 });
-      parts.at(-1)!.hash = await hashing(read, move, "copied", fs.createWriteStream(part));
-      await flush(part);
+      // Flushed every 128 MB on the way: else the kernel holds gigabytes in
+      // memory, the bar is full long before they're on the disk and the
+      // last flush takes as long as the copy.
+      const fh = await fs.promises.open(part, "w");
+      try {
+        let unsynced = 0;
+        const into = new Writable({
+          write: (chunk: Buffer, _encoding, done) =>
+            (async () => {
+              for (let at = 0; at < chunk.length;) at += (await fh.write(chunk, at)).bytesWritten;
+              unsynced += chunk.length;
+              if (unsynced >= 128 << 20) {
+                await fh.datasync();
+                unsynced = 0;
+              }
+            })().then(() => done(), done),
+        });
+        parts.at(-1)!.hash = await hashing(read, move, "copied", into);
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
       const copied = fs.statSync(part).size;
       if (copied !== size)
         throw new Error(`${path.basename(dest)}: only ${formatBytes(copied)} of ${formatBytes(size)} were copied`);
@@ -374,7 +358,6 @@ async function runMove(pkgId: number) {
   if (!move || !pkg) return void s.moves.delete(pkgId);
   move.running = true;
   try {
-    if (move.back) return await moveBack(pkg, move);
     const plan = movePlan(pkg);
     if (plan.error) throw new Error(plan.error);
     const to = libraryTargets(pkg).find((t) => t.path === move.target);
@@ -419,7 +402,7 @@ async function runMove(pkgId: number) {
   } catch (e) {
     move.running = false;
     move.error = errorText(e);
-    notify(move.back ? "Undo failed" : "Move failed", { description: `${titleOf(pkg)}: ${move.error}`, tone: "error" });
+    notify("Move failed", { description: `${titleOf(pkg)}: ${move.error}`, tone: "error" });
   } finally {
     // Once the queue is through, the library is scanned again (and Jellyfin
     // asked to), so what came in counts as owned right away.
@@ -428,31 +411,6 @@ async function runMove(pkgId: number) {
       s.scanDue = false;
       void import("./rescan").then((m) => m.rescan());
     }
-  }
-}
-
-// Undo: the files back from the library into the package's folder, checked
-// the same way; the package back to Organize; then, only then, the files
-// taken out of the library (and the folders left empty, the title's too
-// unless something else is in it).
-async function moveBack(pkg: DownloadPackage, move: Move) {
-  const titleDir = path.join(LIBRARY_DIR, pkg.movedTo!);
-  const root = packagePath(pkg);
-  const files = pkg.movedFiles ?? [];
-  await copyChecked(
-    files.map((f) => {
-      const src = path.join(titleDir, f.to);
-      return { src, dest: path.join(root, f.from), size: fs.statSync(src).size };
-    }),
-    move,
-  );
-  setPackageMoved(pkg.id, null);
-  state().moves.delete(pkg.id);
-  for (const f of files) {
-    const file = path.join(titleDir, f.to);
-    remove(file, () => fs.rmSync(file, { force: true }));
-    for (let dir = path.dirname(file); dir.startsWith(titleDir); dir = path.dirname(dir))
-      remove(dir, () => fs.rmdirSync(dir), true);
   }
 }
 

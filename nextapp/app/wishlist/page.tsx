@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Inbox, SearchX } from "lucide-react";
+import { Heart, SearchX } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { FacetMenu, FilterChips } from "@/components/filter-menu";
 import { PageTools } from "@/components/page-tools";
@@ -95,7 +95,7 @@ export default function WishlistPage() {
               }
             />
           ) : (
-            <EmptyState icon={Inbox} title="Your wishlist is empty" />
+            <EmptyState icon={Heart} title="Your wishlist is empty" hint="Find movies and shows on Discover." />
           )
         ) : (
           <div className={POSTER_GRID}>

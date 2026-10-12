@@ -2,16 +2,16 @@
 
 import { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { CELL, MUTED_CELL, NOT_ON_PHONE, ROW, TITLE_CELL } from "@/components/library-table";
+import { StatTile } from "@/components/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ReleaseGroups } from "./release-groups";
 import { SlotsMenu } from "./download-slots";
 import { ArchivePasswords } from "./archive-passwords";
 import { IgnoredShows } from "./ignored-shows";
-import { SectionFrame, FRAME_LIST, TableFrame } from "@/components/section-frame";
+import { SectionFrame, FRAME_LIST } from "@/components/section-frame";
 import { Breakable } from "@/components/breakable";
-import { pollDelay, SETTINGS_COLUMNS } from "./logic";
+import { pollDelay } from "./logic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, runSync, jsonRequest } from "@/lib/api-client";
 import { plural, relativeTime } from "@/lib/format";
@@ -31,20 +31,19 @@ import { ErrorAlert } from "@/components/error-alert";
 // Hours; 0 means the automatic schedule is off (manual "Sync" only).
 function intervalLabel(hours: number): string {
   if (hours === 0) return "Off";
-  if (hours === 1) return "Every hour";
-  if (hours === 24) return "Every day";
-  if (hours === 168) return "Every week";
-  if (hours % 24 === 0) return `Every ${hours / 24} days`;
-  return `Every ${hours} hours`;
+  // Always in hours, as the env vars set them ("Every 24 hours").
+  return hours === 1 ? "Every hour" : `Every ${hours} hours`;
 }
 
 function EnvRow({ env, value }: { env: string; value: string | undefined }) {
   return (
-    <div className="flex h-9 items-center justify-between gap-4 px-3 text-sm">
+    <div className="flex h-9 items-center justify-between gap-4 px-3 text-[0.8125rem]">
       <dt className="min-w-0 font-mono text-xs text-muted-foreground">
         <Breakable text={env} separator="_" />
       </dt>
-      <dd className="shrink-0">{value !== undefined ? value || "—" : <Skeleton className="h-4 w-24" />}</dd>
+      <dd className="shrink-0 font-mono text-xs">
+        {value !== undefined ? value || "—" : <Skeleton className="h-4 w-24" />}
+      </dd>
     </div>
   );
 }
@@ -60,7 +59,7 @@ function PrefRow({
 }) {
   return (
     <label className="flex h-11 cursor-pointer items-center gap-3 px-3 transition-colors hover:bg-muted/40">
-      <span className="min-w-0 flex-1 text-sm font-medium">{title}</span>
+      <span className="min-w-0 flex-1 text-[0.8125rem] font-medium">{title}</span>
       {checked !== undefined ? (
         <Switch checked={checked} onCheckedChange={onChange} aria-label={title} />
       ) : (
@@ -70,12 +69,11 @@ function PrefRow({
   );
 }
 
-// The sync stages, a row each: its schedule, when it last ran, and Sync.
+// The sync stages, a card each: when it last ran, its schedule, and Sync.
 const STAGES: { stage: SyncStageName; title: string }[] = [
   { stage: "library", title: "Library" },
   { stage: "tmdb", title: "TMDB" },
   { stage: "releases", title: "xREL" },
-  { stage: "missing", title: "Missing" },
 ];
 
 async function loadSettings() {
@@ -160,59 +158,42 @@ export default function SettingsPage() {
 
       {error ? <ErrorAlert>{error}</ErrorAlert> : null}
 
-      {/* Two columns from xl: what syncs on the left, what's set on the right. */}
-      <div className="mt-6 grid items-start gap-4 xl:grid-cols-[3fr_2fr]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <TableFrame
-            title="Sync"
-            minWidth="min-w-0"
-            columns={[
-              { label: "Source", stretch: true },
-              { label: "Schedule", width: SETTINGS_COLUMNS.middle, phone: false },
-              { label: "Last sync", width: SETTINGS_COLUMNS.lastSync, phone: false },
-              { label: "Sync", hidden: true, width: SETTINGS_COLUMNS.action },
-            ]}
-          >
-            {STAGES.map((st) => {
-              const running = busy === st.stage || Boolean(status?.[st.stage].running);
-              const syncedAt = status?.[st.stage].syncedAt ?? null;
-              const schedule = config ? (
-                intervalLabel(config.intervals[st.stage])
-              ) : (
-                <Skeleton className="inline-block h-4 w-20" />
-              );
-              // While it runs, the spinning Sync button says so.
-              const lastSync = loading ? <Skeleton className="inline-block h-4 w-20" /> : relativeTime(syncedAt);
-              return (
-                <tr key={st.stage} className={ROW}>
-                  {/* On a phone schedule and last sync are a line under the source. */}
-                  <td className={TITLE_CELL}>
-                    <div className="font-medium">{st.title}</div>
-                    <div className="truncate text-xs text-muted-foreground sm:hidden">
-                      {schedule} · {lastSync}
-                    </div>
-                  </td>
-                  <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{schedule}</td>
-                  <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>{lastSync}</td>
-                  <td className={cn(CELL, "py-0 text-right")}>
-                    {/* Just the icon, like the groups' ⋯ below, so the tables'
-                          columns line up. */}
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="align-middle text-muted-foreground"
-                      onClick={() => trigger(st.stage)}
-                      disabled={running}
-                      aria-label={`Sync ${st.title}`}
-                    >
-                      <RefreshCw className={cn(running && "animate-spin")} />
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-          </TableFrame>
+      {/* A card each: when it last synced, its schedule under it, and
+          its Sync (spinning while it runs). One under another on a phone. */}
+      <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-3 sm:gap-6 phone-landscape:grid-cols-3">
+        {STAGES.map((st) => {
+          const running = busy === st.stage || Boolean(status?.[st.stage].running);
+          const syncedAt = status?.[st.stage].syncedAt ?? null;
+          return (
+            <StatTile
+              key={st.stage}
+              label={st.title}
+              value={relativeTime(syncedAt)}
+              muted={!syncedAt}
+              hint={config ? [intervalLabel(config.intervals[st.stage])] : undefined}
+              loading={loading || !config}
+              action={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground"
+                  onClick={() => trigger(st.stage)}
+                  disabled={running}
+                  aria-label={`Sync ${st.title}`}
+                >
+                  <RefreshCw className={cn(running && "animate-spin")} />
+                </Button>
+              }
+            />
+          );
+        })}
+      </div>
 
+      {/* Two columns, half and half like Analytics', from xl and on a phone on
+          its side: the release groups, ignored shows and the environment on
+          the left, what's set here on the right. */}
+      <div className="mt-4 grid items-start gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-2 phone-landscape:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-6">
           <ReleaseGroups
             data={groups}
             onData={(next) => {
@@ -221,28 +202,6 @@ export default function SettingsPage() {
             }}
             onError={setError}
           />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-4">
-          <SectionFrame title="Options">
-            <div className={FRAME_LIST}>
-              <PrefRow
-                title="Releases below 720p"
-                checked={prefs?.showSdReleases}
-                onChange={(checked) => setPref({ showSdReleases: checked })}
-              />
-              <div className="flex h-11 items-center gap-3 px-3">
-                <span className="min-w-0 flex-1 text-sm font-medium">Parallel downloads</span>
-                {config ? (
-                  <SlotsMenu slots={config.downloadSlots} maxSlots={config.maxDownloadSlots} onChange={setSlots} />
-                ) : (
-                  <Skeleton className="h-5 w-16" />
-                )}
-              </div>
-            </div>
-          </SectionFrame>
-
-          <ArchivePasswords passwords={config?.passwords ?? null} save={savePasswords} onError={setError} />
 
           <IgnoredShows onError={setError} />
 
@@ -277,6 +236,28 @@ export default function SettingsPage() {
               <EnvRow env="DOWNLOAD_DIR" value={config?.downloadDir} />
             </dl>
           </SectionFrame>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-4 sm:gap-6">
+          <SectionFrame title="Options">
+            <div className={FRAME_LIST}>
+              <PrefRow
+                title="Releases below 720p"
+                checked={prefs?.showSdReleases}
+                onChange={(checked) => setPref({ showSdReleases: checked })}
+              />
+              <div className="flex h-11 items-center gap-3 px-3">
+                <span className="min-w-0 flex-1 text-[0.8125rem] font-medium">Parallel downloads</span>
+                {config ? (
+                  <SlotsMenu slots={config.downloadSlots} maxSlots={config.maxDownloadSlots} onChange={setSlots} />
+                ) : (
+                  <Skeleton className="h-5 w-16" />
+                )}
+              </div>
+            </div>
+          </SectionFrame>
+
+          <ArchivePasswords passwords={config?.passwords ?? null} save={savePasswords} onError={setError} />
         </div>
       </div>
     </main>

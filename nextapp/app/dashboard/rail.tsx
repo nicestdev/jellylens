@@ -6,12 +6,12 @@ import { PosterCard } from "@/components/poster-card";
 import { SectionFrame, TableFrame } from "@/components/section-frame";
 import { tmdbImage } from "@/lib/api-client";
 import type { OrganizeDisk, OrganizeMoved, RequestItem } from "@/lib/api-types";
-import { displayName, errorLine, type Section } from "@/app/queue/logic";
-import { targetOf } from "@/app/queue/organize-logic";
+import { displayName, type Section } from "@/app/queue/logic";
 import { formatBytes, relativeTime } from "@/lib/format";
 import { titlePath } from "@/lib/title-path";
 import { cn } from "@/lib/utils";
-import { diskLow, freeShare, totalFree } from "./logic";
+import { diskLow, freeShare, queueRows, totalFree, type QueueTone } from "./logic";
+import { Dots } from "@/components/dot";
 
 // The Dashboard's narrow column: the library's disks, the wishlist and
 // what came in last. Each a table headed with its section, as small as a
@@ -29,7 +29,8 @@ function Empty({ text, span }: { text: string; span: number }) {
   );
 }
 
-const diskColumns: Column[] = [{ label: "Disks" }, { label: "Free", align: "right" }];
+// Free says the heading already ("Disks · 4.12 TB free").
+const diskColumns: Column[] = [{ label: "Disks" }, { label: "Free", align: "right", hidden: true }];
 
 // A disk: its name over a bar of what's used, what's free; under 5 % free
 // both red, the bar dimmed like the episode dots.
@@ -46,7 +47,7 @@ export function DisksTable({ disks, loading }: { disks: OrganizeDisk[]; loading:
         disks.map((d) => (
           <tr key={d.disk} className={cn(ROW, "h-auto")}>
             <td className={cn(TITLE_CELL, "py-2")}>
-              <div className="font-medium">{d.disk}</div>
+              <div className="font-mono text-xs font-medium">{d.disk}</div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-track">
                 <div
                   className={cn("h-full rounded-full", diskLow(d) ? "bg-destructive/60" : "bg-muted-foreground/60")}
@@ -93,59 +94,48 @@ export function WishlistTable({ items, total }: { items: RequestItem[]; total: n
 // What was moved into the library in the last 7 days, as posters (three
 // across on a phone): the title, its disk and when; the release name on
 // hover. Each opens its title page.
-export function ImportsTable({ moved, loading }: { moved: OrganizeMoved[]; loading: boolean }) {
+// Only with something in it.
+export function ImportsTable({ moved }: { moved: OrganizeMoved[] }) {
+  if (!moved.length) return null;
   return (
-    <SectionFrame title="Last imports" count={loading && !moved.length ? undefined : moved.length}>
-      {moved.length ? (
-        <div className="-mx-3 grid grid-cols-3 gap-3 border-t border-row p-3 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))]">
-          {moved.map((m) => (
-            <div key={m.id} className="min-w-0">
-              <PosterCard
-                href={m.media ? titlePath(`${m.media.type}:${m.media.tmdbId}`) : undefined}
-                imageSrc={tmdbImage(m.media?.posterPath, "w185")}
-                title={m.media?.title ?? m.name}
-                meta={`${m.movedTo.split("/")[0]} · ${relativeTime(m.movedAt)}`}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="-mx-3 border-t border-row px-3 py-2 text-sm text-muted-foreground">
-          {loading ? "Loading" : "Nothing in the last 7 days"}
-        </p>
-      )}
+    <SectionFrame title="Last imports" count={moved.length}>
+      <div className="-mx-3 grid grid-cols-3 gap-3 border-t border-row p-3 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))]">
+        {moved.map((m) => (
+          <div key={m.id} className="min-w-0">
+            <PosterCard
+              href={m.media ? titlePath(`${m.media.type}:${m.media.tmdbId}`) : undefined}
+              imageSrc={tmdbImage(m.media?.posterPath, "w185")}
+              title={m.media?.title ?? m.name}
+              meta={[relativeTime(m.movedAt)]}
+            />
+          </div>
+        ))}
+      </div>
     </SectionFrame>
   );
 }
 
-const queueColumns: Column[] = [{ label: "Queue" }, { label: "", align: "right" }];
+// The Queue in one table, simplified (queueRows): each title and where
+// it's at, a click opens the Queue. running: the downloads' speed and time
+// left, on the heading's right.
+const TONE: Record<QueueTone, string> = {
+  error: "text-destructive",
+  warning: "text-warning",
+  success: "text-success",
+  info: "text-info",
+};
 
-// The Queue's sections that need a hand (Needs attention, then Ready to
-// organize) in one table, simplified: each title and a word on it, a
-// click opens the Queue. Why it failed (red), Waiting for a start, or
-// where it goes: the disk.
-export function QueueTable({ parts }: { parts: Section[] }) {
-  const rows = parts.flatMap((part) => {
-    const ready = part.title === "Ready to organize";
-    return [
-      ...part.packages.map((p) => ({ key: `p${p.id}`, pkg: p, error: p.error ?? "", note: "" })),
-      // One being moved (or waiting to be) needs nothing more.
-      ...part.items
-        .filter((i) => !ready || !i.move)
-        .map((i) => ({
-          key: `i${i.id}`,
-          pkg: i,
-          error: ready ? null : i.error || i.move?.error || "",
-          note: targetOf(i)?.disk ?? "—",
-        })),
-      ...part.moved.map((m) => ({ key: `m${m.id}`, pkg: m, error: m.move?.error ?? "", note: "" })),
-      ...part.pending.map((p) => ({ key: `p${p.id}`, pkg: p, error: null, note: "Waiting" })),
-    ];
-  });
+export function QueueTable({ parts, running }: { parts: Section[]; running: string[] }) {
+  const rows = queueRows(parts);
   if (!rows.length) return null;
   return (
-    <TableFrame title="Queue" count={rows.length} columns={queueColumns} minWidth="min-w-0">
-      {rows.map(({ key, pkg, error, note }) => {
+    <TableFrame
+      title="Queue"
+      count={rows.length}
+      columns={[{ label: "Queue" }, { label: <Dots parts={running} spaced />, align: "right", width: "w-1/2" }]}
+      minWidth="min-w-0"
+    >
+      {rows.map(({ key, pkg, line, tone }) => {
         const name = displayName(pkg);
         return (
           <tr key={key} className={ROW}>
@@ -154,8 +144,14 @@ export function QueueTable({ parts }: { parts: Section[] }) {
                 {withYear(name.title, name.year)}
               </Link>
             </td>
-            <td className={cn(CELL, "text-right", error === null ? "text-muted-foreground" : "text-destructive")}>
-              {error === null ? note : errorLine(error)}
+            <td
+              className={cn(
+                CELL,
+                "max-w-0 truncate text-right font-mono text-xs",
+                tone ? TONE[tone] : "text-muted-foreground",
+              )}
+            >
+              <Dots parts={line} spaced />
             </td>
           </tr>
         );

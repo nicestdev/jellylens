@@ -14,7 +14,6 @@ function hours(name: string, fallback: number): number {
 }
 export const LIBRARY_SCAN_INTERVAL_HOURS = hours("LIBRARY_SCAN_INTERVAL_HOURS", 6);
 export const TMDB_SYNC_INTERVAL_HOURS = hours("TMDB_SYNC_INTERVAL_HOURS", 24);
-export const MISSING_RECHECK_INTERVAL_HOURS = hours("MISSING_RECHECK_INTERVAL_HOURS", 24);
 export const XREL_SYNC_INTERVAL_HOURS = hours("XREL_SYNC_INTERVAL_HOURS", 6);
 
 // Sign-in with Jellyfin accounts; on unless set to "false" (or 0/no/off).

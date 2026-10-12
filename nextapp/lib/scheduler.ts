@@ -25,7 +25,6 @@ const globalForTriggers = globalThis as unknown as { __jellylensTriggers?: Recor
 const SYNC_LABEL: Record<string, string> = {
   "library-scan": "Library scan",
   "tmdb-sync": "TMDB sync",
-  "missing-recheck": "Missing recheck",
   "releases-sync": "Releases sync",
 };
 

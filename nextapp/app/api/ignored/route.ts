@@ -12,22 +12,21 @@ async function parseEntry(req: Request): Promise<IgnoreEntry | null> {
   } catch {
     return null;
   }
-  const { showId, season } = body;
+  const { showId } = body;
   if (typeof showId !== "string" || !showId) return null;
-  if (season !== null && !Number.isInteger(season)) return null;
-  return { showId, season: season as number | null };
+  return { showId };
 }
 
 export async function POST(req: Request) {
   const entry = await parseEntry(req);
-  if (!entry) return Response.json({ error: "Expected { showId, season }." }, { status: 400 });
+  if (!entry) return Response.json({ error: "Expected { showId }." }, { status: 400 });
   addIgnored(entry);
   return Response.json({ items: listIgnored() } satisfies IgnoredResponse);
 }
 
 export async function DELETE(req: Request) {
   const entry = await parseEntry(req);
-  if (!entry) return Response.json({ error: "Expected { showId, season }." }, { status: 400 });
+  if (!entry) return Response.json({ error: "Expected { showId }." }, { status: 400 });
   removeIgnored(entry);
   return Response.json({ items: listIgnored() } satisfies IgnoredResponse);
 }

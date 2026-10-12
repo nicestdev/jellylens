@@ -184,3 +184,12 @@ export async function findSceneGroup(name: string): Promise<string | null> {
 export async function fetchSceneReleases(name: string): Promise<Release[]> {
   return (await searchScene(name, RESERVE)).map(toSceneRelease);
 }
+
+// The page of the movie or show on xREL that carries this IMDb id, or null
+// if xREL has none. For the title page's xREL link (app/api/xrel-link).
+export async function findTitleLink(imdbId: string): Promise<string | null> {
+  const data = await throttledSearch(() =>
+    call<{ results?: { link_href: string; uris?: string[] }[] }>("/search/ext_info.json", { q: imdbId }),
+  );
+  return data.results?.find((r) => r.uris?.includes("imdb:" + imdbId))?.link_href ?? null;
+}

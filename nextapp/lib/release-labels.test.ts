@@ -12,11 +12,14 @@ import {
   titleMeta,
 } from "./release-labels";
 
+// The values as the poster shows them, with its spaced dots.
+const shownMeta = (parts: unknown[]) => parts.filter(Boolean).join(" · ");
+
 describe("titleMeta", () => {
   it("shows the year and the number of releases, once that's known", () => {
-    expect(titleMeta({ year: 2021, releases: 3 })).toBe("2021 · 3 releases");
-    expect(titleMeta({ year: null, releases: 1 })).toBe("1 release");
-    expect(titleMeta({ year: 2021 })).toBe("2021");
+    expect(shownMeta(titleMeta({ year: 2021, releases: 3 }))).toBe("2021 · 3 releases");
+    expect(shownMeta(titleMeta({ year: null, releases: 1 }))).toBe("1 release");
+    expect(shownMeta(titleMeta({ year: 2021 }))).toBe("2021");
   });
 });
 
