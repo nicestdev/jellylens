@@ -62,10 +62,10 @@ export const STATUS_LABEL: Partial<Record<DownloadPackageItem["status"], string>
 export const releaseName = (name: string) => name.replace(/\s+-\s+[^.]+$/, "").trim();
 
 // The title shown: TMDB's, else the one in the release name.
-export function displayName(pkg: Pick<DownloadPackageItem, "media" | "name">): { title: string; year: number | null } {
-  if (pkg.media) return { title: pkg.media.title, year: pkg.media.year };
+export function displayName(pkg: Pick<DownloadPackageItem, "media" | "name">): string {
+  if (pkg.media) return pkg.media.title;
   const parsed = parseReleaseName(releaseName(pkg.name).replace(/\.S\d{1,2}(?:[+-]S?\d{1,2})+(?=\.)/i, ".S01"));
-  return { title: parsed.title || pkg.name, year: parsed.year };
+  return parsed.title || pkg.name;
 }
 
 // The Stats above the list: the speed now, what's left to download and

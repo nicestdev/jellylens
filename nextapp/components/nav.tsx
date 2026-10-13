@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { ChartPie, Compass, Film, Heart, Layers, Lock, Rocket, Settings, Tv, type LucideIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { SearchIcon } from "@/components/design-icons";
-import { setPageActionsSlot, setPageToolsSlot, usePageTools } from "@/components/page-tools";
+import { setPageActionsSlot } from "@/components/page-tools";
 import { DevTools, MobileDevTools } from "@/components/dev-tools";
 import { COUNTS_STALE, DOWNLOADS_CHANGED, REQUESTS_CHANGED, apiFetch, loadDownloads } from "@/lib/api-client";
 import type { DownloadsResponse, RequestsResponse, StatusResponse } from "@/lib/api-types";
@@ -164,7 +163,7 @@ export function Sidebar({ user, canSignOut }: { user: SessionUser; canSignOut: b
                     <l.icon className={NAV_ICON} />
                     {l.label}
                   </span>
-                  {count ? <span className="font-mono text-xs text-muted-foreground">{count}</span> : null}
+                  {count ? <span className="text-xs text-muted-foreground">{count}</span> : null}
                 </Link>
               );
             })}
@@ -186,27 +185,21 @@ export function Sidebar({ user, canSignOut }: { user: SessionUser; canSignOut: b
 const MOBILE_ITEM =
   "py-1 text-left text-xl font-semibold tracking-tight text-muted-foreground transition-colors hover:text-foreground";
 
-// Below md: a slim bar with the logo, a page's search button and a
+// Below md: a slim bar with the logo, a page's ⋯ (the Queue's) and a
 // two-line button that morphs into an ×. The two lines open a full-screen
-// panel with large links that fade in one after another; the search button
-// folds the page's search, filters and sort down from under the bar
-// (`PageTools`), like Apple's search.
+// panel with large links that fade in one after another.
 export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut: boolean }) {
   // The panel has room for every link in one list.
   const links = sectionsFor(user).flatMap((s) => s.links);
   const pathname = usePathname();
-  const tools = usePageTools();
   // A nav page's name, or a title page's "Releases", is here beside the
   // logo instead of a heading on the page.
   const title = pathname.startsWith("/title/") ? "Releases" : links.find((l) => l.href === pathname)?.label;
-  // What's open, and the page it was opened on. Navigating anywhere (link,
-  // back button) makes it stale, which closes it without an effect.
-  const [openOn, setOpenOn] = useState<{ what: "menu" | "search"; path: string } | null>(null);
-  const what = openOn?.path === pathname ? openOn.what : null;
-  const menuOpen = what === "menu";
-  // Only while the page has tools: a page without them closes it.
-  const searchOpen = what === "search" && tools.present;
-  const open = menuOpen || searchOpen;
+  // The page the menu was opened on. Navigating anywhere (link, back
+  // button) makes it stale, which closes it without an effect.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
+  const menuOpen = open;
   const close = () => setOpenOn(null);
   // The panels are portaled to <body>, out of the header's stacking. The
   // portal target only exists on the client.
@@ -229,14 +222,6 @@ export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut:
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  // Rendered at once, so the field can take focus in the tap itself: iOS
-  // only brings up the keyboard for a focus there.
-  const openSearch = (e: React.MouseEvent<HTMLButtonElement>) => {
-    flushSync(() => setOpenOn({ what: "search", path: pathname }));
-    const panel = document.getElementById(e.currentTarget.getAttribute("aria-controls") ?? "");
-    panel?.querySelector("input")?.focus({ preventScroll: true });
-  };
 
   // Starts at the very top, behind the bar; the links clear it with top
   // padding.
@@ -283,41 +268,6 @@ export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut:
     </div>
   );
 
-  // Under the bar, over the page dimmed behind it; a tap on the page or
-  // Enter in the search closes it, the page then showing what was found.
-  const search = (
-    <>
-      <div
-        aria-hidden
-        onClick={close}
-        className={cn(
-          "fixed inset-0 top-12 z-20 bg-background/70 transition-[opacity,visibility] duration-300 md:hidden",
-          searchOpen ? "visible opacity-100" : "invisible opacity-0",
-        )}
-      />
-      <div
-        id="mobile-search"
-        inert={!searchOpen}
-        onKeyDown={(e) => e.key === "Enter" && e.target instanceof HTMLInputElement && close()}
-        className={cn(
-          "fixed inset-x-0 top-12 z-30 max-h-[calc(100dvh-3rem)] overflow-y-auto border-b bg-sidebar pt-2 pr-[calc(1rem+env(safe-area-inset-right))] pb-4 pl-[calc(1rem+env(safe-area-inset-left))] duration-300 ease-out md:hidden",
-          // Visible at once on the way in, so the field takes focus in the tap.
-          searchOpen
-            ? "visible translate-y-0 opacity-100 transition-[opacity,transform]"
-            : "invisible -translate-y-2 opacity-0 transition-[opacity,visibility,transform]",
-          // The page's own spacing above its toolbar isn't needed here.
-          "[&>*:first-child]:mt-0",
-          // Under the search, the filters share a line however wide what's
-          // picked is, so the sort never wraps; a picked one shows only its
-          // value ("English", not "Audio: English"), as its chip does.
-          "[&_[data-facet]]:min-w-0 [&_[data-facet]]:flex-[1_1_0] [&_[data-facet]]:justify-between",
-          "[&_[data-facet][data-picked]_[data-facet-label]]:hidden",
-        )}
-        ref={setPageToolsSlot}
-      />
-    </>
-  );
-
   return (
     <header
       // Solid, not see-through: iOS 26 Safari tints the status bar above it
@@ -359,31 +309,12 @@ export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut:
             open ? "invisible opacity-0" : "visible opacity-100",
           )}
         />
-        {tools.present ? (
-          <button
-            type="button"
-            aria-label="Search and filter"
-            aria-expanded={searchOpen}
-            aria-controls="mobile-search"
-            inert={open}
-            onClick={openSearch}
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "icon" }),
-              "relative transition-[opacity,visibility] duration-300",
-              open ? "invisible opacity-0" : "visible opacity-100",
-            )}
-          >
-            <SearchIcon className="size-[1.125rem]" />
-            {/* The page shows less than it has: a search or filter is on. */}
-            {tools.active ? <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" /> : null}
-          </button>
-        ) : null}
         <button
           type="button"
-          aria-label={open ? (searchOpen ? "Close search" : "Close menu") : "Open menu"}
+          aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
-          aria-controls={searchOpen ? "mobile-search" : "mobile-menu"}
-          onClick={() => (open ? close() : setOpenOn({ what: "menu", path: pathname }))}
+          aria-controls="mobile-menu"
+          onClick={() => (open ? close() : setOpenOn(pathname))}
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "relative aria-expanded:bg-transparent")}
         >
           {/* Two bars that slide to the middle and cross into an ×, growing so
@@ -403,7 +334,6 @@ export function MobileBar({ user, canSignOut }: { user: SessionUser; canSignOut:
         </button>
       </div>
       {mounted ? createPortal(menu, document.body) : null}
-      {mounted ? createPortal(search, document.body) : null}
     </header>
   );
 }

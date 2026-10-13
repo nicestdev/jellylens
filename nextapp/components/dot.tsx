@@ -6,20 +6,21 @@ export const Dot = ({ className }: { className?: string }) => (
   <span className={className ? `opacity-50 ${className}` : "opacity-50"}>·</span>
 );
 
-// Values with a Dot between, the empty ones left out: tight in Mono data
-// ("Loading·54 %"), spaced in Sans and in a heading ("2001 · 9 seasons").
-// The logic hands out the values; only here do they get their dots.
-export function Dots({ parts, spaced }: { parts: ReactNode[]; spaced?: boolean }) {
+// Values with a Dot between, a space each side, the empty ones left out
+// ("2001 · 9 seasons"); tight: none, for a release's attributes
+// ("VECTOR·4K·x265·DL"). The logic hands out the values; only here do they
+// get their dots.
+export function Dots({ parts, tight }: { parts: ReactNode[]; tight?: boolean }) {
   return parts.filter(Boolean).map((p, i) => (
     <Fragment key={i}>
       {i ? (
-        spaced ? (
+        tight ? (
+          <Dot />
+        ) : (
           <>
             {" "}
             <Dot />{" "}
           </>
-        ) : (
-          <Dot />
         )
       ) : null}
       {p}
@@ -28,5 +29,4 @@ export function Dots({ parts, spaced }: { parts: ReactNode[]; spaced?: boolean }
 }
 
 // A value that's either one piece or values to show with Dots.
-export const shown = (node: ReactNode | ReactNode[], spaced?: boolean) =>
-  Array.isArray(node) ? <Dots parts={node} spaced={spaced} /> : node;
+export const shown = (node: ReactNode | ReactNode[]) => (Array.isArray(node) ? <Dots parts={node} /> : node);

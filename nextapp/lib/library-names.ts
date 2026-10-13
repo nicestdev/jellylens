@@ -37,6 +37,9 @@ export function libraryFolderName(media: { title: string; year: number | null; t
 // The files of a download that go into the library: videos and
 // subtitles, not samples.
 const MEDIA = /\.(mkv|mp4|m4v|avi|ts|m2ts|wmv|mov|srt|ass|ssa|sub|idx|sup)$/i;
+// A file as lists show it: without its video or subtitle ending, and only
+// that ("….x265-WAYNE" is a release name, not an ending).
+export const withoutExtension = (name: string) => name.replace(MEDIA, "");
 export const isLibraryFile = (rel: string) => MEDIA.test(rel) && !/(^|[/._ -])sample([/._ -]|$)/i.test(rel);
 
 // A movie's files under the release's name instead when its video's name

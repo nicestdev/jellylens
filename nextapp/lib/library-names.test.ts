@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { isLibraryFile, isVideo, libraryFolderName, releaseFileNames, seasonFolder, seasonOf } from "./library-names";
+import {
+  isLibraryFile,
+  isVideo,
+  libraryFolderName,
+  releaseFileNames,
+  seasonFolder,
+  seasonOf,
+  withoutExtension,
+} from "./library-names";
 
 const movie = (title: string, year: number | null = 2001) => ({ title, year, tmdbId: 1 });
 
@@ -63,5 +71,13 @@ describe("files and seasons", () => {
     expect(seasonOf("Folge 3.mkv", "Show.S01.German")).toBe(1);
     expect(seasonOf("Folge 3.mkv", "Show.German")).toBeNull();
     expect(seasonFolder(3)).toBe("Season 03");
+  });
+});
+
+describe("withoutExtension", () => {
+  it("cuts a video's or subtitle's ending, not the last part of a release name", () => {
+    expect(withoutExtension("Heat.1995.German.DL.1080p.x265-WAYNE.mkv")).toBe("Heat.1995.German.DL.1080p.x265-WAYNE");
+    expect(withoutExtension("Heat.1995.de.SRT")).toBe("Heat.1995.de");
+    expect(withoutExtension("Heat.1995.German.DL.1080p.x265-WAYNE")).toBe("Heat.1995.German.DL.1080p.x265-WAYNE");
   });
 });

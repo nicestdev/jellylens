@@ -25,12 +25,12 @@ export function SectionFrame({
   return (
     <section aria-label={title} className={cn("min-w-0 overflow-hidden rounded-lg border bg-card", className)}>
       <div className="flex min-h-9 items-center gap-4 border-b px-3">
-        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium">
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
           {title}
           {count !== undefined ? (
             <span className="text-[0.8125rem] font-normal text-muted-foreground">
               {" "}
-              <Dot /> {shown(count, true)}
+              <Dot /> {shown(count)}
             </span>
           ) : null}
         </h2>
@@ -49,7 +49,7 @@ export const FRAME_LIST = "-mx-3 divide-y divide-row border-t border-row";
 // rest): one header row, the section's heading with its count lighter in
 // place of the first column's name ("Running · 2"), the other columns'
 // names beside it. footer: under the table, edge to edge (an AddRow).
-// open: the heading folds the rows away and back (a chevron after it),
+// open: the heading folds the rows away and back (a chevron before it),
 // onToggle on a click; folded, the other columns' names go too, only the
 // heading is left.
 export function TableFrame({
@@ -82,7 +82,7 @@ export function TableFrame({
       {count !== undefined ? (
         <span className="text-[0.8125rem] font-normal text-muted-foreground">
           {" "}
-          <Dot /> {shown(count, true)}
+          <Dot /> {shown(count)}
         </span>
       ) : null}
     </>
@@ -92,10 +92,10 @@ export function TableFrame({
       type="button"
       aria-expanded={open}
       onClick={onToggle}
-      className="inline-flex cursor-pointer items-center gap-1 text-foreground outline-none"
+      className="flex w-fit cursor-pointer items-center gap-1 text-foreground outline-none"
     >
-      {label}
       <ChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")} />
+      {label}
     </button>
   ) : (
     <span className="text-foreground">{label}</span>

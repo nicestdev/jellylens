@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_ENABLED } from "@/lib/env";
-import { SESSION_COOKIE, activeUser } from "@/lib/session";
+import { DEV_NON_ADMIN_COOKIE } from "@/lib/dev-cookie";
+import { LOCAL_USER, SESSION_COOKIE, activeUser } from "@/lib/session";
 
-// The Dashboard, the Queue, Analytics and Settings, plus the releases and
+// The Dashboard, the Queue, Analytics and Settings, plus a release's page and
 // everything that syncs or ignores, are admin only; everyone else gets Movies, Shows, Discover and their own Wishlist.
 const ADMIN_ONLY = [
   "/dashboard",
@@ -44,17 +45,21 @@ export async function proxy(req: NextRequest) {
     return Response.json({ error: "Cross-site request blocked." }, { status: 403 });
   }
 
-  if (!AUTH_ENABLED || under(pathname, PUBLIC)) return NextResponse.next();
+  // In `next dev` the Dev section can show the app as a non-admin, sign-in off too.
+  const nonAdmin = process.env.NODE_ENV === "development" && req.cookies.get(DEV_NON_ADMIN_COOKIE)?.value === "1";
+  if ((!AUTH_ENABLED && !nonAdmin) || under(pathname, PUBLIC)) return NextResponse.next();
 
   const api = pathname.startsWith("/api/");
-  const user = await activeUser(req.cookies.get(SESSION_COOKIE)?.value);
+  const found = AUTH_ENABLED ? await activeUser(req.cookies.get(SESSION_COOKIE)?.value) : LOCAL_USER;
+  const user = found && nonAdmin ? { ...found, admin: false } : found;
   if (!user) {
     if (api) return Response.json({ error: "Not signed in." }, { status: 401 });
     const url = new URL("/login", req.url);
     if (pathname !== "/") url.searchParams.set("next", pathname + search);
     return NextResponse.redirect(url);
   }
-  if (!user.admin && under(pathname, ADMIN_ONLY)) {
+  // The release list itself (Discover) is for everyone; its titles' pages aren't.
+  if (!user.admin && under(pathname, ADMIN_ONLY) && pathname !== "/api/releases") {
     if (api) return Response.json({ error: "Only Jellyfin administrators can do that." }, { status: 403 });
     return NextResponse.redirect(new URL("/movies", req.url));
   }

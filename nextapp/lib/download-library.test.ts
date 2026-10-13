@@ -111,7 +111,12 @@ describe("libraryOf", () => {
     ]);
     expect(library).toEqual({
       old: ["nvme01/shows/T/Silo.S01E01.Pilot.720p-OLD.mkv", "nvme01/shows/T/Silo.S01E02-E04.720p-OLD.mkv"],
-      new: ["Season 01/S01E01", "Season 01/S01E02-E03", "Season 01/S01E04-E05", "Season 01/S01E05"],
+      new: [
+        "Season 01/Silo.S01E01.German.1080p-GRP",
+        "Season 01/Silo.S01E02-E03.German.1080p-GRP",
+        "Season 01/Silo.S01E04-E05.German.1080p-GRP",
+        "Season 01/Silo.S01E05.German.1080p-GRP",
+      ],
       exact: false,
       skip: 3,
       choices: ["replace"],
@@ -126,7 +131,7 @@ describe("libraryOf", () => {
     mine(2);
     const some = pkg("Silo.S01.German.1080p-GRP", ["Silo1080S01E01.rar", "Silo1080S01E02.rar", "Silo1080S01E03.rar"]);
     expect(libraryOf(some.pkg, some.files).library).toMatchObject({
-      new: ["Season 01/S01E03"],
+      new: ["Season 01/Silo.S01E03.German.1080p-GRP"],
       exact: true,
       skip: 2,
       choices: ["skip"],

@@ -32,7 +32,7 @@ export const NOT_ON_PHONE = "max-sm:hidden";
 // 12px a side.
 export const CELL = "px-3 py-2 whitespace-nowrap";
 export const MUTED_CELL = cn(CELL, "text-muted-foreground");
-export const NUMBER_CELL = cn(CELL, "text-right font-mono text-xs text-sub-foreground");
+export const NUMBER_CELL = cn(CELL, "text-right text-sub-foreground tabular-nums");
 // The stretched first cell: max-w-0 lets it truncate instead of growing.
 export const TITLE_CELL = cn(CELL, "max-w-0 truncate");
 // A row's ⋯ menu: from sm up in a column of its own at the row's end,
@@ -73,7 +73,7 @@ export function DataTable({
     <div className={cn("relative overflow-x-auto overflow-y-hidden", flat ? "-mx-3" : "rounded-lg border bg-table")}>
       <table
         className={cn(
-          "w-full border-collapse text-[0.8125rem]",
+          "w-full border-collapse text-sm",
           fixed ? "table-fixed" : "",
           minWidth ??
             (fixed ? (fits ? "sm:min-w-[48rem]" : "min-w-[48rem]") : fits ? "sm:min-w-[40rem]" : "min-w-[40rem]"),
@@ -84,9 +84,7 @@ export function DataTable({
             nothing rather than hidden, since a fixed table takes its column
             widths from it. The first is the section's heading ("Needs attention · 3"). */}
         <thead className="max-sm:[&_th:not(:first-child)]:h-0 max-sm:[&_th:not(:first-child)]:py-0 max-sm:[&_th:not(:first-child)]:text-[0px] max-sm:[&_th:not(:first-child)]:leading-[0]">
-          <tr
-            className={cn("h-9 border-b text-left font-mono text-[0.8125rem] text-sub-foreground", !flat && "bg-card")}
-          >
+          <tr className={cn("h-9 border-b text-left text-sm text-sub-foreground", !flat && "bg-card")}>
             {columns.map((c, i) => (
               <th
                 key={i}

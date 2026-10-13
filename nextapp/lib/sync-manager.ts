@@ -66,7 +66,7 @@ export function applySchedules() {
   setSchedule("releases-sync", XREL_SYNC_INTERVAL_HOURS, triggerReleasesSync);
 }
 
-// A stage started by hand (Settings' Sync, the Queue's Rescan), in the
+// A stage started by hand (Settings' Sync), in the
 // background; no note once it's done (you asked for it and see it run), a
 // failure has its own (makeTrigger's). fresh: not joining a run that's
 // under way (Trigger's fresh).

@@ -24,7 +24,7 @@ function libraryItem(entry: LibraryEntry | undefined) {
 
 // GET /api/releases?q=&type=movie|tv&group=&sort=date|title&dir=&offset=
 // The favorite groups' releases as one tile per movie or show, for the
-// Discover's releases; admin only (see proxy.ts). Words match a release name or
+// Discover's releases, for everyone (its <key> page is admin only, see proxy.ts). Words match a release name or
 // the checked title; facet params can repeat (any of them matches). The
 // filter values are over everything, so the menu doesn't shrink as you
 // narrow it down.

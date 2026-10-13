@@ -48,15 +48,6 @@ type Kind = "movie" | "tv";
 type ScanFile = { rel: string; name: string; folder: string; disk: string; size: number; mtime: number };
 type TitleFolder = { kind: Kind; tmdbId: string; name: string; year: number | null; disk: string; files: ScanFile[] };
 
-// How far a scan is, for the Queue's Rescan library: listing the disks, then probing
-// new files (done of total), then asking TMDB about new titles.
-type ScanProgress = { phase: "listing" | "probing" | "tmdb" | "saving"; done: number; total: number };
-const g = globalThis as unknown as { __jellylensScanProgress?: ScanProgress | null };
-export const scanProgress = () => g.__jellylensScanProgress ?? null;
-const progress = (p: ScanProgress | null) => {
-  g.__jellylensScanProgress = p;
-};
-
 const readDir = (dir: string) => fs.readdir(dir, { withFileTypes: true }).catch(() => []);
 
 // Every video under dir, extras and samples left out.
@@ -125,8 +116,6 @@ async function probeAll(files: ScanFile[]): Promise<Map<string, Probe>> {
     if (s && s.size === f.size && s.mtime === f.mtime) result.set(f.rel, s.probe);
     else todo.push(f);
   }
-  let done = 0;
-  progress({ phase: "probing", done, total: todo.length });
   await mapWithConcurrency(todo, PROBES_AT_ONCE, async (f) => {
     const probe = await ffprobe(path.join(LIBRARY_DIR, f.rel)).catch((e) => {
       console.error(`[library-scan] ffprobe failed for ${f.rel}:`, (e as Error).message);
@@ -134,15 +123,13 @@ async function probeAll(files: ScanFile[]): Promise<Map<string, Probe>> {
     });
     setProbe(f.rel, { size: f.size, mtime: f.mtime, probe });
     result.set(f.rel, probe);
-    progress({ phase: "probing", done: ++done, total: todo.length });
   });
   pruneProbes(new Set(files.map((f) => f.rel)));
   return result;
 }
 
 // Details of the titles TMDB hasn't been asked about yet (all of them for
-// the TMDB sync's refresh, which leaves the scan's progress alone); without
-// a TMDB key, none. How many requests failed.
+// the TMDB sync's refresh); without a TMDB key, none. How many requests failed.
 async function fetchDetails(
   wanted: { kind: Kind; tmdbId: string }[],
   tmdb: { apiKey: string; language: string } | null,
@@ -153,9 +140,6 @@ async function fetchDetails(
   // A title on several disks is asked about once.
   const unique = [...new Map(wanted.map((t) => [`${t.kind}:${t.tmdbId}`, t])).entries()];
   const todo = unique.filter(([key]) => refresh || !known.has(key)).map(([, t]) => t);
-  let done = 0;
-  const report = (n: number) => !refresh && progress({ phase: "tmdb", done: n, total: todo.length });
-  report(done);
   let failed = 0;
   const found = await mapWithConcurrency(todo, TMDB_AT_ONCE, async (t) => {
     try {
@@ -166,8 +150,6 @@ async function fetchDetails(
     } catch {
       failed++;
       return null;
-    } finally {
-      report(++done);
     }
   });
   setDetails(found.filter((f) => f !== null));
@@ -309,34 +291,28 @@ function buildShows(titles: TitleFolder[], probes: Map<string, Probe>, details: 
 
 export async function scanLibrary(tmdb: { apiKey: string; language: string } | null) {
   if (!LIBRARY_DIR) throw new Error("Set LIBRARY_DIR to the library's disks (each with movies/ and shows/).");
-  try {
-    progress({ phase: "listing", done: 0, total: 0 });
-    const { titles, untagged } = await listTitles();
-    if (!titles.length) throw new Error(`No title folders ("Name (Year) [tmdbid-N]") in ${LIBRARY_DIR}.`);
-    const probes = await probeAll(titles.flatMap((t) => t.files));
-    const tmdbFailed = await fetchDetails(titles, tmdb);
+  const { titles, untagged } = await listTitles();
+  if (!titles.length) throw new Error(`No title folders ("Name (Year) [tmdbid-N]") in ${LIBRARY_DIR}.`);
+  const probes = await probeAll(titles.flatMap((t) => t.files));
+  const tmdbFailed = await fetchDetails(titles, tmdb);
 
-    progress({ phase: "saving", done: 0, total: 0 });
-    const details = getDetails();
-    const { movies, items: movieItems } = buildMovies(titles, probes, details);
-    const { shows, episodes, items: episodeItems, unnamed } = buildShows(titles, probes, details);
-    const syncedAt = new Date().toISOString();
-    replaceLibrary({ movies, shows, episodes, files: storedFiles([...movieItems, ...episodeItems]) }, syncedAt);
-    dropFulfilledRequests();
-    if (untagged.length) console.warn(`[library-scan] ${untagged.length} folders without [tmdbid-N]:`, untagged);
-    if (unnamed.length) console.warn(`[library-scan] ${unnamed.length} show files without SxxEyy:`, unnamed);
-    return {
-      movies: movies.length,
-      shows: shows.length,
-      episodes: episodes.length,
-      untagged: untagged.length,
-      unnamed: unnamed.length,
-      tmdbFailed,
-      syncedAt,
-    };
-  } finally {
-    progress(null);
-  }
+  const details = getDetails();
+  const { movies, items: movieItems } = buildMovies(titles, probes, details);
+  const { shows, episodes, items: episodeItems, unnamed } = buildShows(titles, probes, details);
+  const syncedAt = new Date().toISOString();
+  replaceLibrary({ movies, shows, episodes, files: storedFiles([...movieItems, ...episodeItems]) }, syncedAt);
+  dropFulfilledRequests();
+  if (untagged.length) console.warn(`[library-scan] ${untagged.length} folders without [tmdbid-N]:`, untagged);
+  if (unnamed.length) console.warn(`[library-scan] ${unnamed.length} show files without SxxEyy:`, unnamed);
+  return {
+    movies: movies.length,
+    shows: shows.length,
+    episodes: episodes.length,
+    untagged: untagged.length,
+    unnamed: unnamed.length,
+    tmdbFailed,
+    syncedAt,
+  };
 }
 
 // The TMDB sync's part: every library title's details asked for again (a

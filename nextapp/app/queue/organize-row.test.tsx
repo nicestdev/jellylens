@@ -64,14 +64,14 @@ describe("OrganizeRow", () => {
     expect(season).toHaveTextContent(/^Season 01$/);
     expect(season).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: /Season 02/ })).toHaveTextContent(/^Season 02$/);
-    const file = screen.getByText("Gen.V.S01E01.mkv").parentElement!;
+    const file = screen.getByText("Gen.V.S01E01").parentElement!;
     expect(file).toHaveStyle({ paddingLeft: "24px" });
     await userEvent.click(season);
     expect(season).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("Gen.V.S01E01.mkv")).toBeNull();
-    expect(screen.getByText("Gen.V.S02E01.mkv")).toBeInTheDocument();
+    expect(screen.queryByText("Gen.V.S01E01")).toBeNull();
+    expect(screen.getByText("Gen.V.S02E01")).toBeInTheDocument();
     // A new title's disk is picked by hand.
-    expect(disk()).toHaveTextContent("Pick");
+    expect(disk()).toHaveTextContent("Select");
     // Nothing to say about it in Status; on a phone the size alone says it.
     expect(screen.getAllByText("—")).toHaveLength(1);
   });
@@ -100,7 +100,7 @@ describe("OrganizeRow", () => {
 
   it("shows how far a move is, with nothing to pick or do meanwhile", () => {
     table(<OrganizeRow item={{ ...item, move: progress() }} onPick={vi.fn()} onMove={vi.fn()} onDelete={vi.fn()} />);
-    expect(screen.getAllByText(wholeText(/^Moving·[\d.]+ MB\/s·/))).toHaveLength(2);
+    expect(screen.getAllByText(wholeText(/^Moving · [\d.]+ MB\/s · /))).toHaveLength(2);
     expect(document.body.textContent).toContain("50\u202f%");
     expect(screen.queryByRole("button", { name: /^Disk: / })).toBeNull();
     expect(screen.queryByRole("button", { name: /^More for / })).toBeNull();
@@ -152,8 +152,8 @@ describe("OrganizeRow", () => {
       ],
     };
     table(<OrganizeRow item={owned} onPick={vi.fn()} onMove={onMove} onDelete={onDelete} />);
-    expect(screen.getByText("Gen.V.S01E01.720p-OLD.mkv").parentElement).toHaveTextContent(/^−/);
-    expect(screen.getByText("Gen.V.S01E01.mkv").parentElement).toHaveTextContent(/^\+/);
+    expect(screen.getByText("Gen.V.S01E01.720p-OLD").parentElement).toHaveTextContent(/^−/);
+    expect(screen.getByText("Gen.V.S01E01").parentElement).toHaveTextContent(/^\+/);
     expect(screen.getAllByText("−1")[0]).toHaveClass("text-destructive");
     expect(screen.getAllByText("+1")[0]).toHaveClass("text-success");
     expect(screen.getByLabelText("In library")).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe("MovedRow", () => {
   it("shows the folder it went to with its files, and when, with no menu", () => {
     table(<MovedRow item={moved} />);
     expect(screen.getByText("Heat (1995) [tmdbid-949]")).toBeInTheDocument();
-    expect(screen.getByText("Heat.1995.mkv")).toBeInTheDocument();
+    expect(screen.getByText("Heat.1995")).toBeInTheDocument();
     expect(screen.getAllByText(/^Moved /)).toHaveLength(2);
     expect(screen.queryByRole("button")).toBeNull();
   });

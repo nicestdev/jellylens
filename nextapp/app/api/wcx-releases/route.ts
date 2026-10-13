@@ -4,6 +4,7 @@ import { startIfNew } from "@/lib/download-match";
 import { TMDB_API_KEY, WCX_API_URL } from "@/lib/env";
 import { linkInfo, nameFromUrl, routeOf } from "@/lib/hosters";
 import { resolutionOf, seasonsOf } from "@/lib/release-labels";
+import { inResolutions, namesByResolution, wcxRow } from "@/lib/title-rows";
 import { candidates, byPreference } from "@/lib/mirrors";
 import { addPackage, setPackageMedia, wcxUid, type DownloadMedia } from "@/lib/store";
 import { TMDB_LANGUAGE } from "@/lib/env";
@@ -230,14 +231,18 @@ async function mediaOf(tmdbId: string): Promise<DownloadMedia | null> {
 
 const badTmdbId = (tmdbId: unknown) => typeof tmdbId !== "string" || !/^(movie|tv):\d+$/.test(tmdbId);
 
-// GET /api/wcx-releases?tmdbId=movie:949 — what WCX has of the entry, with
+// GET /api/wcx-releases?tmdbId=movie:949&resolution=… — what WCX has of the entry, with
 // its mirrors (kept CHECK_MS, see cachedReleasesOf); admin only (proxy.ts).
 export async function GET(req: Request) {
-  const tmdbId = new URL(req.url).searchParams.get("tmdbId") ?? "";
+  const url = new URL(req.url);
+  const tmdbId = url.searchParams.get("tmdbId") ?? "";
   if (badTmdbId(tmdbId)) return Response.json({ error: "Expected tmdbId=movie:<id> or tv:<id>." }, { status: 400 });
   try {
-    const releases = (await cachedReleasesOf(tmdbId)).map(({ links: _l, hide: _h, ...r }) => r);
-    return Response.json({ releases } satisfies WcxReleasesResponse);
+    const all = (await cachedReleasesOf(tmdbId)).map(({ links: _l, hide: _h, ...r }) => r);
+    // Only the qualities asked for come down (`?resolution=`, repeated), else all.
+    const keep = inResolutions(url.searchParams.getAll("resolution"));
+    const releases = all.filter((r) => keep(wcxRow(r)));
+    return Response.json({ releases, resolutions: namesByResolution(all.map(wcxRow)) } satisfies WcxReleasesResponse);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });
   }

@@ -1,25 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CircleArrowDown, FileDown, ListX, RefreshCcw } from "lucide-react";
+import { AlertCircle, CircleArrowDown, ListX, Rocket } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { DOWNLOADS_CHANGED, apiFetch, jsonRequest, loadDownloads, loadOrganize } from "@/lib/api-client";
-import type { DownloadPackageItem, DownloadsResponse, OrganizeResponse, OrganizeScan } from "@/lib/api-types";
+import type { DownloadPackageItem, DownloadsResponse, OrganizeResponse } from "@/lib/api-types";
 import { useLoad } from "@/hooks/use-load";
 import { usePoll } from "@/hooks/use-poll";
 import { AddControls } from "./add-form";
 import { queueItems, type QueueChange } from "./queue-controls";
 import { PackageRow } from "./package-row";
 import { TableFrame } from "@/components/section-frame";
-import { StatTile } from "@/components/stat-tile";
+import { StatStrip } from "@/components/stat-strip";
 import { isActive, queueLine, sections, sizeOf } from "./logic";
 import { MovedRow, OrganizeRow, downloadColumns } from "./organize-row";
 import { isMoving } from "./organize-logic";
 import { ErrorAlert } from "@/components/error-alert";
-
-const loadScan = () => apiFetch<OrganizeScan>("/api/organize/scan");
 
 // A package from when it comes in to when it's in the library, on one
 // page: DLC containers and links come in here (a release's mirror on a
@@ -28,7 +26,12 @@ const loadScan = () => apiFetch<OrganizeScan>("/api/organize/scan");
 // (lib/downloader.ts); then each goes to the disk picked, into its title's
 // folder ("Name (Year) [tmdbid-N]", lib/library-move.ts). Sections in
 // logic.ts; Done folds away.
-const STATS = ["Speed", "Left", "Time left", "Free"] as const;
+const STATS = {
+  Speed: "all downloads together",
+  Left: "still to download",
+  "Time left": "at this speed",
+  Free: "in the downloads folder",
+} as const;
 
 export default function QueuePage() {
   const page = useLoad(loadDownloads);
@@ -127,19 +130,6 @@ export default function QueuePage() {
       setError((e as Error).message);
     }
   }
-  // The library scan: asked for on load and every 10 s, only whether it
-  // runs (its note once it's done comes from the server, lib/rescan.ts).
-  const scanPage = useLoad(loadScan);
-  const scanning = scanPage.data?.running ?? false;
-  usePoll(scanPage.reload, 10000);
-  async function scan() {
-    setError("");
-    try {
-      scanPage.setData(await apiFetch<OrganizeScan>("/api/organize/scan", { method: "POST" }));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
   // The disk picked per item (its path).
   const [picked, setPicked] = useState<Record<number, string>>({});
 
@@ -151,12 +141,10 @@ export default function QueuePage() {
   const isOpen = (title: string) => toggled[title] ?? (title !== "Done" || parts.length === 1);
 
   return (
-    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-4 sm:px-6 sm:py-5">
       {/* The page's ⋯ at the right of the heading: adding packages (pasted
           links open below it), Download all, Pause all and Resume all
-          (how many come in at once is on Settings); Rescan library (the
-          library scan, and Jellyfin's, lib/rescan.ts; it runs on its own
-          after moves too) and Clear done. */}
+          (how many come in at once is on Settings) and Clear done. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-3xl font-semibold max-md:sr-only">Queue</h1>
         <AddControls
@@ -178,15 +166,7 @@ export default function QueuePage() {
                       ]
                     : [],
                   queueItems(data, changeQueue),
-                  [
-                    {
-                      icon: RefreshCcw,
-                      label: scanning ? "Scanning" : "Rescan library",
-                      onClick: scan,
-                      disabled: scanning,
-                    },
-                    ...(organize?.moved.length ? [{ icon: ListX, label: "Clear done", onClick: clear }] : []),
-                  ],
+                  organize?.moved.length ? [{ icon: ListX, label: "Clear done", onClick: clear }] : [],
                 ]
               : []
           }
@@ -216,14 +196,17 @@ export default function QueuePage() {
         </Alert>
       ) : null}
 
-      {/* Each stat its label over its value, two a row on a phone. */}
-      {/* The stats as tiles, like Analytics': all four always, "—" (muted)
-          for what isn't there while nothing comes in; two a row on a phone. */}
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:mt-6 sm:grid-cols-4 sm:gap-6 phone-landscape:grid-cols-4">
-        {STATS.map((label) => {
-          const value = stats.find((st) => st.label === label)?.value;
-          return <StatTile key={label} label={label} value={value ?? "—"} muted={!value} loading={!data} />;
-        })}
+      {/* The stats in one strip: Speed, Left and Time left only while something comes in
+          (queueLine has them then), Free always. */}
+      <div className="mt-4 sm:mt-6">
+        <StatStrip
+          loading={!data}
+          stats={(Object.keys(STATS) as (keyof typeof STATS)[]).flatMap((label) => {
+            const value = stats.find((st) => st.label === label)?.value;
+            if (!value && label !== "Free") return [];
+            return [{ label, value: value ?? "—", hint: STATS[label], muted: !value }];
+          })}
+        />
       </div>
 
       <div className="mt-4 flex flex-col gap-4 sm:mt-6 sm:gap-6">
@@ -234,7 +217,7 @@ export default function QueuePage() {
             ))}
           </div>
         ) : parts.length === 0 ? (
-          <EmptyState icon={FileDown} title="Drop DLC files anywhere on this page" />
+          <EmptyState icon={Rocket} title="Your queue is empty" hint="Drop DLC files anywhere on this page." />
         ) : (
           parts.map((part) => (
             // A table each, headed with the section and its count, like a

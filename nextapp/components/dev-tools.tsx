@@ -1,7 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { BellRing, FlaskConical } from "lucide-react";
+import { BellRing, FlaskConical, ShieldCheck } from "lucide-react";
+import { DEV_NON_ADMIN_COOKIE } from "@/lib/dev-cookie";
 import { installMockFetch, mockOn, setMock } from "@/lib/mock/fetch";
 import { toast, type ToastTone } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -64,10 +65,26 @@ function useMockOn() {
   );
 }
 
+// Admin on or off: a cookie the server reads in `next dev` (lib/auth.ts,
+// proxy.ts), so the page loads again as the other kind of user.
+const adminOff = () => document.cookie.split("; ").includes(`${DEV_NON_ADMIN_COOKIE}=1`);
+function setAdmin(on: boolean) {
+  document.cookie = `${DEV_NON_ADMIN_COOKIE}=${on ? "; max-age=0" : "1"}; path=/`;
+  location.reload();
+}
+function useAdminOn() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => !adminOff(),
+    () => null,
+  );
+}
+
 // The sidebar's Dev section, above Sign out: Mock data on or off (the page
 // loads again) and Test toasts. Nothing in a production build.
 export function DevTools({ itemClass }: { itemClass: string }) {
   const on = useMockOn();
+  const admin = useAdminOn();
   if (process.env.NODE_ENV !== "development") return null;
   return (
     <div className="flex flex-col gap-px">
@@ -84,6 +101,18 @@ export function DevTools({ itemClass }: { itemClass: string }) {
         </span>
         <span className="text-xs text-muted-foreground">{on ? "On" : "Off"}</span>
       </button>
+      <button
+        type="button"
+        disabled={admin === null}
+        onClick={() => setAdmin(!admin)}
+        className={cn(itemClass, "w-full text-left")}
+      >
+        <span className="flex min-w-0 items-center gap-2.5">
+          <ShieldCheck className="size-4 shrink-0 opacity-70" />
+          Admin
+        </span>
+        <span className="text-xs text-muted-foreground">{admin ? "On" : "Off"}</span>
+      </button>
       <button type="button" onClick={testToasts} className={cn(itemClass, "w-full justify-start gap-2.5 text-left")}>
         <BellRing className="size-4 shrink-0 opacity-70" />
         Test toasts
@@ -92,15 +121,19 @@ export function DevTools({ itemClass }: { itemClass: string }) {
   );
 }
 
-// The same in the phone menu, without a heading: two more buttons above
+// The same in the phone menu, without a heading: three more buttons above
 // Sign out, read like it and spaced like it.
 export function MobileDevTools({ itemClass }: { itemClass: string }) {
   const on = useMockOn();
+  const admin = useAdminOn();
   if (process.env.NODE_ENV !== "development") return null;
   return (
     <>
       <button type="button" disabled={on === null} onClick={() => setMock(!on)} className={itemClass}>
         Mock data <span className="text-base font-normal">{on ? "On" : "Off"}</span>
+      </button>
+      <button type="button" disabled={admin === null} onClick={() => setAdmin(!admin)} className={itemClass}>
+        Admin <span className="text-base font-normal">{admin ? "On" : "Off"}</span>
       </button>
       <button type="button" onClick={testToasts} className={itemClass}>
         Test toasts

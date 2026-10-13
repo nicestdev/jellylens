@@ -288,36 +288,32 @@ describe("partCheck", () => {
 });
 
 describe("displayName", () => {
-  it("is TMDB's title and year once matched", () => {
+  it("is TMDB's title once matched", () => {
     const p = pkg(1, "pending", {
       name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR",
       media: { type: "movie", tmdbId: 949, title: "Heat", year: 1995, posterPath: null },
     });
-    expect(displayName(p)).toEqual({ title: "Heat", year: 1995 });
+    expect(displayName(p)).toBe("Heat");
   });
 
-  it("reads the title and year from the release name otherwise", () => {
-    expect(displayName(pkg(1, "pending", { name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR" }))).toEqual({
-      title: "Heat",
-      year: 1995,
-    });
+  it("reads the title from the release name otherwise", () => {
+    expect(displayName(pkg(1, "pending", { name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR" }))).toBe("Heat");
   });
 
   it("leaves out the uploader after a dash", () => {
-    expect(displayName(pkg(1, "pending", { name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR - Anna" }))).toEqual({
-      title: "Heat",
-      year: 1995,
-    });
+    expect(displayName(pkg(1, "pending", { name: "Heat.1995.German.DL.1080p.BluRay.x264-VECTOR - Anna" }))).toBe(
+      "Heat",
+    );
   });
 
   it("reads a show's title from a multi-season pack", () => {
     for (const name of ["Silo.S01-S02.German.DL.1080p.WEB.x264-GRP", "Silo.S01+S02+S03.German.DL.1080p.WEB.x264-GRP"])
-      expect(displayName(pkg(1, "pending", { name })).title).toBe("Silo");
+      expect(displayName(pkg(1, "pending", { name }))).toBe("Silo");
   });
 
   it("is the package's name when the release name has no title", () => {
-    expect(displayName(pkg(1, "pending", { name: "" })).title).toBe("");
-    expect(displayName(pkg(1, "pending", { name: "links" }))).toEqual({ title: "links", year: null });
+    expect(displayName(pkg(1, "pending", { name: "" }))).toBe("");
+    expect(displayName(pkg(1, "pending", { name: "links" }))).toBe("links");
   });
 });
 

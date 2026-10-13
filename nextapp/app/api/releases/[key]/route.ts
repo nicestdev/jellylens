@@ -10,6 +10,7 @@ import {
   titleReleases,
 } from "@/lib/store";
 import { groupEpisodes } from "@/lib/release-labels";
+import { inResolutions, namesByResolution, xrelRow } from "@/lib/title-rows";
 import { resolveTitles } from "@/lib/sync-releases";
 import { TMDB_LANGUAGE } from "@/lib/env";
 import { TMDB_API_KEY } from "@/lib/env";
@@ -79,7 +80,7 @@ const xrelTitle = (titleKey: string) => titleKey.split("~")[0];
 const partsOf = (key: string, titleKey: string) =>
   tileTitleKeys(key).filter((k) => xrelTitle(k) === xrelTitle(titleKey));
 
-async function detail(key: string): Promise<ReleaseDetail> {
+async function detail(key: string, resolutions: string[] = []): Promise<ReleaseDetail> {
   const byTitle = Map.groupBy(tileTitleKeys(key), xrelTitle);
   const titles = [...byTitle.values()].map((keys) => {
     const releases = keys.flatMap(titleReleases).sort((a, b) => b.publishedAt - a.publishedAt);
@@ -88,15 +89,27 @@ async function detail(key: string): Promise<ReleaseDetail> {
     const label = year && keys.length === 1 ? `${title} (${year})` : title;
     return { titleKey: keys[0], label, match: matchInfo(keys[0]), items };
   });
-  return { key, head: await headOf(key, titles), titles };
+  const head = await headOf(key, titles);
+  const available = namesByResolution(titles.flatMap((t) => t.items.map(xrelRow)));
+  // Only the qualities asked for come down, a title with none of them staying listed.
+  const keep = inResolutions(resolutions);
+  return {
+    key,
+    head,
+    titles: titles.map((t) => ({ ...t, items: t.items.filter((r) => keep(xrelRow(r))) })),
+    resolutions: available,
+  };
 }
 
-// GET /api/releases/<key> — the xREL titles on one tile, each with its
-// releases (newest first) and how its match came about, for the title page
-// the tile opens; admin only.
-export async function GET(_req: Request, { params }: Params) {
+// ?resolution=1080p&resolution=2160p, repeated.
+const resolutionsOf = (req: Request) => new URL(req.url).searchParams.getAll("resolution");
+
+// GET /api/releases/<key>?resolution=… — the xREL titles on one tile, each
+// with its releases (newest first, of the qualities asked for, else all) and
+// how its match came about, for the title page the tile opens; admin only.
+export async function GET(req: Request, { params }: Params) {
   const { key } = await params;
-  return Response.json((await detail(key)) satisfies ReleaseDetail);
+  return Response.json((await detail(key, resolutionsOf(req))) satisfies ReleaseDetail);
 }
 
 // POST { titleKey, verdict: "wrong" | "xrel" | null } — a decision about one
@@ -106,6 +119,7 @@ export async function GET(_req: Request, { params }: Params) {
 // if it was the tile's last.
 export async function POST(req: Request, { params }: Params) {
   const { key } = await params;
+  const resolutions = resolutionsOf(req);
   const body = await req.json().catch(() => ({}));
   const { titleKey, verdict } = body;
   if (typeof titleKey !== "string" || (verdict !== "wrong" && verdict !== "xrel" && verdict !== null)) {
@@ -116,6 +130,8 @@ export async function POST(req: Request, { params }: Params) {
     setVerdict(part, verdict);
     await resolveTitles(TMDB_API_KEY, TMDB_LANGUAGE, part);
   }
-  const tile = await detail(key);
-  return Response.json((tile.titles.length ? tile : await detail(tileOf(titleKey))) satisfies ReleaseDetail);
+  const tile = await detail(key, resolutions);
+  return Response.json(
+    (tile.titles.length ? tile : await detail(tileOf(titleKey), resolutions)) satisfies ReleaseDetail,
+  );
 }

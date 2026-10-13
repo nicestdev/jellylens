@@ -24,7 +24,7 @@ export default function AnalyticsPage() {
   const empty = data && data.movies.titles + data.shows.titles === 0;
 
   return (
-    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-4 sm:px-6 sm:py-5">
       <h1 className="text-3xl font-semibold max-md:sr-only">Analytics</h1>
 
       {error || sync.error ? <ErrorAlert>{sync.error || `Failed to load analytics: ${error}`}</ErrorAlert> : null}
@@ -36,7 +36,7 @@ export default function AnalyticsPage() {
       ) : null}
 
       {loading && !data ? (
-        <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-3 sm:gap-6 phone-landscape:grid-cols-3">
+        <div className="mt-4 grid grid-cols-3 gap-3 sm:mt-6 sm:gap-6">
           {Array.from({ length: 3 }, (_, i) => (
             <Skeleton key={i} className="h-[4.625rem] rounded-lg" />
           ))}
@@ -51,9 +51,9 @@ export default function AnalyticsPage() {
         </div>
       ) : data ? (
         <>
-          <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-3 sm:gap-6 phone-landscape:grid-cols-3">
+          <div className="mt-4 grid grid-cols-3 gap-3 sm:mt-6 sm:gap-6">
             {overviewTiles(data).map((t) => (
-              <StatTile key={t.label} {...t} />
+              <StatTile key={t.label} {...t} compact />
             ))}
           </div>
           <div className="mt-4 grid items-start gap-4 sm:mt-6 sm:gap-6 xl:grid-cols-2 phone-landscape:grid-cols-2">

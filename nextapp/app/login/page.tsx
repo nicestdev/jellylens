@@ -5,7 +5,7 @@ import { Footer } from "@/components/footer";
 import { Logo } from "@/components/logo";
 import { LoginForm } from "./login-form";
 
-// No nav here: one card with the logo and name on top of the form. In `next dev` it
+// No nav here: the logo and name on top of the form, on the plain background. In `next dev` it
 // stays open signed in and with sign-in off too, to look at; the layout's
 // nav is there then, so it goes over the whole window like the 404.
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
@@ -15,11 +15,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (user && !preview) redirect(next);
 
   const page = (
-    <main className="flex flex-1 flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[26rem] rounded-lg border bg-card px-8 py-10 shadow-2xl shadow-black/40">
+    <main className="flex flex-1 flex-col items-center justify-center px-4 pt-10 pb-10">
+      <div className="w-full max-w-[20rem] sm:max-w-[15rem]">
         <div className="flex flex-col items-center text-center">
           <Logo className="size-12" />
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight">Sign in to Jellylens</h1>
+          <h1 className="mt-5 text-2xl font-medium">Sign in to Jellylens</h1>
           <p className="mt-1 text-sm text-muted-foreground">With your Jellyfin account</p>
         </div>
         <div className="mt-8">
@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   // Signed out, the layout has no nav and adds the footer itself.
   if (!user) return page;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-background px-safe">
+    <div data-bare className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-sidebar px-safe">
       {page}
       <Footer />
     </div>

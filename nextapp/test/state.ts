@@ -10,7 +10,6 @@ const GLOBALS = [
   "__jellylensTriggers",
   "__jellylensDownloader",
   "__jellylensMoves",
-  "__jellylensScanProgress",
   "__jellylensEvents",
   "__ddownloadCookies",
   "__ddownloadSignIn",

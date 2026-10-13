@@ -40,10 +40,11 @@ import type { LibraryTarget, MoveProgress } from "@/lib/library-move";
 import { PhoneStatus, StatusCell, type RowState } from "@/components/row-status";
 import { formatBytes, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { withoutExtension } from "@/lib/library-names";
 import { displayName, errorLine, formatSpeed, releaseName, timeLeft } from "./logic";
 import { destination, fits, ownedInFolder, targetOf } from "./organize-logic";
 
-// Title and year, TMDB's or else the release name's (and an icon after them, if given) over a small second
+// Title, TMDB's or else the release name's (and an icon after them, if given) over a small second
 // line, text-xs Mono if mono (a release name), and what's below, if given.
 export function TitleCell({
   media,
@@ -60,12 +61,11 @@ export function TitleCell({
   below?: ReactNode;
   menu?: ReactNode;
 }) {
-  const { title, year } = displayName({ media, name });
+  const title = displayName({ media, name });
   return (
     <td className={cn(CELL, "w-full max-w-0")}>
       <div className="flex min-w-0 items-baseline gap-1.5">
         <span className="truncate font-medium">{title}</span>
-        {year ? <span className="shrink-0 text-muted-foreground tabular-nums">{year}</span> : null}
         {icon}
         {menu ? <span className={cn(PHONE_MENU, "ml-auto")}>{menu}</span> : null}
       </div>
@@ -82,10 +82,10 @@ export function TitleCell({
 // it; there the disk picker, if given), the title's folder, under it a show's season folders, and under
 // those (or the title's folder) every file, each a step further in. With
 // old (what the library has already) like a diff: those with a "−" before
-// them (red), the new ones with a "+" (green). A season folder shows its
+// them (red), the new ones with a "+" (green), the whole line in its color. A season folder shows its
 // files under its name and a chevron, a click folds it.
 // kept: what the library has that stays (a Skip in Needs attention),
-// marked "∗" (blue); the files are "+" then too.
+// marked "=" (blue); the files are "+" then too.
 export function FileTree({
   root,
   folder,
@@ -103,19 +103,14 @@ export function FileTree({
   const line = (key: string, Icon: LucideIcon, text: ReactNode, depth: number, className?: string, mark?: string) => (
     <div
       key={key}
-      className={cn("flex min-w-0 items-center gap-1", className)}
+      className={cn(
+        "flex min-w-0 items-center gap-1",
+        mark === "−" ? "text-destructive" : mark === "=" ? "text-info" : mark && "text-success",
+        className,
+      )}
       style={{ paddingLeft: `${depth * 0.75}rem` }}
     >
-      {mark ? (
-        <span
-          className={cn(
-            "w-2 shrink-0",
-            mark === "−" ? "text-destructive" : mark === "∗" ? "text-info" : "text-success",
-          )}
-        >
-          {mark}
-        </span>
-      ) : null}
+      {mark ? <span className="w-2 shrink-0">{mark}</span> : null}
       <Icon className="size-3 shrink-0" />
       <span className="truncate">{text}</span>
     </div>
@@ -130,7 +125,7 @@ export function FileTree({
     dirs.set(dir, [...(dirs.get(dir) ?? []), { name: f.slice(cut + 1), mark }]);
   };
   for (const f of old) add(f, "−");
-  for (const f of kept) add(f, "∗");
+  for (const f of kept) add(f, "=");
   for (const f of files) add(f, mark);
   // Every folder open, a click folds it (kept as which were clicked).
   const [flipped, setFlipped] = useState(new Set<string>());
@@ -143,7 +138,7 @@ export function FileTree({
     });
   return (
     <div className="font-mono text-xs leading-4">
-      {root ? line("root", HardDrive, root, 0, "font-sans sm:hidden") : null}
+      {root ? line("root", HardDrive, root, 0, "sm:hidden") : null}
       {line("folder", Folder, folder, 0)}
       {[...dirs].map(([dir, names]) => {
         const shown = !dir || isOpen(dir) ? names : [];
@@ -164,7 +159,14 @@ export function FileTree({
             </button>
           ) : null,
           ...shown.map((n) =>
-            line(`${dir}/${n.mark ?? ""}${n.name}`, FileVideo, n.name, dir ? 2 : 1, undefined, n.mark),
+            line(
+              `${dir}/${n.mark ?? ""}${n.name}`,
+              FileVideo,
+              withoutExtension(n.name),
+              dir ? 2 : 1,
+              undefined,
+              n.mark,
+            ),
           ),
         ];
       })}
@@ -239,12 +241,15 @@ function DiskMenu({
   target,
   label,
   className,
+  plain,
   onPick,
 }: {
   item: OrganizeItem;
   target: LibraryTarget | null;
   label?: string | null;
   className?: string;
+  // In the tree's own type (Mono, regular) rather than the Disk column's.
+  plain?: boolean;
   onPick: (t: LibraryTarget) => void;
 }) {
   return (
@@ -256,18 +261,18 @@ function DiskMenu({
           !target && "text-warning",
           className,
         )}
-        aria-label={`Disk: ${label ?? target?.disk ?? "Pick"}`}
+        aria-label={`Disk: ${label ?? target?.disk ?? "Select"}`}
       >
-        <span className="truncate font-mono text-xs">{label ?? target?.disk ?? "Pick"}</span>
+        <span className={cn("truncate", !plain && "font-medium")}>{label ?? target?.disk ?? "Select"}</span>
         <ChevronDown className="size-3 self-center text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-auto min-w-56">
         {item.targets.map((t) => (
           <DropdownMenuItem key={t.path} disabled={!fits(item, t)} onClick={() => onPick(t)} className="gap-3">
             <Check className={cn("size-3.5", t.path !== target?.path && "invisible")} />
-            <span className="flex-1 font-mono text-xs">{t.disk}</span>
+            <span className="flex-1 font-medium">{t.disk}</span>
             {t.existing ? <span className="text-xs text-muted-foreground">has it</span> : null}
-            <span className={cn("font-mono text-xs", fits(item, t) ? "text-muted-foreground" : "text-destructive")}>
+            <span className={cn("text-xs", fits(item, t) ? "text-muted-foreground" : "text-destructive")}>
               {t.freeBytes !== null ? `${formatBytes(t.freeBytes)} free` : "?"}
             </span>
           </DropdownMenuItem>
@@ -317,7 +322,7 @@ export function OrganizeRow({
       : old.length
         ? {
             line: (
-              <span className="font-mono">
+              <span>
                 <span className="text-destructive">−{old.length}</span>{" "}
                 <span className="text-success">+{item.files.length}</span>
               </span>
@@ -369,6 +374,7 @@ export function OrganizeRow({
                     target={target}
                     label={place.root}
                     className="w-auto"
+                    plain
                     onPick={(t) => onPick(t.path)}
                   />
                 ) : (
@@ -386,7 +392,7 @@ export function OrganizeRow({
       />
       <td className={cn(CELL, NOT_ON_PHONE)}>
         {!pickable ? (
-          <span className="font-mono text-xs text-muted-foreground">{target?.disk ?? "—"}</span>
+          <span className="font-medium text-muted-foreground">{target?.disk ?? "—"}</span>
         ) : (
           <DiskMenu item={item} target={target} onPick={(t) => onPick(t.path)} />
         )}
@@ -413,7 +419,7 @@ export function MovedRow({ item }: { item: OrganizeMoved }) {
         line={<FileTree root={item.movedTo.slice(0, cut)} folder={item.movedTo.slice(cut + 1)} files={item.files} />}
         below={<PhoneStatus state={state} right={size} />}
       />
-      <td className={cn(MUTED_CELL, NOT_ON_PHONE, "font-mono text-xs")}>{item.movedTo.split("/")[0]}</td>
+      <td className={cn(MUTED_CELL, NOT_ON_PHONE, "font-medium")}>{item.movedTo.split("/")[0]}</td>
       <StatusCell state={state} />
       <td className={cn(NUMBER_CELL, NOT_ON_PHONE)}>{size}</td>
       <td className={MENU_CELL} />

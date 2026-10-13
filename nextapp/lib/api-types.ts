@@ -123,7 +123,13 @@ export type ReleaseHead = {
   aired: Record<number, SeasonAiring> | null; // a show's aired (and known) episodes per season, TMDB's
 };
 export type { LibraryCopy, SeasonAiring };
-export type ReleaseDetail = { key: string; head: ReleaseHead | null; titles: ReleaseDetailTitle[] };
+// resolutions: every quality the tile's releases have, with their names (all of them, however `?resolution=` narrows `titles`).
+export type ReleaseDetail = {
+  key: string;
+  head: ReleaseHead | null;
+  titles: ReleaseDetailTitle[];
+  resolutions: Record<string, string[]>;
+};
 
 // GET, POST, DELETE /api/release-groups. syncing: its releases are being
 // fetched right now; matching: the sync is checking titles on TMDB.
@@ -189,7 +195,8 @@ export type WcxRelease = {
   createdAt: string | null;
   mirrors: WcxMirror[];
 };
-export type WcxReleasesResponse = { releases: WcxRelease[] };
+// resolutions: as in ReleaseDetail.
+export type WcxReleasesResponse = { releases: WcxRelease[]; resolutions: Record<string, string[]> };
 export type WcxAddResponse =
   // started: downloading right away; else it waits in Needs attention.
   | { result: "added"; packageId: number; name: string; started: boolean; hoster: string; source: WcxSource }
@@ -281,9 +288,6 @@ export type OrganizeMoved = {
   // Moved in by Replace.
   replaced: boolean;
 };
-// GET/POST /api/organize/scan — the library scan: running, and how far its probing is
-// (0–100; null while idle).
-export type OrganizeScan = { running: boolean; percent: number | null };
 export type OrganizeResponse = {
   ready: boolean;
   libraryDir: string;

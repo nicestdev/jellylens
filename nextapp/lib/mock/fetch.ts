@@ -1,18 +1,17 @@
 // Mock data (the sidebar's Dev section, components/dev-tools.tsx): while
-// it's on, the GETs of the Queue and Settings are answered in the browser from
-// lib/mock/data.ts and lib/mock/settings.ts, and every other request to
+// it's on, the GETs of the Queue, the wishlist and Settings are answered in the
+// browser from lib/mock/data.ts and lib/mock/settings.ts, and every other request to
 // those routes (and Settings' Sync, and ignoring or unignoring a show,
 // whose lists stay real) is refused, so no action meant for made-up data
 // reaches the real thing. Only in `next dev`; nothing is written anywhere.
-import { mockDownloads, mockOrganize } from "./data";
+import { mockDownloads, mockOrganize, mockRequests } from "./data";
 import { mockConfig, mockPreferences, mockReleaseGroups, mockStatus } from "./settings";
 
 const KEY = "mock";
 const ROUTES: Record<string, () => unknown> = {
   "/api/downloads": mockDownloads,
   "/api/organize": mockOrganize,
-  // Running, so Rescan library shows "Scanning".
-  "/api/organize/scan": () => ({ running: true, percent: 40 }),
+  "/api/requests": mockRequests,
   "/api/status": mockStatus,
   "/api/config": mockConfig,
   "/api/preferences": mockPreferences,

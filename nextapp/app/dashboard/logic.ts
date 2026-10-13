@@ -9,6 +9,7 @@ import type {
   ShowItem,
 } from "@/lib/api-types";
 import { partCheck, STATUS_LABEL, summarize, type Section } from "@/app/queue/logic";
+import { seasonCode } from "@/lib/format";
 
 // What the Dashboard shows, worked out from the routes' data. No React
 // here, so it's tested on its own.
@@ -46,6 +47,45 @@ export const recentImports = (moved: OrganizeMoved[], now = Date.now()) =>
   moved
     .filter((m) => now - new Date(m.movedAt).getTime() <= 7 * 24 * 3600_000)
     .sort((a, b) => b.movedAt.localeCompare(a.movedAt));
+
+// The seasons a move brought: those in its files' folders ("Season 02/…"),
+// else the one in the release's name ("….S02.…").
+const seasonsOf = (m: OrganizeMoved) => {
+  const folders = m.files.flatMap((f) => /(?:^|\/)Season (\d+)\//i.exec(f)?.[1] ?? []);
+  const inName = /\.S(\d{1,2})(?=[.E+-])/i.exec(m.name)?.[1];
+  return [...new Set((folders.length ? folders : inName ? [inName] : []).map(Number))];
+};
+
+// Last imports as tiles, a show's moves (its seasons arriving one by one)
+// as one, newest first: the time of its latest, all its seasons.
+export type ImportTile = {
+  key: string;
+  media: OrganizeMoved["media"];
+  name: string;
+  movedAt: string;
+  seasons: number[];
+};
+export function importTiles(moved: OrganizeMoved[]): ImportTile[] {
+  const tiles = new Map<string, ImportTile>();
+  for (const m of moved) {
+    const key = m.media ? `${m.media.type}:${m.media.tmdbId}` : `move:${m.id}`;
+    const tile = tiles.get(key);
+    if (tile) tile.seasons = [...new Set([...tile.seasons, ...seasonsOf(m)])];
+    else tiles.set(key, { key, media: m.media, name: m.name, movedAt: m.movedAt, seasons: seasonsOf(m) });
+  }
+  return [...tiles.values()].map((t) => ({ ...t, seasons: t.seasons.sort((a, b) => a - b) }));
+}
+
+// Seasons as "S01–S03, S05": a run of them as a range.
+export function seasonsLabel(seasons: number[]): string {
+  const runs: number[][] = [];
+  for (const s of seasons) {
+    const last = runs.at(-1);
+    if (last && s === last[1] + 1) last[1] = s;
+    else runs.push([s, s]);
+  }
+  return runs.map(([from, to]) => seasonCode(from, to)).join(", ");
+}
 
 // The Queue box's rows, from the Queue's sections (Done left out): each
 // title and where it's at, the details being the Queue's. Error

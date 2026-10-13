@@ -43,6 +43,10 @@ export const DOWNLOADS_CHANGED = "jellylens:downloads-changed";
 // title page's Check added a package; the sidebar asks for them again.
 export const COUNTS_STALE = "jellylens:counts-stale";
 
+// Fired on window when an admin ignored or unignored a show (its title
+// page's ⋯): the Dashboard's Incomplete shows load again.
+export const IGNORES_CHANGED = "jellylens:ignores-changed";
+
 // Fired on window after a match was fixed on a title page, so the list it
 // was opened over (still mounted under it) loads again.
 export const RELEASES_CHANGED = "jellylens:releases-changed";

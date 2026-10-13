@@ -148,6 +148,18 @@ describe("GET /api/wcx-releases", () => {
     ]);
   });
 
+  it("brings down only the qualities asked for, naming every quality the page has", async () => {
+    setWcxUid("movie:949", "heatPage0001");
+    wcx();
+    const res = await (
+      await route()
+    ).GET(new Request("http://jellylens.test/api/wcx-releases?tmdbId=movie:949&resolution=2160p"));
+    const { releases, resolutions } = await res.json();
+    expect(releases.map((r: { uid: string }) => r.uid)).toEqual(["uhd"]);
+    expect(Object.keys(resolutions).sort()).toEqual(["1080p", "2160p"]);
+    expect(resolutions["2160p"]).toEqual(["heat.1995.german.dl.2160p.webhd.h265-innovativ"]);
+  });
+
   it("asks WCX again only after a while, and checks no links", async () => {
     setWcxUid("movie:949", "heatPage0001");
     const fetch = wcx();
@@ -190,7 +202,7 @@ describe("GET /api/wcx-releases", () => {
 
   it("has nothing for an entry without a WCX page, asking nobody", async () => {
     const fetch = mockFetch(() => undefined);
-    expect(await (await get("movie:949")).json()).toEqual({ releases: [] });
+    expect(await (await get("movie:949")).json()).toEqual({ releases: [], resolutions: {} });
     expect(fetch).not.toHaveBeenCalled();
   });
 

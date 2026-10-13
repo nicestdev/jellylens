@@ -59,7 +59,7 @@ describe("PackageRow", () => {
   it("shows the title over the release name, how many parts are online and its size", () => {
     renderRow({ ...pkg, files: [file(1), file(2)] });
     expect(screen.getByText("Heat")).toBeInTheDocument();
-    expect(screen.getByText("1995")).toBeInTheDocument();
+    expect(screen.queryByText("1995")).toBeNull();
     expect(screen.getByText("Heat.1995.German.DL.1080p.BluRay.x264-WAYNE")).toBeInTheDocument();
     // In its column and under the title for phones.
     expect(screen.getAllByText(wholeText("Online · 2/2"))).toHaveLength(2);
@@ -75,14 +75,14 @@ describe("PackageRow", () => {
       files: [file(1, { status: "downloading", received: 256 * 1024 ** 2, speed: 12 * 1024 ** 2 }), file(2)],
     });
     expect(document.body.textContent).toContain("25\u202f%");
-    expect(screen.getAllByText(wholeText(/^Loading·12.00 MB\/s·\d+ min$/))).toHaveLength(2);
+    expect(screen.getAllByText(wholeText(/^Loading · 12.00 MB\/s · \d+ min$/))).toHaveLength(2);
   });
 
   it("shows its state as plain text, what to do about it first in its menu", async () => {
     const cases: [DownloadPackageItem["status"], RegExp, string][] = [
       ["pending", /^Online · 1\/1$/, "Start"],
       ["queued", /^Waiting$/, "Pause"],
-      ["downloading", /^Loading·/, "Pause"],
+      ["downloading", /^Loading · /, "Pause"],
       ["paused", /^Paused$/, "Resume"],
       ["failed", /^Failed$/, "Retry"],
     ];
@@ -132,7 +132,7 @@ describe("PackageRow", () => {
       onAction,
     );
     expect(screen.getByLabelText("In library")).not.toHaveAttribute("title");
-    expect(screen.getByText("Heat.1995.720p-OLD.mkv").parentElement).toHaveTextContent(/^−/);
+    expect(screen.getByText("Heat.1995.720p-OLD").parentElement).toHaveTextContent(/^−/);
     expect(screen.getAllByText("−1")[0]).toHaveClass("text-destructive");
     expect(screen.getAllByText("+1")[0]).toHaveClass("text-success");
     await userEvent.click(more());
@@ -145,16 +145,16 @@ describe("PackageRow", () => {
     const onAction = vi.fn();
     const library = {
       old: ["nvme01/shows/Silo (2023) [tmdbid-125988]/Season 01/Silo.S01E01.German.1080p-GRP.mkv"],
-      new: ["Season 01/S01E02", "Season 01/S01E03"],
+      new: ["Season 01/Silo.S01E02.German.1080p-GRP", "Season 01/Silo.S01E03.German.1080p-GRP"],
       exact: true,
       skip: 1,
       choices: ["skip" as const],
       disks: ["nvme01"],
     };
     const { unmount } = renderRow({ ...pkg, library }, vi.fn(), onAction);
-    expect(screen.getByText("S01E02").parentElement).toHaveTextContent(/^\+/);
-    expect(screen.getByText("Silo.S01E01.German.1080p-GRP.mkv").parentElement).toHaveTextContent(/^∗/);
-    expect(screen.getAllByText("∗1")[0]).toHaveClass("text-info");
+    expect(screen.getByText("Silo.S01E02.German.1080p-GRP").parentElement).toHaveTextContent(/^\+/);
+    expect(screen.getByText("Silo.S01E01.German.1080p-GRP").parentElement).toHaveTextContent(/^=/);
+    expect(screen.getAllByText("=1")[0]).toHaveClass("text-info");
     await userEvent.click(more());
     await userEvent.click(screen.getByRole("menuitem", { name: "Download missing" }));
     expect(onAction).toHaveBeenCalledWith("start", { choice: "skip" });

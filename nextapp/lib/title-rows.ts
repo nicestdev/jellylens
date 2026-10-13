@@ -2,7 +2,7 @@ import type { LibraryCopy, TitleRelease, WcxRelease } from "./api-types";
 import { MB, seasonCode, seasonLabel } from "./format";
 import { rankIn, toggled, type SortDir } from "./facets";
 import { matchesWords } from "./text";
-import { fromRelease, resolutionOf, seasonsOf, withoutTitle } from "./release-labels";
+import { NO_GROUP, fromRelease, resolutionOf, seasonsOf, withoutTitle } from "./release-labels";
 import { audioOf, codecOf, episodesOf } from "./release-name";
 
 // The title page's releases (components/title-view.tsx), xREL's and WCX's
@@ -36,6 +36,21 @@ export const xrelRow = (r: TitleRelease): ReleaseRow => ({
   date: r.publishedAt,
   seasons: seasonsOf(r.name),
 });
+
+// The qualities some rows have, each with its release names (one release is
+// one name, any case: the lowercase ones), for the Quality segments to count
+// what picking one would show, though only the picked ones come down
+// (`?resolution=` on the title page's routes).
+export type ResolutionNames = Record<string, string[]>;
+export function namesByResolution(rows: ReleaseRow[]): ResolutionNames {
+  const names: Record<string, Set<string>> = {};
+  for (const r of rows) if (r.resolution) (names[r.resolution] ??= new Set()).add(r.name.toLowerCase());
+  return Object.fromEntries(Object.entries(names).map(([q, set]) => [q, [...set]]));
+}
+
+// The rows of the qualities asked for (all of them with none).
+export const inResolutions = (picked: string[]) => (r: ReleaseRow) =>
+  !picked.length || picked.includes(r.resolution ?? "");
 
 export const wcxRow = (r: WcxRelease): ReleaseRow => ({
   id: r.uid,
@@ -150,10 +165,10 @@ export const allRowsOf = (titles: { items: TitleRelease[] }[], wcx: WcxRelease[]
 
 // ---- The toolbar
 
-// The quality switch (resolution) and the Season menu.
-export type RowFacetKey = "resolution" | "season";
+// The quality switch (resolution), the Season and the Group menu.
+export type RowFacetKey = "resolution" | "season" | "group";
 type RowFilters = Record<RowFacetKey, Set<string>>;
-export const noRowFilters = (): RowFilters => ({ resolution: new Set(), season: new Set() });
+export const noRowFilters = (): RowFilters => ({ resolution: new Set(), season: new Set(), group: new Set() });
 
 // Qualities best first, as a title page's Quality menu lists them.
 export const RESOLUTIONS = ["2160p", "1080p", "720p", "576p", "480p", "SD"] as const;
@@ -163,14 +178,15 @@ const seasonList = (r: ReleaseRow) =>
   r.seasons ? Array.from({ length: r.seasons[1] - r.seasons[0] + 1 }, (_, i) => String(r.seasons![0] + i)) : [];
 
 function valuesOf(key: RowFacetKey, r: ReleaseRow): string[] {
-  return key === "season" ? seasonList(r) : [r.resolution || NONE];
+  return key === "season" ? seasonList(r) : key === "group" ? [r.group ?? NO_GROUP] : [r.resolution || NONE];
 }
 
-export const FACET_LABELS: Record<RowFacetKey, string> = { resolution: "Quality", season: "Season" };
+export const FACET_LABELS: Record<RowFacetKey, string> = { resolution: "Quality", season: "Season", group: "Group" };
 
 export function formatFacet(key: RowFacetKey, v: string): string {
   if (v === NONE) return "Unknown";
   if (key === "season") return v === "0" ? "Specials" : seasonCode(Number(v));
+  if (key === "group") return v;
   return v === "2160p" ? "4K" : v;
 }
 
@@ -178,6 +194,7 @@ export function formatFacet(key: RowFacetKey, v: string): string {
 // seasons up); a facet with fewer than two is no filter.
 export function facetValues(key: RowFacetKey, rows: ReleaseRow[]): string[] {
   const list = [...new Set(rows.flatMap((r) => valuesOf(key, r)))];
+  if (key === "group") return list.sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
   return key === "resolution" ? list.sort((a, b) => rank(a) - rank(b)) : list.sort((a, b) => Number(a) - Number(b));
 }
 const rank = rankIn(RESOLUTIONS);

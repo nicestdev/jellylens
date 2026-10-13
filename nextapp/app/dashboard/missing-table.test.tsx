@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import "@/test/dom";
 import type { MissingSeason, ShowItem } from "@/lib/api-types";
 import { show } from "@/test/fixtures";
@@ -30,11 +29,11 @@ const dark: ShowItem = {
 
 describe("MissingTable", () => {
   it("has a row per season with a gap: the show, the season, its episodes as dots, how many", () => {
-    render(<MissingTable shows={[{ item: dark, seasons: [season(1), season(3)], count: 2 }]} onIgnore={vi.fn()} />);
+    render(<MissingTable shows={[{ item: dark, seasons: [season(1), season(3)], count: 2 }]} />);
     expect(screen.getAllByRole("columnheader")[0]).toHaveTextContent("Incomplete shows · 1");
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]).getAllByRole("link", { name: "Dark (2017)" })[0]).toHaveAttribute("href", "/title/tv/70523");
+    expect(within(rows[0]).getAllByRole("link", { name: "Dark" })[0]).toHaveAttribute("href", "/title/tv/70523");
     const dots = rows[0].querySelector(".flex-wrap")!.children;
     expect([...dots].map((d) => d.className)).toEqual([
       expect.stringContaining("bg-muted-foreground"),
@@ -43,17 +42,8 @@ describe("MissingTable", () => {
     ]);
   });
 
-  it("ignores the whole show from its ⋯", async () => {
-    const onIgnore = vi.fn();
-    render(<MissingTable shows={[{ item: dark, seasons: [season(2)], count: 1 }]} onIgnore={onIgnore} />);
-    await userEvent.click(screen.getAllByRole("button", { name: "More for Dark Season 2" })[0]);
-    expect(await screen.findAllByRole("menuitem")).toHaveLength(1);
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Ignore show" }));
-    expect(onIgnore).toHaveBeenLastCalledWith({ showId: "70523" });
-  });
-
   it("isn't there when nothing is incomplete", () => {
-    const { container } = render(<MissingTable shows={[]} onIgnore={vi.fn()} />);
+    const { container } = render(<MissingTable shows={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

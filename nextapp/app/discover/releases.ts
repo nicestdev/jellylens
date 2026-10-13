@@ -1,7 +1,7 @@
 import type { ReleasesResponse } from "@/lib/api-types";
 import type { SortDir } from "@/lib/facets";
 
-// What Discover shows of the favorite groups' releases (admins only)
+// What Discover shows of the favorite groups' releases
 // besides the grid itself (which the server filters and sorts, see
 // lib/store/releases.ts): the request for it and the filter menus (the
 // tiles' texts and the title page's are in lib/release-labels.ts).

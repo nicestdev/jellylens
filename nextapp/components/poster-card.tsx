@@ -95,7 +95,7 @@ export function PosterCard({
         </div>
         {meta?.some(Boolean) ? (
           <div className="truncate text-xs text-muted-foreground">
-            <Dots parts={meta} spaced />
+            <Dots parts={meta} />
           </div>
         ) : null}
       </Tile>
@@ -108,11 +108,10 @@ export function PosterCard({
   );
 }
 
-// Two across on phones, then as many as fit at 10.5rem, as in the design.
-// Two on a phone, four on a phone on its side (short and wide; else three
-// would fit), as many as fit from sm up.
+// Three across on a phone, five on a phone on its side (short and wide), as many as
+// fit from sm up.
 export const POSTER_GRID =
-  "grid grid-cols-2 gap-x-3.5 gap-y-5.5 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] sm:gap-x-5 sm:gap-y-8 phone-landscape:grid-cols-4";
+  "grid grid-cols-3 gap-x-2.5 gap-y-5 sm:grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] sm:gap-x-5 sm:gap-y-8 phone-landscape:grid-cols-5";
 
 export function PosterGridSkeleton() {
   return (

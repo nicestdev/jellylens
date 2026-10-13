@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import { COUNTS_STALE, DOWNLOADS_CHANGED, REQUESTS_CHANGED } from "@/lib/api-client";
 import type { DownloadsResponse, RequestItem, RequestsResponse, StatusResponse } from "@/lib/api-types";
-import { PageTools } from "./page-tools";
 import { MobileBar, Sidebar } from "./nav";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/settings" }));
@@ -186,35 +185,5 @@ describe("MobileBar", () => {
     render(<MobileBar user={admin} canSignOut={false} />);
     expect(screen.getByRole("link", { name: "Jellylens" })).toHaveAttribute("href", "/dashboard");
     expect(screen.getByRole("banner")).toHaveTextContent("Settings");
-  });
-
-  it("folds a page's tools down from its search button on a phone, a dot while they narrow the page", async () => {
-    const matchMedia = vi
-      .spyOn(window, "matchMedia")
-      .mockImplementation(
-        (query) => ({ matches: true, media: query, addEventListener() {}, removeEventListener() {} }) as never,
-      );
-    try {
-      const page = (active: boolean) => (
-        <>
-          <MobileBar user={admin} canSignOut={false} />
-          <PageTools active={active}>
-            <input aria-label="Search" />
-          </PageTools>
-        </>
-      );
-      const { rerender } = render(page(false));
-      const button = await screen.findByRole("button", { name: "Search and filter" });
-      expect(button.querySelector(".rounded-full")).toBeNull();
-      const panel = document.getElementById("mobile-search")!;
-      expect(within(panel).getByRole("textbox", { hidden: true })).toBeInTheDocument();
-      fireEvent.click(button);
-      expect(button).toHaveAttribute("aria-expanded", "true");
-      expect(within(panel).getByRole("textbox", { name: "Search" })).toHaveFocus();
-      rerender(page(true));
-      expect(button.querySelector(".rounded-full")).not.toBeNull();
-    } finally {
-      matchMedia.mockRestore();
-    }
   });
 });

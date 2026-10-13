@@ -7,7 +7,9 @@ import {
   formatFacet,
   ghostRows,
   keepRow,
+  inResolutions,
   libraryNote,
+  namesByResolution,
   noRowFilters,
   toggleFilter,
   wcxRow,
@@ -110,6 +112,36 @@ describe("the toolbar", () => {
     const twoQualities = toggleFilter(toggleFilter(noRowFilters(), "resolution", "720p"), "resolution", "SD");
     expect(rows.filter(keepRow("", twoQualities)).length).toBe(2);
     expect(toggleFilter(twoQualities, "resolution", "SD").resolution).toEqual(new Set(["720p"]));
+  });
+});
+
+describe("the Quality and Group menus", () => {
+  const rows = [
+    xrelRow(xrel("Silo.S02.German.DL.720p.WEB.h264-VECTOR", { quality: "HD-720p" })),
+    xrelRow(xrel("silo.s02.german.dl.720p.web.h264-vector", { quality: "HD-720p" })),
+    xrelRow(xrel("Silo.S01.German.DL.2160p.WEB.h265-WAYNE", { quality: "HD-2160p", group: "WAYNE" })),
+    wcxRow(wcx("Silo.S01.German.DL.2160p.WEB.h265-FuN")),
+  ];
+
+  it("names each quality's releases once, whatever the case", () => {
+    expect(namesByResolution(rows)).toEqual({
+      "720p": ["silo.s02.german.dl.720p.web.h264-vector"],
+      "2160p": ["silo.s01.german.dl.2160p.web.h265-wayne", "silo.s01.german.dl.2160p.web.h265-fun"],
+    });
+  });
+
+  it("keeps the picked qualities, all with none", () => {
+    expect(rows.filter(inResolutions([])).length).toBe(4);
+    expect(rows.filter(inResolutions(["2160p"])).map((r) => r.group)).toEqual(["WAYNE", "FuN"]);
+    expect(rows.filter(inResolutions(["720p", "2160p"])).length).toBe(4);
+  });
+
+  it("lists the groups A to Z, the ones without a group as n/a", () => {
+    expect(facetValues("group", rows)).toEqual(["FuN", "VECTOR", "WAYNE"]);
+    expect(facetValues("group", [...rows, { ...rows[0], group: null }])).toContain("n/a");
+    expect(formatFacet("group", "WAYNE")).toBe("WAYNE");
+    const picked = toggleFilter(noRowFilters(), "group", "WAYNE");
+    expect(rows.filter(keepRow("", picked)).map((r) => r.name)).toEqual(["Silo.S01.German.DL.2160p.WEB.h265-WAYNE"]);
   });
 });
 

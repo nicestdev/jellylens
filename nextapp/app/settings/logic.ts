@@ -1,5 +1,4 @@
 import type { IgnoreEntry, ReleaseGroupsResponse, ShowItem, StatusResponse } from "@/lib/api-types";
-import { showName } from "@/lib/format";
 
 // How often the Settings page reloads: every 2 s while anything is under
 // way, every 15 s otherwise (to notice a scheduled sync starting). Under
@@ -27,13 +26,12 @@ export function pollDelay({
 
 // The last columns of the two group tables, the same widths so they line
 // up: Releases, Last sync, the button.
-export const SETTINGS_COLUMNS = { middle: "w-32", lastSync: "w-24", action: "w-12" };
+export const SETTINGS_COLUMNS = { middle: "w-32", lastSync: "w-20", action: "w-12" };
 
-// Ignored Settings lists: the ignored shows, each with its name and year,
-// by name.
+// Ignored Settings lists: the ignored shows, by name.
 export function ignoredList(shows: ShowItem[], ignored: IgnoreEntry[]) {
   const byId = new Map(shows.map((s) => [s.id, s]));
   return ignored
-    .map((entry) => ({ entry, name: showName(byId.get(entry.showId)) }))
+    .map((entry) => ({ entry, name: byId.get(entry.showId)?.name ?? "Unknown show" }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

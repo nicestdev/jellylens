@@ -10,14 +10,12 @@ import { displayName, type Section } from "@/app/queue/logic";
 import { formatBytes, relativeTime } from "@/lib/format";
 import { titlePath } from "@/lib/title-path";
 import { cn } from "@/lib/utils";
-import { diskLow, freeShare, queueRows, totalFree, type QueueTone } from "./logic";
+import { diskLow, freeShare, importTiles, queueRows, seasonsLabel, totalFree, type QueueTone } from "./logic";
 import { Dots } from "@/components/dot";
 
-// The Dashboard's narrow column: the library's disks, the wishlist and
-// what came in last. Each a table headed with its section, as small as a
+// The Dashboard's tables: the library's disks, the wishlist and what came
+// in last. Each a table headed with its section, as small as a
 // phone (no width under which it scrolls).
-
-const withYear = (title: string, year: number | null | undefined) => (year ? `${title} (${year})` : title);
 
 function Empty({ text, span }: { text: string; span: number }) {
   return (
@@ -47,7 +45,7 @@ export function DisksTable({ disks, loading }: { disks: OrganizeDisk[]; loading:
         disks.map((d) => (
           <tr key={d.disk} className={cn(ROW, "h-auto")}>
             <td className={cn(TITLE_CELL, "py-2")}>
-              <div className="font-mono text-xs font-medium">{d.disk}</div>
+              <div className="font-medium">{d.disk}</div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-track">
                 <div
                   className={cn("h-full rounded-full", diskLow(d) ? "bg-destructive/60" : "bg-muted-foreground/60")}
@@ -81,7 +79,7 @@ export function WishlistTable({ items, total }: { items: RequestItem[]; total: n
         <tr key={`${r.mediaType}:${r.tmdbId}`} className={ROW}>
           <td className={TITLE_CELL}>
             <Link href={titlePath(`${r.mediaType}:${r.tmdbId}`)} className="font-medium">
-              {withYear(r.title, r.year)}
+              {r.title}
             </Link>
           </td>
           <td className={NUMBER_CELL}>{relativeTime(r.requestedAt)}</td>
@@ -96,17 +94,18 @@ export function WishlistTable({ items, total }: { items: RequestItem[]; total: n
 // hover. Each opens its title page.
 // Only with something in it.
 export function ImportsTable({ moved }: { moved: OrganizeMoved[] }) {
-  if (!moved.length) return null;
+  const tiles = importTiles(moved);
+  if (!tiles.length) return null;
   return (
-    <SectionFrame title="Last imports" count={moved.length}>
+    <SectionFrame title="Last imports" count={tiles.length}>
       <div className="-mx-3 grid grid-cols-3 gap-3 border-t border-row p-3 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))]">
-        {moved.map((m) => (
-          <div key={m.id} className="min-w-0">
+        {tiles.map((m) => (
+          <div key={m.key} className="min-w-0">
             <PosterCard
               href={m.media ? titlePath(`${m.media.type}:${m.media.tmdbId}`) : undefined}
               imageSrc={tmdbImage(m.media?.posterPath, "w185")}
               title={m.media?.title ?? m.name}
-              meta={[relativeTime(m.movedAt)]}
+              meta={[seasonsLabel(m.seasons), relativeTime(m.movedAt)]}
             />
           </div>
         ))}
@@ -132,26 +131,19 @@ export function QueueTable({ parts, running }: { parts: Section[]; running: stri
     <TableFrame
       title="Queue"
       count={rows.length}
-      columns={[{ label: "Queue" }, { label: <Dots parts={running} spaced />, align: "right", width: "w-1/2" }]}
+      columns={[{ label: "Queue" }, { label: <Dots parts={running} />, align: "right", width: "w-1/2" }]}
       minWidth="min-w-0"
     >
       {rows.map(({ key, pkg, line, tone }) => {
-        const name = displayName(pkg);
         return (
           <tr key={key} className={ROW}>
             <td className={TITLE_CELL}>
               <Link href="/queue" className="font-medium">
-                {withYear(name.title, name.year)}
+                {displayName(pkg)}
               </Link>
             </td>
-            <td
-              className={cn(
-                CELL,
-                "max-w-0 truncate text-right font-mono text-xs",
-                tone ? TONE[tone] : "text-muted-foreground",
-              )}
-            >
-              <Dots parts={line} spaced />
+            <td className={cn(CELL, "max-w-0 truncate text-right", tone ? TONE[tone] : "text-muted-foreground")}>
+              {line.filter(Boolean).join(" ")}
             </td>
           </tr>
         );

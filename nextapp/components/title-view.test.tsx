@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { wholeText } from "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import { RELEASES_CHANGED } from "@/lib/api-client";
+import { inResolutions, namesByResolution, wcxRow, xrelRow } from "@/lib/title-rows";
 import type { MatchInfo, ReleaseDetail, ReleaseDetailTitle, ReleaseHead, WcxRelease } from "@/lib/api-types";
 import { dismissToast, getToasts } from "@/lib/toast";
 import { Toaster } from "./toaster";
@@ -57,14 +58,26 @@ const title = (
 const bluray = title("heat~1995", "Heat (1995)", ["Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR"]);
 const rip = title("heat", "Heat", ["Heat.German.AC3.HDRip.XViD-VECTOR"], { status: "searched" });
 
+type Tile = Omit<ReleaseDetail, "resolutions">;
+
+// What the route answers: only the qualities asked for (`?resolution=`) of
+// each title's releases, and every quality the tile has.
+const detailOf = (tile: Tile, url: URL): ReleaseDetail => {
+  const keep = inResolutions(url.searchParams.getAll("resolution"));
+  return {
+    ...tile,
+    titles: tile.titles.map((t) => ({ ...t, items: t.items.filter((r) => keep(xrelRow(r))) })),
+    resolutions: namesByResolution(tile.titles.flatMap((t) => t.items.map(xrelRow))),
+  };
+};
+
 // Answers GET /api/releases/<key> with detail, POSTs with after(body).
 // Also handles /api/wcx-search, always returning null.
-function api(detail: ReleaseDetail, after?: (body: { titleKey: string; verdict: string | null }) => ReleaseDetail) {
+function api(detail: Tile, after?: (body: { titleKey: string; verdict: string | null }) => Tile) {
   return mockFetch((url, init) => {
     if (url.pathname === "/api/wcx-search") return json({ url: null });
     if (url.pathname !== "/api/releases/" + encodeURIComponent(detail.key)) return undefined;
-    if (init?.method === "POST") return json(after!(JSON.parse(String(init.body))));
-    return json(detail);
+    return json(detailOf(init?.method === "POST" ? after!(JSON.parse(String(init.body))) : detail, url));
   });
 }
 
@@ -78,13 +91,16 @@ const release = (re: RegExp) => (name: string) => re.test(name.replace(/ /g, "")
 // The table row a release's name is in.
 const row = (name: RegExp) => screen.getByRole("link", { name: release(name) }).closest("tr")!;
 
-// Picks a quality in the Quality menu, or drops it if it's picked (it
-// takes several).
-async function pickQuality(q: string) {
-  await userEvent.click(screen.getByRole("button", { name: /^Quality/ }));
-  await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: q }));
+// Picks a value in a toolbar menu ("Quality", "All", "4K"): one at a time, the
+// menu closed again.
+async function pick(menu: string, value: string) {
+  await userEvent.click(screen.getByRole("button", { name: new RegExp(`^${menu}:`) }));
+  await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: new RegExp(`^${value}`) }));
   await userEvent.keyboard("{Escape}");
 }
+const pickQuality = (q: string) => pick("Quality", q);
+// A title's ⋯ (a phone's, up beside Back, is there too).
+const moreOptions = async (name: string) => (await screen.findAllByRole("button", { name }))[0];
 
 describe("TitleView", () => {
   it("lists a single title's releases with its menu beside the name", async () => {
@@ -111,7 +127,7 @@ describe("TitleView", () => {
     expect(within(bluRay).queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByText(/Grouped from/)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "More options for Heat" }));
+    await userEvent.click(await moreOptions("More options for Heat"));
     await userEvent.click(await screen.findByRole("menuitem", { name: /Wrong match/ }));
 
     expect(await screen.findByText("Marked as a wrong match by you.")).toBeInTheDocument();
@@ -131,7 +147,7 @@ describe("TitleView", () => {
       titles: [{ ...bluray, match: match({ status: "rejected", verdict: "wrong" }) }],
     }));
     render(<TitleView tileKey="movie:949" />);
-    await userEvent.click(await screen.findByRole("button", { name: "More options for Heat" }));
+    await userEvent.click(await moreOptions("More options for Heat"));
     await userEvent.click(await screen.findByRole("menuitem", { name: /Wrong match/ }));
     await vi.waitFor(() => expect(router.replace).toHaveBeenCalledWith("/title/xrel/heat~1995"));
   });
@@ -140,7 +156,7 @@ describe("TitleView", () => {
     mockFetch((url, init) => {
       if (url.pathname === "/api/wcx-search") return json({ url: null });
       if (init?.method === "POST") return json({ error: "database is locked" }, { status: 500 });
-      return json({ key: "movie:949", head, titles: [bluray] });
+      return json(detailOf({ key: "movie:949", head, titles: [bluray] }, url));
     });
     render(
       <>
@@ -148,7 +164,7 @@ describe("TitleView", () => {
         <Toaster />
       </>,
     );
-    await userEvent.click(await screen.findByRole("button", { name: "More options for Heat" }));
+    await userEvent.click(await moreOptions("More options for Heat"));
     await userEvent.click(await screen.findByRole("menuitem", { name: /Wrong match/ }));
     expect(await screen.findByText("Couldn't change the match")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: release(/German\.DL\.2160p\.UHD/) })).toBeInTheDocument();
@@ -209,26 +225,31 @@ describe("TitleView", () => {
     );
   });
 
-  it("lists a show's releases as a table per season, the newest open, the rest folded", async () => {
-    const show = title("got", "Game of Thrones", [
-      "Game.of.Thrones.S01.German.DL.2160p.UHD.BluRay.x265-PL3X",
-      "Game.of.Thrones.S01.German.DL.1080p.BluRay.x264-GTVG",
-      "Game.of.Thrones.S02.German.DL.1080p.BluRay.x264-JaJunge",
-    ]);
+  const got = title("got", "Game of Thrones", [
+    "Game.of.Thrones.S01.German.DL.2160p.UHD.BluRay.x265-PL3X",
+    "Game.of.Thrones.S01.German.DL.1080p.BluRay.x264-GTVG",
+    "Game.of.Thrones.S02.German.DL.1080p.BluRay.x264-JaJunge",
+  ]);
+  const gotApi = () =>
     api({
       key: "tv:1399",
       head: { ...head, title: "Game of Thrones", year: 2011, mediaType: "tv", tmdbId: 1399 },
-      titles: [show],
+      titles: [got],
     });
+  const shows = (n: number) => vi.waitFor(() => expect(shownCount()).toBe(n));
+
+  it("lists a show's releases as a table per season, the newest open, the rest folded", async () => {
+    gotApi();
     render(<TitleView tileKey="tv:1399" />);
 
     expect(await screen.findByText(/x264-JaJunge/)).toBeInTheDocument();
     expect(meta()).toHaveTextContent("2011·Show·3 releases");
+    // A heading says how many releases its table has.
     const season2 = screen.getByRole("button", { name: /^Season 2/ });
     const season1 = screen.getByRole("button", { name: /^Season 1/ });
-    expect(season2).toHaveTextContent("Season 2 · 1 release");
+    expect(season2).toHaveTextContent(/^Season 2 · 1 release$/);
     expect(season2).toHaveAttribute("aria-expanded", "true");
-    expect(season1).toHaveTextContent("Season 1 · 2 releases");
+    expect(season1).toHaveTextContent(/^Season 1 · 2 releases$/);
     expect(season1).toHaveAttribute("aria-expanded", "false");
     expect(shownCount()).toBe(1);
     await userEvent.click(season1);
@@ -240,58 +261,100 @@ describe("TitleView", () => {
     // A season clicked open or folded stays that way however the filters
     // narrow the list, first shown or not.
     await pickQuality("4K");
+    await shows(1);
     expect(screen.getByRole("button", { name: /^Season 1/ })).toHaveAttribute("aria-expanded", "true");
-    expect(shownCount()).toBe(1);
-    await pickQuality("4K");
+    await pickQuality("All");
+    await shows(2);
     expect(screen.getByRole("button", { name: /^Season 2/ })).toHaveAttribute("aria-expanded", "false");
-    expect(shownCount()).toBe(2);
   });
 
-  it("narrows the releases with the Quality and Season menus", async () => {
-    const show = title("got", "Game of Thrones", [
-      "Game.of.Thrones.S01.German.DL.2160p.UHD.BluRay.x265-PL3X",
-      "Game.of.Thrones.S01.German.DL.1080p.BluRay.x264-GTVG",
-      "Game.of.Thrones.S02.German.DL.1080p.BluRay.x264-JaJunge",
-    ]);
-    api({
-      key: "tv:1399",
-      head: { ...head, title: "Game of Thrones", year: 2011, mediaType: "tv", tmdbId: 1399 },
-      titles: [show],
-    });
+  it("narrows the releases with the Quality, Group and Season menus", async () => {
+    gotApi();
     render(<TitleView tileKey="tv:1399" />);
 
-    // Every quality to start with, nothing picked.
-    expect(await screen.findByRole("button", { name: /^Season 1/ })).toHaveTextContent("Season 1 · 2 releases");
-    expect(screen.getByRole("button", { name: /^Quality/ })).toHaveTextContent("Quality: All");
-    await userEvent.click(screen.getByRole("button", { name: /^Quality/ }));
-    expect(screen.getAllByRole("menuitemcheckbox").map((i) => i.textContent)).toEqual(["4K", "1080p"]);
+    // Every quality to start with, each menu entry with how many releases it shows.
+    const season1 = await screen.findByRole("button", { name: /^Season 1/ });
+    expect(screen.getByRole("button", { name: /^Quality: All/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^Quality:/ }));
+    expect((await screen.findAllByRole("menuitemcheckbox")).map((i) => i.textContent)).toEqual([
+      "All3",
+      "720p0",
+      "1080p2",
+      "4K1",
+    ]);
     await userEvent.keyboard("{Escape}");
-    await pickQuality("1080p");
-    expect(screen.getByRole("button", { name: /^Season 1/ })).toHaveTextContent("Season 1 · 1 release");
+    await userEvent.click(season1);
+    expect(shownCount()).toBe(3);
 
-    await userEvent.click(screen.getByRole("button", { name: /^Season:/ }));
-    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "S02" }));
+    // Only the picked quality comes down; a chip says so.
+    await pickQuality("1080p");
+    await shows(2);
+    expect(screen.getByRole("button", { name: "Remove 1080p" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Quality: 1080p/ })).toBeInTheDocument();
+
+    // The Group menu has the groups of what came down, counting what the other filters leave.
+    await userEvent.click(screen.getByRole("button", { name: /^Group:/ }));
+    expect((await screen.findAllByRole("menuitemcheckbox")).map((i) => i.textContent)).toEqual([
+      "All2",
+      "GTVG1",
+      "JaJunge1",
+    ]);
     await userEvent.keyboard("{Escape}");
-    expect(shownCount()).toBe(1);
+    await pick("Group", "JaJunge");
+    await shows(1);
     expect(screen.getByText(/x264-JaJunge/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Season 1/ })).not.toBeInTheDocument();
 
-    // 4K alone has no S02: nothing left, until the season's chip is removed.
+    // 4K has no JaJunge: nothing left, until the group's chip is removed.
     await pickQuality("4K");
-    await pickQuality("1080p");
-    expect(shownCount()).toBe(0);
-    expect(screen.getByText(/No releases match/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Remove S02" }));
-    expect(shownCount()).toBe(1);
+    await shows(0);
+    expect(screen.getByText("No releases match")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove JaJunge" }));
+    await shows(1);
     expect(screen.getByText(/x265-PL3X/)).toBeInTheDocument();
 
-    // Both qualities: all of them.
-    await pickQuality("1080p");
-    expect(screen.getByRole("button", { name: /^Season 2/ })).toHaveTextContent("Season 2 · 1 release");
-    expect(screen.getByRole("button", { name: /^Season 1/ })).toHaveTextContent("Season 1 · 2 releases");
+    // The Season menu: S02 has only the 1080p.
+    await pickQuality("All");
+    await shows(3);
+    await pick("Season", "S02");
+    await shows(1);
+    expect(screen.getByRole("button", { name: /^Season 2/ })).toHaveTextContent(/^Season 2 · 1 release$/);
+    await userEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    await shows(3);
   });
 
-  it("keeps a title and its menu when the Quality menu leaves nothing of it", async () => {
+  it("opens on FHD on a phone, or on all when the title has none", async () => {
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((media: string) => ({
+      matches: true,
+      media,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const fetch = gotApi();
+      const { unmount } = render(<TitleView tileKey="tv:1399" />);
+      expect(await screen.findByRole("button", { name: "Remove 1080p" })).toBeInTheDocument();
+      expect(fetch.mock.calls.some(([u]) => String(u) === "/api/releases/tv%3A1399?resolution=1080p")).toBe(true);
+      expect(screen.queryByText(/x265-PL3X/)).not.toBeInTheDocument();
+      unmount();
+
+      // Nothing of 1080p on the title: no filter, so everything shows.
+      api({
+        key: "movie:949",
+        head,
+        titles: [title("heat", "Heat", ["Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR"])],
+      });
+      render(<TitleView tileKey="movie:949" />);
+      await vi.waitFor(() => expect(screen.getByRole("button", { name: /^Quality: All/ })).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: "Remove 1080p" })).not.toBeInTheDocument();
+      expect(shownCount()).toBe(1);
+    } finally {
+      window.matchMedia = matchMedia;
+    }
+  });
+
+  it("keeps a title and its menu when the Quality leaves nothing of it", async () => {
     api({
       key: "movie:949",
       head,
@@ -301,11 +364,11 @@ describe("TitleView", () => {
     // Every quality to start with.
     await waitFor(() => expect(shownCount()).toBe(2));
     await pickQuality("4K");
-    expect(shownCount()).toBe(1);
+    await shows(1);
     expect(screen.queryByText(/HDRip/)).not.toBeInTheDocument();
     // The rip's title is still listed, to be matched another way.
     expect(screen.getByText(/Found on TMDB by its release name/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "More options for Heat" })).toBeInTheDocument();
+    expect(await moreOptions("More options for Heat")).toBeInTheDocument();
     expect(screen.getByText("Heat (1995)")).toBeInTheDocument();
   });
 
@@ -367,8 +430,15 @@ describe("TitleView", () => {
           const answer = check(JSON.parse(String(init.body)));
           return answer instanceof Response ? answer : json(answer);
         }
-        if (url.pathname === "/api/wcx-releases") return json({ releases: list });
-        if (url.pathname === "/api/releases/movie%3A949") return json({ key: "movie:949", head, titles });
+        if (url.pathname === "/api/wcx-releases") {
+          const keep = inResolutions(url.searchParams.getAll("resolution"));
+          return json({
+            releases: list.filter((r) => keep(wcxRow(r))),
+            resolutions: namesByResolution(list.map(wcxRow)),
+          });
+        }
+        if (url.pathname === "/api/releases/movie%3A949")
+          return json(detailOf({ key: "movie:949", head, titles }, url));
       });
     }
     // A release's Check button, by its (first copy's) name (the first of
@@ -393,8 +463,9 @@ describe("TitleView", () => {
       // Its Check button in the Mirror column, and again under the name for a phone.
       expect(screen.getByRole("columnheader", { name: "Mirror" })).toBeInTheDocument();
       expect(within(row(/x264-WAYNE/)).getAllByRole("button", { name: /^Check its mirrors/ })).toHaveLength(2);
-      expect(within(row(/x264-WAYNE/)).getByText("8.00 GB")).toBeInTheDocument();
-      expect(within(row(/x264-WAYNE/)).getByText("07.08.2026")).toBeInTheDocument();
+      // Its size and date show in the table, under the name on a phone and beside the mirror on one on its side.
+      expect(within(row(/x264-WAYNE/)).getAllByText("8.00 GB").length).toBeGreaterThan(0);
+      expect(within(row(/x264-WAYNE/)).getAllByText("07.08.2026").length).toBeGreaterThan(0);
       expect(screen.getByRole("link", { name: release(/x264-WAYNE/) })).toHaveAttribute(
         "href",
         "https://wcx.example/detail/abc",
@@ -418,7 +489,7 @@ describe("TitleView", () => {
       expect(within(row(/x265-VECTOR/)).queryByRole("button")).not.toBeInTheDocument();
       // 1080p: only WAYNE's, and none of xREL's.
       await pickQuality("1080p");
-      expect(shownCount()).toBe(1);
+      await shows(1);
       expect(screen.queryByText(/x265-VECTOR/)).not.toBeInTheDocument();
 
       await userEvent.click(within(row(/x264-WAYNE/)).getAllByRole("button", { name: /^Check its mirrors/ })[0]);
@@ -482,7 +553,8 @@ describe("TitleView", () => {
       mockFetch((url) => {
         if (url.pathname === "/api/wcx-search") return json({ url: "https://wcx.example/detail/abc" });
         if (url.pathname === "/api/wcx-releases") return json({ error: "WCX is down" }, { status: 502 });
-        if (url.pathname === "/api/releases/movie%3A949") return json({ key: "movie:949", head, titles: [bluray] });
+        if (url.pathname === "/api/releases/movie%3A949")
+          return json(detailOf({ key: "movie:949", head, titles: [bluray] }, url));
       });
       render(<TitleView tileKey="movie:949" />);
       expect(await screen.findByText("Couldn't load WCX: WCX is down")).toBeInTheDocument();
@@ -522,7 +594,7 @@ describe("TitleView", () => {
         "href",
         "https://xrel.example/heat~19950",
       );
-      expect(within(both).getByText("8.00 GB")).toBeInTheDocument();
+      expect(within(both).getAllByText("8.00 GB").length).toBeGreaterThan(0);
       // One Check for both copies: the server picks among their mirrors.
       await userEvent.click(checkButton(name.toLowerCase()));
       await vi.waitFor(() => expect(within(both).getAllByRole("img", { name: /^In the Queue/ })).toHaveLength(2));

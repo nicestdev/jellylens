@@ -86,8 +86,15 @@ export function libraryOf(
     for (let e = c.episode; e <= (c.episodeEnd ?? c.episode); e++) if (seen.has(`${c.season}:${e}`)) return true;
     return false;
   };
-  const code = (p: (typeof parts)[number]) =>
-    `${seasonFolder(p.season)}/${episodeCode(p.season, p.episodes[0], p.episodes.at(-1))}`;
+  // A release that names only the season ("Silo.S01.German.1080p-GRP", one
+  // season or a range) gives each episode's file name by putting the
+  // episode in its place; else just the episode's code.
+  const seasonOnly = /\.S\d{1,2}(?:[+-]S?\d{1,2})*(?=\.)/i;
+  const named = seasonOnly.test(release) && !/\.S\d{1,2}E\d/i.test(release);
+  const code = (p: (typeof parts)[number]) => {
+    const ep = episodeCode(p.season, p.episodes[0], p.episodes.at(-1));
+    return `${seasonFolder(p.season)}/${named ? release.replace(seasonOnly, `.${ep}`) : ep}`;
+  };
   const missing = parts.filter((p) => !p.mine);
   const lib = library(copies.filter(covers), [], seen.size, missing.length);
   // What comes: every episode with Replace, only the missing with Skip.

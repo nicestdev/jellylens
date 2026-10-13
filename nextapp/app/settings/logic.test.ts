@@ -42,7 +42,7 @@ describe("pollDelay", () => {
 });
 
 describe("ignoredList", () => {
-  it("names each ignored show, by name", () => {
+  it("names each ignored show, without its year", () => {
     const shows = [
       {
         ...show({ id: "a", name: "Dark", year: 2017 }),
@@ -52,6 +52,6 @@ describe("ignoredList", () => {
       { ...show({ id: "b", name: "Andor" }), missingEpisodes: null, languages: null },
     ];
     const list = ignoredList(shows, [{ showId: "a" }, { showId: "gone" }, { showId: "b" }]);
-    expect(list.map((e) => e.name)).toEqual(["Andor", "Dark (2017)", "Unknown show"]);
+    expect(list.map((e) => e.name)).toEqual(["Andor", "Dark", "Unknown show"]);
   });
 });

@@ -1,11 +1,8 @@
 import { JELLYFIN_API_KEY, JELLYFIN_URL } from "./env";
 import { refreshLibraries } from "./jellyfin";
-import { scanProgress } from "./library-scan";
-import { startByHand, triggerLibraryScan } from "./sync-manager";
-import type { OrganizeScan } from "./api-types";
+import { startByHand } from "./sync-manager";
 
-// The library scan started from the Queue (Rescan library) or after a
-// move: Jellylens scans the disks, and Jellyfin is asked to scan its
+// The library scan after a move: Jellylens scans the disks, and Jellyfin is asked to scan its
 // libraries too, so it plays what came in (it does that on its own; a
 // Jellyfin that can't be reached doesn't hold the scan up).
 export function rescan() {
@@ -16,13 +13,4 @@ export function rescan() {
   }
   // Fresh: a scan already running may have listed the disks before the move.
   startByHand("library", true);
-}
-
-// Whether the scan runs, and how far its probing is (null otherwise).
-export function scanState(): OrganizeScan {
-  const p = scanProgress();
-  return {
-    running: triggerLibraryScan.running(),
-    percent: p?.phase === "probing" && p.total ? (p.done / p.total) * 100 : null,
-  };
 }

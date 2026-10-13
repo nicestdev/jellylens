@@ -69,7 +69,7 @@ function FacetOptions({ facet }: { facet: Facet }) {
 
 // The design's toolbar button: outline, muted, the same whatever it filters.
 export const TOOLBAR_BUTTON =
-  "h-9 shrink-0 gap-1.5 rounded-lg border border-input bg-transparent pr-2.5 pl-3 text-sm font-normal text-sub-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted max-sm:h-11";
+  "h-9 shrink-0 gap-1.5 rounded-lg border border-input bg-transparent pr-2.5 pl-3 text-sm font-normal text-sub-foreground hover:bg-muted hover:text-foreground aria-expanded:bg-muted max-sm:h-10";
 
 // A toolbar filter: one button per facet ("Genre: All"), its menu a
 // scrolling checklist of the facet's values that stays open while toggling.

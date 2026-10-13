@@ -14,7 +14,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Breakable } from "@/components/breakable";
-import { LibraryIcon } from "@/components/library-icon";
 import { TableFrame } from "@/components/section-frame";
 import { CELL, NOT_ON_PHONE, NUMBER_CELL, ROW } from "@/components/library-table";
 import { buttonVariants } from "@/components/ui/button";
@@ -40,19 +39,23 @@ const ACTION_ICONS: Record<string, LucideIcon> = { wrong: Unlink, xrel: Link2, a
 
 // The ⋯ menu that fixes one xREL title's match by hand: drop TMDB's data,
 // take xREL's link after all, or go back to the automatic check.
+// match: left out for a title with nothing to match, children: items of the
+// title's own (Ignore show) after the match's.
 export function MatchMenu({
   label,
   match,
-  saving,
+  saving = false,
   onPick,
+  children,
 }: {
   label: string;
-  match: MatchInfo;
-  saving: boolean;
-  onPick: (verdict: MatchInfo["verdict"]) => void;
+  match?: MatchInfo;
+  saving?: boolean;
+  onPick?: (verdict: MatchInfo["verdict"]) => void;
+  children?: ReactNode;
 }) {
-  const actions = matchActions(match);
-  if (!actions.length) return null;
+  const actions = match ? matchActions(match) : [];
+  if (!actions.length && !children) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -66,12 +69,13 @@ export function MatchMenu({
         {actions.map((a) => {
           const Icon = ACTION_ICONS[a.verdict ?? "auto"];
           return (
-            <DropdownMenuItem key={a.label} onClick={() => onPick(a.verdict)}>
+            <DropdownMenuItem key={a.label} onClick={() => onPick?.(a.verdict)}>
               <Icon />
               {a.label}
             </DropdownMenuItem>
           );
         })}
+        {children}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -79,12 +83,11 @@ export function MatchMenu({
 
 // What the name says, as one line under it (values, shown with Dots):
 // group, quality, codec, audio.
-const attributeLine = (r: ReleaseRow, disks?: string | null) => [
+const attributeLine = (r: ReleaseRow) => [
   r.group ?? NO_GROUP,
   r.resolution ? formatFacet("resolution", r.resolution) : null,
   r.codec || null,
   r.audio,
-  disks,
 ];
 
 // One table: the release's name (linking to href's page) over its group,
@@ -99,11 +102,10 @@ const attributeLine = (r: ReleaseRow, disks?: string | null) => [
 // still to come, green when the season is complete; when the release has
 // more than you have, yours in peach and the release's next to it. open, onToggle: a heading that folds the rows away (a
 // show's seasons). library: what the library has
-// of a release, its name in peach with the disk icon and the disks at the
-// end of the line under it when it's this very release. title, count: its heading (a show's season, its episodes), "Releases" and how
-// many unless given. A library row (ghostRows, owned set): its name in
-// peach with the disk icon, the disks it's on after its audio; no
-// link, mirror or date.
+// of a release, its name in peach when it's this very
+// release. title, count: its heading (a show's season, its episodes), "Releases" and
+// nothing after it unless given. A library row (ghostRows, owned set): its name in
+// peach; no link, mirror or date.
 // A release's name: one line, but two (broken anywhere) on a phone.
 // How many episodes a release has against the season's aired ones: red
 // when fewer, sky when more are still to come, else green (complete).
@@ -144,7 +146,7 @@ export function ReleaseTable<R extends ReleaseRow>({
   return (
     <TableFrame
       title={title}
-      count={count ?? rows.length}
+      count={count}
       open={open}
       onToggle={onToggle}
       columns={[
@@ -166,42 +168,44 @@ export function ReleaseTable<R extends ReleaseRow>({
         // then the release's own count against the aired ones.
         const of = owned?.episodes != null && r.episodes && owned.episodes < r.episodes ? r.episodes : null;
         const tone = of ? "text-warning" : episodesTone(episodes, aired);
-        // Only on the library's own rows and this very release: the disk icon,
-        // and the disks at the end of the line under the name.
-        const disks = ghost ? r.owned : owned?.exact ? owned.disks : null;
-        const diskIcon = (className: string) => (disks ? <LibraryIcon className={className} /> : null);
         return (
           <tr key={r.id} className={cn(ROW, "h-17")}>
             <td className={cn(CELL, "max-w-0")}>
-              {/* On a phone the mirror goes on the right of the name. */}
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    {link ? (
-                      <a
-                        href={link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(NAME, owned?.exact && "text-warning", "transition-colors hover:text-bright")}
-                      >
-                        <Breakable text={withoutTitle(r.name, { keepEpisode: true })} />
-                        {/* On a phone the name wraps, so the icon goes after its last word. */}
-                        {diskIcon("ml-1.5 inline-block align-[-0.125em] sm:hidden")}
-                      </a>
-                    ) : (
-                      <span className={cn(NAME, ghost && "text-warning")}>
-                        <Breakable text={withoutTitle(r.name, { keepEpisode: true })} />
-                        {diskIcon("ml-1.5 inline-block align-[-0.125em] sm:hidden")}
-                      </span>
-                    )}
-                    {diskIcon("max-sm:hidden")}
-                  </div>
+              {/* On a phone the name has the whole width and the mirror stands in the corner at
+                  the bottom right (its icon flush with the name's end); on one on its side, right
+                  of all three, then date over size. */}
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 sm:grid-cols-1 sm:gap-x-0">
+                <div className="col-span-3 flex min-w-0 items-center gap-2 sm:col-span-1 phone-landscape:col-span-1">
+                  {link ? (
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(NAME, owned?.exact && "text-warning", "transition-colors hover:text-bright")}
+                    >
+                      <Breakable text={withoutTitle(r.name, { keepEpisode: true })} />
+                    </a>
+                  ) : (
+                    <span className={cn(NAME, ghost && "text-warning")}>
+                      <Breakable text={withoutTitle(r.name, { keepEpisode: true })} />
+                    </span>
+                  )}
+                </div>
+                <div className="col-start-1 min-w-0">
                   <div className="mt-0.75 truncate font-mono text-xs text-muted-foreground max-sm:whitespace-normal">
-                    <Dots parts={attributeLine(r, disks)} />
-                    <span className="sm:hidden">
-                      {/* After the attributes, so each with a Dot before it. */}
-                      {[
-                        episodes ? (
+                    <Dots parts={attributeLine(r)} tight />
+                  </div>
+                  {/* On a phone a line of its own: episodes, date, size. On one on its side
+                      only the episodes: date and size stand right of the mirror. */}
+                  <div
+                    className={cn(
+                      "mt-0.5 text-xs text-muted-foreground sm:hidden",
+                      !episodes && "phone-landscape:hidden",
+                    )}
+                  >
+                    {[
+                      {
+                        node: episodes ? (
                           of ? (
                             <>
                               <span className={cn(tone)}>{episodes}</span> /{" "}
@@ -211,20 +215,34 @@ export function ReleaseTable<R extends ReleaseRow>({
                             <span className={cn(tone)}>{plural(episodes, "episode")}</span>
                           )
                         ) : null,
-                        r.size ? formatBytes(r.size) : null,
-                        r.date ? formatDate(r.date) : null,
-                      ]
-                        .filter(Boolean)
-                        .map((v, i) => (
-                          <Fragment key={i}>
-                            <Dot />
-                            {v}
-                          </Fragment>
-                        ))}
-                    </span>
+                      },
+                      { node: r.date ? formatDate(r.date) : null, side: true },
+                      { node: r.size ? formatBytes(r.size) : null, side: true },
+                    ]
+                      .filter((v) => v.node)
+                      .map((v, i) => (
+                        <span key={i} className={cn(v.side && "phone-landscape:hidden")}>
+                          {i ? (
+                            <>
+                              {" "}
+                              <Dot />{" "}
+                            </>
+                          ) : null}
+                          {v.node}
+                        </span>
+                      ))}
                   </div>
                 </div>
-                {buttons ? <div className="shrink-0 sm:hidden">{buttons}</div> : null}
+                {buttons ? (
+                  <div className="col-start-2 row-start-2 -mr-2 shrink-0 self-end sm:hidden phone-landscape:row-span-2 phone-landscape:row-start-1 phone-landscape:mr-0 phone-landscape:self-center">
+                    {buttons}
+                  </div>
+                ) : null}
+                {/* A phone on its side has room: date over size, right of the mirror. */}
+                <div className="col-start-3 row-span-2 row-start-1 hidden w-[5.5rem] shrink-0 flex-col items-end text-xs text-muted-foreground tabular-nums phone-landscape:flex">
+                  <span>{r.date ? formatDate(r.date) : null}</span>
+                  <span>{r.size ? formatBytes(r.size) : null}</span>
+                </div>
               </div>
             </td>
             {hasMirrors ? <td className={cn(CELL, NOT_ON_PHONE, "text-center")}>{buttons}</td> : null}

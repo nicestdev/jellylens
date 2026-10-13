@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { HardDrive, Heart } from "lucide-react";
 import { PosterCard } from "@/components/poster-card";
 import { latestRequest } from "@/app/wishlist/logic";
@@ -43,9 +42,9 @@ function metaLine(item: Result): (string | number | null | undefined)[] {
   return [item.year, next ? `${next.kind} ${shortDate(next.date)}` : TYPE_LABEL[item.mediaType]];
 }
 
-// A poster's In library mark, top right where the heart would be (what's
-// owned can't be wished for): the library icon in peach (like the Queue's) in a round chip, the heart's
-// size, nothing to click. className: its place, beside a heart. small: on
+// A poster's In library mark, where the heart would be (what's owned can't be
+// wished for): the library icon in peach (like the Queue's), under a tile's
+// poster like the heart, on a title page's poster in a round chip; nothing to click. className: its place, beside a heart. small: on
 // a title page's poster, which is smaller than a tile's.
 function LibraryMark({ className, small = false }: { className?: string; small?: boolean }) {
   return (
@@ -53,23 +52,23 @@ function LibraryMark({ className, small = false }: { className?: string; small?:
       role="img"
       aria-label="In library"
       className={cn(
-        "pointer-events-auto absolute grid place-items-center rounded-full bg-sidebar/75 text-warning",
+        "pointer-events-auto absolute grid place-items-center rounded-full text-warning",
         small ? SMALL_MARK : MARK,
         className,
       )}
     >
-      <HardDrive className={small ? SMALL_ICON : "size-5"} strokeWidth={2} />
+      <HardDrive className={small ? SMALL_ICON : "size-4"} strokeWidth={2} />
     </span>
   );
 }
 
-// A mark's place and size: a tile's, or (SMALL_) a title page's poster's,
-// a phone's smaller still.
-const MARK = "top-2 right-2 size-10";
-const SMALL_MARK = "top-1.5 right-1.5 size-8 sm:top-2 sm:right-2 sm:size-9";
+// A mark's place and size: a title page's poster's (SMALL_), a phone's smaller still.
+const SMALL_MARK = "top-1.5 right-1.5 size-8 bg-sidebar/75 sm:top-2 sm:right-2 sm:size-9";
+// A tile's mark: a round chip on the poster's top right, phone and desktop alike.
+const MARK = "top-1.5 right-1.5 size-7 bg-sidebar/75";
 const SMALL_ICON = "size-4 sm:size-4.5";
 
-// A poster's heart, top right, red: on the wishlist it's filled and
+// A poster's heart, top right, in the accent on a round chip: on the wishlist it's filled and
 // always there; off it, an outline, it shows while the poster is hovered or the button
 // focused (always on touch screens, which can't hover). A click puts the
 // title on the wishlist or takes it off (no note: it shows right there); the rest of
@@ -95,6 +94,7 @@ function HeartToggle({
       ? `Remove ${title} for everyone`
       : `Remove ${title} from wishlist`
     : `Add ${title} to wishlist`;
+  const icon = small ? SMALL_ICON : "size-4";
   return (
     <button
       type="button"
@@ -105,12 +105,11 @@ function HeartToggle({
       className={cn(
         "pointer-events-auto absolute grid cursor-pointer place-items-center rounded-full transition-opacity duration-150 disabled:opacity-60",
         small ? SMALL_MARK : MARK,
-        on
-          ? "bg-sidebar/75 text-wish"
-          : "bg-sidebar/60 text-wish opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+        "text-primary",
+        !on && "opacity-0 group-hover/card:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
       )}
     >
-      <Heart className={cn(small ? SMALL_ICON : "size-5", on && "fill-current")} strokeWidth={on ? 0 : 1.8} />
+      <Heart className={cn(icon, on && "fill-current")} strokeWidth={on ? 1.8 : 2} />
     </button>
   );
 }
@@ -251,22 +250,18 @@ export function useDiscover(q: string, on = true) {
   return { items: !on || loading ? [] : results!.items, loading, error: on ? (results?.error ?? "") : "" };
 }
 
-// showReleases: opens a poster's releases instead of its TMDB page
-// (admins only).
+// admin: a poster links to its title page (the releases) instead of its TMDB
+// page, so a right click opens that in a new tab, as on Movies and Shows.
 type TileContext = {
   pending: Set<string>;
   // Wishlist posters taken off a moment ago, still in sight.
   leaving?: Set<string>;
   toggle: (item: Result, requested: boolean, everyone?: boolean, linger?: boolean) => void;
-  showReleases?: (item: Result) => void;
+  admin: boolean;
 };
 
-// The posters' context on Discover and the Wishlist: the requests, and for
-// admins a title's page to open.
-export function useTileContext(r: ReturnType<typeof useRequests>) {
-  const router = useRouter();
-  return { ...r, showReleases: r.admin ? (item: Result) => router.push(titlePath(itemKey(item))) : undefined };
-}
+const hrefOf = (item: Result, ctx: TileContext) =>
+  ctx.admin ? titlePath(itemKey(item)) : tmdbUrl(item.mediaType, item.tmdbId);
 
 // A title page's poster's mark, as on a tile but smaller: the library
 // icon when it's owned, else the heart that puts it on the wishlist or
@@ -305,8 +300,7 @@ export function RequestAction({ item, requested, ctx }: { item: Result; requeste
 export function ResultTile({ item, requested, ctx }: { item: Result; requested: boolean; ctx: TileContext }) {
   return (
     <PosterCard
-      onClick={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
-      href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
+      href={hrefOf(item, ctx)}
       imageSrc={tmdbImage(item.posterPath)}
       title={item.title}
       meta={metaLine(item)}
@@ -330,8 +324,7 @@ export function WishlistTile({ item, ctx }: { item: Request; ctx: TileContext })
   const leaving = ctx.leaving?.has(itemKey(item)) ?? false;
   return (
     <PosterCard
-      onClick={ctx.showReleases ? () => ctx.showReleases!(item) : undefined}
-      href={ctx.showReleases ? undefined : tmdbUrl(item.mediaType, item.tmdbId)}
+      href={hrefOf(item, ctx)}
       imageSrc={tmdbImage(item.posterPath)}
       title={item.title}
       meta={overview ? [item.year, requesterNames(item)] : metaLine(item)}

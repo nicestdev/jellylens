@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { FacetMenu, FilterChips } from "@/components/filter-menu";
-import { PageTools } from "@/components/page-tools";
 import { SearchInput } from "@/components/search-input";
 import { SortMenu, type SortOption } from "@/components/sort-menu";
 import { byCount, toggled, type LibraryFilters, type SortDir } from "@/lib/facets";
@@ -47,10 +46,12 @@ export function LibraryToolbar<K extends string>({
     })),
   ];
   return (
-    <PageTools active={!!filters.query || chips.length > 0}>
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <SearchInput value={filters.query} onChange={setQuery} placeholder={placeholder} size="lg" />
+    <>
+      <div className="flex flex-wrap items-center gap-2 md:mt-6">
+        <SearchInput value={filters.query} onChange={setQuery} placeholder={placeholder} size="lg" grow />
+        {/* Held upright a phone shows the search alone; on its side everything shares a line. */}
         <FacetMenu
+          className="phone-portrait:hidden"
           facet={{
             key: "genre",
             label: "Genre",
@@ -61,6 +62,7 @@ export function LibraryToolbar<K extends string>({
           }}
         />
         <FacetMenu
+          className="phone-portrait:hidden"
           facet={{
             key: "lang",
             label: "Audio",
@@ -71,7 +73,7 @@ export function LibraryToolbar<K extends string>({
             format: languageName,
           }}
         />
-        <div className="ml-auto">
+        <div className="ml-auto phone-portrait:hidden">
           <SortMenu
             options={sorts}
             sortKey={state.sortKey}
@@ -91,6 +93,6 @@ export function LibraryToolbar<K extends string>({
           setLangs(new Set());
         }}
       />
-    </PageTools>
+    </>
   );
 }

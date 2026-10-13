@@ -75,8 +75,3 @@ export function episodeCode(
 }
 
 export const seasonLabel = (season: number) => (season === 0 ? "Specials" : `Season ${season}`);
-
-// A show as the Dashboard and Settings name it: "Dark (2017)", or without
-// the year it hasn't; "Unknown show" for one the library doesn't have.
-export const showName = (show: { name: string; year?: number | null } | null | undefined) =>
-  show ? (show.year ? `${show.name} (${show.year})` : show.name) : "Unknown show";

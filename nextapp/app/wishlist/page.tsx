@@ -4,13 +4,12 @@ import { useState } from "react";
 import { Heart, SearchX } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { FacetMenu, FilterChips } from "@/components/filter-menu";
-import { PageTools } from "@/components/page-tools";
 import { SearchInput } from "@/components/search-input";
 import { SortMenu } from "@/components/sort-menu";
 import { POSTER_GRID, PosterGridSkeleton } from "@/components/poster-card";
 import { useReleasesChanged } from "@/hooks/use-releases-changed";
 import { matchesWords } from "@/lib/text";
-import { WishlistTile, itemKey, useRequests, useTileContext } from "@/components/request-tiles";
+import { WishlistTile, itemKey, useRequests } from "@/components/request-tiles";
 import { toggled, type SortDir } from "@/lib/facets";
 import { TYPES, ofTypes, sortWishlist, sortsFor, typeLabel, type WishlistSortKey } from "./logic";
 import { ErrorAlert } from "@/components/error-alert";
@@ -24,7 +23,6 @@ export default function WishlistPage() {
   const [query, setQuery] = useState("");
   const r = useRequests();
   useReleasesChanged(() => void r.reload());
-  const ctx = useTileContext(r);
   const q = query.trim();
   const matches = matchesWords(q);
   const [types, setTypes] = useState<Set<string>>(() => new Set());
@@ -41,44 +39,44 @@ export default function WishlistPage() {
   );
 
   return (
-    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-4 sm:px-6 sm:py-5">
       <h1 className="text-3xl font-semibold max-md:sr-only">Wishlist</h1>
 
       {r.error ? <ErrorAlert>{r.error}</ErrorAlert> : null}
 
-      <PageTools active={!!query || types.size > 0}>
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={r.overview ? "Search everyone's wishlists" : "Search your wishlist"}
-            size="lg"
-          />
-          <FacetMenu
-            facet={{
-              key: "type",
-              label: "Type",
-              values: [...TYPES],
-              selected: types,
-              onToggle: toggleType,
-              format: typeLabel,
-            }}
-          />
-          <SortMenu
-            className="ml-auto"
-            options={sorts}
-            sortKey={current.key}
-            sortDir={current.dir}
-            onChange={(key, dir) => setSort({ key, dir })}
-          />
-        </div>
-        <FilterChips
-          chips={[...types].map((t) => ({ id: t, label: typeLabel(t), onRemove: () => toggleType(t) }))}
-          onClear={() => setTypes(new Set())}
+      <div className="flex flex-wrap items-center gap-2 md:mt-6">
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={r.overview ? "Search everyone's wishlists" : "Search your wishlist"}
+          size="lg"
+          grow
         />
-      </PageTools>
+        <FacetMenu
+          className="phone-portrait:hidden"
+          facet={{
+            key: "type",
+            label: "Type",
+            values: [...TYPES],
+            selected: types,
+            onToggle: toggleType,
+            format: typeLabel,
+          }}
+        />
+        <SortMenu
+          className="ml-auto phone-portrait:hidden"
+          options={sorts}
+          sortKey={current.key}
+          sortDir={current.dir}
+          onChange={(key, dir) => setSort({ key, dir })}
+        />
+      </div>
+      <FilterChips
+        chips={[...types].map((t) => ({ id: t, label: typeLabel(t), onRemove: () => toggleType(t) }))}
+        onClear={() => setTypes(new Set())}
+      />
 
-      <div className="mt-6">
+      <div className="mt-4 md:mt-6">
         {r.loading ? (
           <PosterGridSkeleton />
         ) : shown.length === 0 ? (
@@ -100,7 +98,7 @@ export default function WishlistPage() {
         ) : (
           <div className={POSTER_GRID}>
             {shown.map((item) => (
-              <WishlistTile key={itemKey(item)} item={item} ctx={ctx} />
+              <WishlistTile key={itemKey(item)} item={item} ctx={r} />
             ))}
           </div>
         )}

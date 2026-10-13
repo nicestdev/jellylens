@@ -46,7 +46,7 @@ export function LibraryPage<T extends { id: string }, K extends string>({
   const { rows, genreCounts, langCounts } = view(items, lib.filters, lib.sortKey, lib.sortDir);
 
   return (
-    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-4 sm:px-6 sm:py-5">
       <h1 className="text-3xl font-semibold max-md:sr-only">{title}</h1>
 
       {error ? <ErrorAlert>{error}</ErrorAlert> : null}
@@ -59,7 +59,7 @@ export function LibraryPage<T extends { id: string }, K extends string>({
         placeholder={loading ? `Search ${noun}` : `Search ${formatNumber(items.length)} ${noun}`}
       />
 
-      <div className="mt-6">
+      <div className="mt-4 md:mt-6">
         {loading ? (
           <PosterGridSkeleton />
         ) : rows.length === 0 ? (

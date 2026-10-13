@@ -153,7 +153,7 @@ export default function SettingsPage() {
   const loading = !status || !config;
 
   return (
-    <main className="w-full max-w-[90rem] px-4 py-5 sm:px-6">
+    <main className="w-full max-w-[90rem] px-4 py-4 sm:px-6 sm:py-5">
       <h1 className="text-3xl font-semibold max-md:sr-only">Settings</h1>
 
       {error ? <ErrorAlert>{error}</ErrorAlert> : null}

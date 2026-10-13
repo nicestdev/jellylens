@@ -18,7 +18,12 @@ const heat: Result = {
   library: null,
   availability: null,
 };
-const ctx = (over: { pending?: Set<string> } = {}) => ({ pending: new Set<string>(), toggle: vi.fn(), ...over });
+const ctx = (over: { pending?: Set<string>; admin?: boolean } = {}) => ({
+  pending: new Set<string>(),
+  admin: false,
+  toggle: vi.fn(),
+  ...over,
+});
 
 const request = (over: Partial<RequestItem> = {}): RequestItem => ({
   ...heat,
@@ -57,15 +62,13 @@ describe("RequestAction", () => {
 });
 
 describe("ResultTile", () => {
-  it("links its poster to TMDB, or opens its releases for an admin", async () => {
+  it("links its poster to TMDB, or to its title page for an admin", () => {
     const { unmount } = render(<ResultTile item={heat} requested={false} ctx={ctx()} />);
     expect(screen.getByRole("link", { name: /Heat/ })).toHaveAttribute("href", "https://www.themoviedb.org/movie/949");
     unmount();
 
-    const showReleases = vi.fn();
-    render(<ResultTile item={heat} requested={false} ctx={{ ...ctx(), showReleases }} />);
-    await userEvent.click(screen.getByRole("button", { name: /^Heat/ }));
-    expect(showReleases).toHaveBeenCalledWith(heat);
+    render(<ResultTile item={heat} requested={false} ctx={ctx({ admin: true })} />);
+    expect(screen.getByRole("link", { name: /Heat/ })).toHaveAttribute("href", "/title/movie/949");
   });
 });
 

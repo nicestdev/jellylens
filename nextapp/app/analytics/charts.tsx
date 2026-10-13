@@ -25,15 +25,13 @@ function Frame({
 }) {
   return (
     <section aria-label={title} className="min-w-0 rounded-lg border bg-card">
-      <div className="flex min-h-9 items-center justify-between gap-4 border-b px-3 font-mono text-sm font-medium">
+      <div className="flex min-h-9 items-center justify-between gap-4 border-b px-3 text-sm font-medium">
         {title}
         {right ? <span className="text-[0.8125rem] font-normal text-muted-foreground">{right}</span> : null}
       </div>
       {/* More room under the content than over it, where the heading's line sits. */}
       <div className="px-3 pt-3 pb-5">{children}</div>
-      {footer ? (
-        <div className="truncate border-t px-3 py-2 font-mono text-xs text-muted-foreground">{footer}</div>
-      ) : null}
+      {footer ? <div className="border-t px-3 py-2 text-xs text-muted-foreground">{footer}</div> : null}
     </section>
   );
 }
@@ -49,7 +47,7 @@ export function AudioGoal({ data }: { data: AnalyticsResponse }) {
     <div>
       <div className="flex justify-between gap-3 text-[0.8125rem]">
         <span>{label}</span>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {formatNumber(part)} of {formatNumber(total)} <Dot />{" "}
           <span className="text-foreground">{percent(part, total)}</span>
         </span>
@@ -65,7 +63,7 @@ export function AudioGoal({ data }: { data: AnalyticsResponse }) {
   const files = data.movies.files + data.shows.files;
   return (
     <Frame
-      title="German × English"
+      title="Dual language"
       footer={rows
         .filter((r) => r !== both)
         .map((r, i) => (
@@ -78,12 +76,12 @@ export function AudioGoal({ data }: { data: AnalyticsResponse }) {
             ) : (
               ""
             )}
-            {r.label} <span className="font-mono text-xs text-foreground">{formatNumber(r.movies + r.episodes)}</span>
+            {r.label} <span className="text-xs text-foreground">{formatNumber(r.movies + r.episodes)}</span>
           </span>
         ))}
     >
       {/* The share as big as a stat tile's number. */}
-      <div className="font-mono text-2xl leading-tight">{percent(bothMovies + bothEpisodes, files)}</div>
+      <div className="text-2xl leading-tight">{percent(bothMovies + bothEpisodes, files)}</div>
       <div className="mt-3 grid gap-4">
         {meter("Movies", bothMovies, data.movies.files)}
         {meter("Episodes", bothEpisodes, data.shows.files)}
@@ -107,24 +105,24 @@ export function QualityHeatmap({ data }: { data: AnalyticsResponse }) {
   const codecs = codecRows(data);
   const max = Math.max(1, ...data.quality.map((c) => c.size));
   return (
-    <Frame title="Resolution × Codec" right="by size">
+    <Frame title="Resolution & codec" right="by size">
       <div className="grid gap-1" style={{ gridTemplateColumns: `auto repeat(${codecs.length}, minmax(0, 1fr))` }}>
         <span />
         {codecs.map((c) => (
-          <span key={c.key} className="truncate pb-1 text-center font-mono text-xs text-muted-foreground">
+          <span key={c.key} className="truncate pb-1 text-center text-xs text-muted-foreground">
             {c.label}
           </span>
         ))}
         {resolutions.map((r) => (
           <div key={r.key} className="contents">
-            <span className="self-center pr-2 font-mono text-xs">{r.label}</span>
+            <span className="self-center pr-2 text-xs">{r.label}</span>
             {codecs.map((c) => {
               const cell = data.quality.find((x) => x.resolution === r.key && x.codec === c.key);
               const fraction = cell ? cell.size / max : 0;
               return (
                 <div
                   key={c.key}
-                  className="flex h-12 min-w-0 flex-col items-center justify-center rounded-md font-mono text-xs sm:h-14"
+                  className="flex h-12 min-w-0 flex-col items-center justify-center rounded-md text-xs sm:h-14"
                   style={{
                     background: cell ? heat(fraction) : undefined,
                     color: fraction > 0.36 ? "var(--p-mantle)" : undefined,
@@ -132,8 +130,8 @@ export function QualityHeatmap({ data }: { data: AnalyticsResponse }) {
                 >
                   {cell ? (
                     <>
-                      <span className="font-medium max-sm:hidden">{formatBytes(cell.size)}</span>
-                      <span className="font-medium sm:hidden">{shortBytes(cell.size)}</span>
+                      <span className="font-mono font-medium max-sm:hidden">{formatBytes(cell.size)}</span>
+                      <span className="font-mono font-medium sm:hidden">{shortBytes(cell.size)}</span>
                       <span className="opacity-70 max-sm:hidden">{plural(cell.files, "file")}</span>
                     </>
                   ) : (
@@ -166,9 +164,8 @@ export function GroupRanking({ rows, groups }: { rows: Row[]; groups: number }) 
         row ? (
           <>
             <Dots
-              spaced
               parts={[
-                <span key="l" className="text-foreground">
+                <span key="l" className="font-mono text-foreground">
                   {row.label}
                 </span>,
                 plural(row.movies, "movie"),
@@ -178,7 +175,14 @@ export function GroupRanking({ rows, groups }: { rows: Row[]; groups: number }) 
             />
           </>
         ) : (
-          <Dots parts={[plural(groups, "group"), formatBytes(total)]} spaced />
+          <Dots
+            parts={[
+              plural(groups, "group"),
+              <span key="t" className="font-mono">
+                {formatBytes(total)}
+              </span>,
+            ]}
+          />
         )
       }
     >

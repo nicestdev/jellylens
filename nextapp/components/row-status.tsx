@@ -23,29 +23,28 @@ function Body({ state, right }: { state: RowState; right?: string }) {
     <span
       onMouseEnter={titleIfCut}
       className={cn(
-        "min-w-0 flex-1 font-mono text-xs",
+        "min-w-0 flex-1",
         // An error wraps: its reason is what to read.
         state.tone === "error" ? "[overflow-wrap:anywhere] whitespace-normal text-destructive" : "truncate",
         state.tone === "warning" && "text-warning",
       )}
     >
-      {/* Tight under a bar, the line beside its share; spaced otherwise. */}
-      {shown(state.line, !state.bar)}
+      {shown(state.line)}
     </span>
   );
   if (!state.bar)
     return (
       <span className="flex min-w-0 items-baseline gap-2">
         {line}
-        {right ? <span className="shrink-0 font-mono text-xs">{right}</span> : null}
+        {right ? <span className="shrink-0">{right}</span> : null}
       </span>
     );
   return (
     <>
       <Bar fraction={state.bar.fraction} color={state.bar.color} className="mt-1 h-1.5" />
-      <span className="mt-1.5 flex items-baseline gap-2 text-xs tabular-nums">
+      <span className="mt-1.5 flex items-baseline gap-2 tabular-nums">
         {line}
-        <span className="shrink-0 font-mono">{`${Math.floor(state.bar.fraction * 100)}\u202f%`}</span>
+        <span className="shrink-0">{`${Math.floor(state.bar.fraction * 100)}\u202f%`}</span>
       </span>
     </>
   );

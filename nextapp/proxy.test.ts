@@ -59,7 +59,6 @@ describe("proxy", () => {
       expect(passes(await proxy(request(path, { cookie: cookie(true) }))), path).toBe(true);
     }
     for (const path of [
-      "/api/releases",
       "/api/releases/abc",
       "/api/release-groups",
       "/api/analytics",
@@ -73,7 +72,14 @@ describe("proxy", () => {
 
   it("gives everyone signed in the shared pages", async () => {
     const { proxy, cookie } = await load();
-    for (const path of ["/movies", "/shows", "/requests", "/api/requests", "/api/tmdb-image/w342/a.jpg"]) {
+    for (const path of [
+      "/movies",
+      "/shows",
+      "/requests",
+      "/api/requests",
+      "/api/releases",
+      "/api/tmdb-image/w342/a.jpg",
+    ]) {
       expect(passes(await proxy(request(path, { cookie: cookie(false) }))), path).toBe(true);
     }
   });

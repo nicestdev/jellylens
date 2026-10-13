@@ -47,10 +47,10 @@ function stateOf(pkg: DownloadPackageItem): RowState {
     if (!lib.new.length) return { line: "All in library" };
     return {
       line: (
-        // Like the tree's marks: − what goes, ∗ what's skipped (blue), + what comes.
-        <span className="font-mono">
+        // Like the tree's marks: − what goes, = what's skipped (blue), + what comes.
+        <span>
           {lib.exact ? (
-            <span className="text-info">∗{lib.skip} </span>
+            <span className="text-info">={lib.skip} </span>
           ) : (
             <span className="text-destructive">−{lib.old.length} </span>
           )}
@@ -126,7 +126,7 @@ function RowMenu({
 }
 
 // One package as a table row, two lines where it helps (like Analytics'
-// files): title and year, a peach icon when the library has some of it,
+// files): title, a peach icon when the library has some of it,
 // the release name under it (and then the library's tree); where it's at (stateOf); its size; and the ⋯
 // menu, which starts, pauses, resumes or retries it.
 type PackageAction = "start" | "pause" | "resume" | "reset" | "retry";
@@ -184,7 +184,7 @@ export function PackageRow({
           library has it on, peach like the icon after the title (where a
           Replace would go), else empty while it comes in. */}
       <td className={cn(CELL, NOT_ON_PHONE)}>
-        {onDisk ? <span className="block truncate font-mono text-xs text-warning">{onDisk}</span> : null}
+        {onDisk ? <span className="block truncate font-medium text-warning">{onDisk}</span> : null}
       </td>
       <StatusCell state={state} />
       <td className={cn(NUMBER_CELL, NOT_ON_PHONE)}>{size}</td>

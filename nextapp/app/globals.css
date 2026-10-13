@@ -17,6 +17,8 @@
 /* That phone on its side, for what still uses its width: the desktop's
    columns (Dashboard, Analytics, Settings), four posters a row. */
 @custom-variant phone-landscape (@media (height < 30rem) and (orientation: landscape));
+/* A phone held upright, where the search is all a list's toolbar shows. */
+@custom-variant phone-portrait (@media (width < 40rem) and (height >= 30rem));
 
 /* Clear of the notch and the rounded corners (viewportFit in app/layout.tsx). */
 @utility px-safe {
@@ -125,6 +127,13 @@
   }
   html {
     @apply font-sans;
+    /* The same width with or without a scrollbar, so grids don't change their column count from page to page. */
+    scrollbar-gutter: stable;
+  }
+  /* The sign-in page and the 404 fill the window in the sidebar's color:
+     no gutter beside them, where nothing scrolls. */
+  html:has([data-bare]) {
+    scrollbar-gutter: auto;
   }
 }
 

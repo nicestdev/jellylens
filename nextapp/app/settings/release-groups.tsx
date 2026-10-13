@@ -119,7 +119,7 @@ function GroupList({
       columns={[
         { label: "Group" },
         { label: "Releases", align: "right", width: SETTINGS_COLUMNS.middle, phone: false },
-        { label: "Last sync", width: SETTINGS_COLUMNS.lastSync, phone: false },
+        { label: "Last sync", align: "right", width: SETTINGS_COLUMNS.lastSync, phone: false },
         {
           label: <AddButton label={addLabel} onClick={() => setOpen(true)} disabled={groups === null} />,
           width: SETTINGS_COLUMNS.action,
@@ -143,11 +143,9 @@ function GroupList({
             </div>
           </td>
           <td className={cn(NUMBER_CELL, NOT_ON_PHONE)}>{formatNumber(g.count)}</td>
-          <td className={cn(MUTED_CELL, NOT_ON_PHONE)}>
+          <td className={cn(MUTED_CELL, NOT_ON_PHONE, "text-right")}>
             {/* Syncing, as faint as the disabled Sync button above. */}
-            <span
-              className={cn("inline-flex items-center gap-1 align-top font-mono text-xs", g.syncing && "opacity-50")}
-            >
+            <span className={cn("inline-flex items-center gap-1 align-top", g.syncing && "opacity-50")}>
               {g.syncing ? <RefreshCw className="size-3 animate-spin" /> : null}
               {groupStatus(g)}
             </span>

@@ -2,11 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { mockFetch } from "@/test/http";
-import type { OrganizeResponse, OrganizeScan } from "@/lib/api-types";
+import type { OrganizeResponse } from "@/lib/api-types";
 import { DOWNLOAD_DIR, LIBRARY_DIR } from "@/lib/env";
 import { addPackage, getPackage, setPackageMedia, setPackageMoved, setPackageStatus } from "@/lib/store";
 
-// GET, POST and DELETE /api/organize, and /api/organize/scan. Downloads and the
+// GET, POST and DELETE /api/organize. Downloads and the
 // library (one disk, nvme01, with movies/) are throwaway folders, Jellyfin's
 // rescan is mocked, and the library scan is stubbed.
 vi.mock("@/lib/env", async (original) => {
@@ -72,7 +72,6 @@ function heat(): number {
 }
 
 const route = () => import("./organize/route");
-const scanRoute = () => import("./organize/scan/route");
 const send = async (method: string, body?: unknown) => {
   const { POST, DELETE } = await route();
   const req = new Request("http://jellylens.test/api/organize", {
@@ -141,28 +140,5 @@ describe("/api/organize", () => {
       error: "It isn't matched to a movie or show on TMDB.",
       targets: [],
     });
-  });
-});
-
-describe("/api/organize/scan", () => {
-  it("says whether the library scan runs", async () => {
-    expect(await (await (await scanRoute()).GET()).json()).toEqual({
-      running: false,
-      percent: null,
-    } satisfies OrganizeScan);
-  });
-
-  it("starts the library scan and has Jellyfin scan too", async () => {
-    const fetch = refresh();
-    await (await scanRoute()).POST();
-    expect(sync.startByHand).toHaveBeenCalledWith("library", true);
-    expect(fetch).toHaveBeenCalledWith("http://jellyfin.test/Library/Refresh", expect.anything());
-  });
-
-  it("scans even when Jellyfin refuses", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    refresh(401);
-    expect((await (await scanRoute()).POST()).status).toBe(200);
-    expect(sync.startByHand).toHaveBeenCalledWith("library", true);
   });
 });

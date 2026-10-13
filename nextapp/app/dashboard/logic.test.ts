@@ -13,11 +13,13 @@ import { show } from "@/test/fixtures";
 import {
   diskLow,
   freeShare,
+  importTiles,
   missingShows,
   openWishlist,
   pendingNote,
   queueRows,
   recentImports,
+  seasonsLabel,
   totalFree,
 } from "./logic";
 
@@ -103,6 +105,40 @@ describe("recentImports", () => {
       moved(4, "2026-10-11T08:00:00Z"),
     ];
     expect(recentImports(list, now).map((m) => m.id)).toEqual([4, 2, 1]);
+  });
+});
+
+describe("importTiles", () => {
+  const show = { type: "tv" as const, tmdbId: 95396, title: "Severance", year: 2022, posterPath: null };
+  const season = (id: number, n: number, movedAt: string) => ({
+    ...moved(id, movedAt),
+    media: show,
+    name: `Severance.S0${n}.German.DL.1080p.WEB.H264-WvF`,
+    files: [`Season 0${n}/Severance.S0${n}E01.mkv`],
+  });
+
+  it("combines a show's seasons into one tile, at its latest move, with all of them", () => {
+    const tiles = importTiles([
+      season(1, 2, "2026-10-10T12:00:00Z"),
+      moved(2, "2026-10-09T12:00:00Z"),
+      season(3, 1, "2026-10-08T12:00:00Z"),
+    ]);
+    expect(tiles.map((t) => [t.key, t.movedAt, t.seasons])).toEqual([
+      ["tv:95396", "2026-10-10T12:00:00Z", [1, 2]],
+      ["move:2", "2026-10-09T12:00:00Z", []],
+    ]);
+  });
+
+  it("reads a season from the release's name when its files have no season folder", () => {
+    expect(
+      importTiles([{ ...season(1, 3, "2026-10-10T12:00:00Z"), files: ["Severance.S03E01.mkv"] }])[0].seasons,
+    ).toEqual([3]);
+  });
+
+  it("names the seasons, a run of them as a range", () => {
+    expect(seasonsLabel([1, 2, 3, 5])).toBe("S01–S03, S05");
+    expect(seasonsLabel([2])).toBe("S02");
+    expect(seasonsLabel([])).toBe("");
   });
 });
 

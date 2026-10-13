@@ -18,8 +18,8 @@ describe("IgnoredShows", () => {
       return json({ items: [{ showId: "s1" }] });
     });
     render(<IgnoredShows onError={vi.fn()} />);
-    expect(await screen.findByText("Dark (2017)")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "More options for Dark (2017)" }));
+    expect(await screen.findByText("Dark")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "More options for Dark" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Unignore" }));
     expect(await screen.findByText("None yet")).toBeInTheDocument();
     const del = fetch.mock.calls.find(([, init]) => init?.method === "DELETE")!;

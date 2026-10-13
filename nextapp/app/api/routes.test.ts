@@ -404,6 +404,20 @@ describe("/api/releases/<key>", () => {
     ]);
   });
 
+  it("brings down only the qualities asked for, naming every quality the tile has", async () => {
+    await seed();
+    const store = await import("@/lib/store");
+    store.insertReleases("g1", [
+      { ...release("3", "heat-sd", "Heat.1995.German.DL.720p.BluRay.x264-VECTOR", 50), quality: "HD-720p" },
+    ]);
+    const { GET } = await import("./releases/[key]/route");
+    const body = await (await GET(new Request("http://jellylens.test?resolution=720p"), params("movie:949"))).json();
+    // The first title has none of it, but stays listed.
+    expect(body.titles.map((t: { items: { id: string }[] }) => t.items.map((r) => r.id))).toEqual([[], ["3"]]);
+    expect(Object.keys(body.resolutions).sort()).toEqual(["1080p", "720p"]);
+    expect(body.resolutions["720p"]).toEqual(["heat.1995.german.dl.720p.bluray.x264-vector"]);
+  });
+
   it("lists a movie's xREL title split by its releases' years as one, without a year", async () => {
     const store = await import("@/lib/store");
     store.addGroup("g1", "VECTOR");

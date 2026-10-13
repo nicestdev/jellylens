@@ -58,7 +58,7 @@ export default async function RootLayout({ children, modal }: { children: React.
             {user.admin ? <EventToasts /> : null}
           </div>
         ) : (
-          <div className="flex min-h-svh flex-col">
+          <div data-bare className="flex min-h-svh flex-col bg-sidebar">
             {children}
             <Footer />
           </div>

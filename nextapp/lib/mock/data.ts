@@ -1,5 +1,5 @@
 // Made-up Queue data for `next dev` (Mock data, lib/mock/fetch.ts):
-// every state the page can show, a package each, without touching the
+// every state the page can show, a package each (and a wishlist for the Dashboard), without touching the
 // database. /api/downloads and /api/organize answer about the same
 // packages (an Organize item's id is its package's), so the sidebar's
 // count adds up. Paths as the routes give them: an owned
@@ -14,6 +14,8 @@ import type {
   OrganizeItem,
   OrganizeMoved,
   OrganizeResponse,
+  RequestItem,
+  RequestsResponse,
 } from "@/lib/api-types";
 import type { MoveProgress } from "@/lib/library-move";
 
@@ -109,19 +111,20 @@ function pkg(
   };
 }
 
-const movie = (tmdbId: number, title: string, year: number) => ({
+// posterPath: a real one where the Dashboard shows posters (Last imports).
+const movie = (tmdbId: number, title: string, year: number, posterPath: string | null = null) => ({
   type: "movie" as const,
   tmdbId,
   title,
   year,
-  posterPath: null,
+  posterPath,
 });
-const show = (tmdbId: number, title: string, year: number) => ({
+const show = (tmdbId: number, title: string, year: number, posterPath: string | null = null) => ({
   type: "tv" as const,
   tmdbId,
   title,
   year,
-  posterPath: null,
+  posterPath,
 });
 type Media = ReturnType<typeof movie> | ReturnType<typeof show>;
 
@@ -274,7 +277,7 @@ function finished(): Finished[] {
     {
       id: 33,
       name: "The.Wild.Robot.2024.German.DL.2160p.WEB.H265-ZeroTwo",
-      media: movie(1184918, "The Wild Robot", 2024),
+      media: movie(1184918, "The Wild Robot", 2024, "/jOZCN1IpDivlnfJKd4o2V1GCthe.jpg"),
       files: ["The.Wild.Robot.2024.German.DL.2160p.WEB.H265-ZeroTwo.mkv"],
       bytes: 14.2 * GB,
       moved: { disk: "nvme04", minutes: 42 },
@@ -282,7 +285,7 @@ function finished(): Finished[] {
     {
       id: 34,
       name: "The.Penguin.S01.German.DL.1080p.WEB.H264-WvF",
-      media: show(194764, "The Penguin", 2024),
+      media: show(194764, "The Penguin", 2024, "/fxFYHRGfTQeTU6G99EZeQHM0jrt.jpg"),
       files: Array.from(
         { length: 8 },
         (_, i) => `Season 01/The.Penguin.S01E0${i + 1}.German.DL.1080p.WEB.H264-WvF.mkv`,
@@ -291,12 +294,58 @@ function finished(): Finished[] {
       moved: { disk: "nvme02", minutes: 180, replaced: true },
     },
     {
+      id: 35,
+      name: "The.Penguin.S02.German.DL.1080p.WEB.H264-WvF",
+      media: show(194764, "The Penguin", 2024, "/fxFYHRGfTQeTU6G99EZeQHM0jrt.jpg"),
+      files: Array.from(
+        { length: 8 },
+        (_, i) => `Season 02/The.Penguin.S02E0${i + 1}.German.DL.1080p.WEB.H264-WvF.mkv`,
+      ),
+      bytes: 19.4 * GB,
+      moved: { disk: "nvme02", minutes: 90 },
+    },
+    {
       id: 36,
       name: "Gladiator.II.2024.German.DL.1080p.BluRay.x265-VECTOR",
-      media: movie(558449, "Gladiator II", 2024),
+      media: movie(558449, "Gladiator II", 2024, "/kLkMt9bB7XDzwQ5wy6OWtdpwgcD.jpg"),
       files: ["Gladiator.II.2024.German.DL.1080p.BluRay.x265-VECTOR.mkv"],
       bytes: 10.1 * GB,
       moved: { disk: "nvme01", minutes: 15 },
+    },
+    {
+      id: 37,
+      name: "Dune.Part.Two.2024.German.DL.2160p.UHD.BluRay.x265-VECTOR",
+      media: movie(693134, "Dune: Part Two", 2024, "/zYLP7Uiqz6XqoiQLAu4XQ6DRUMz.jpg"),
+      files: ["Dune.Part.Two.2024.German.DL.2160p.UHD.BluRay.x265-VECTOR.mkv"],
+      bytes: 34 * GB,
+      moved: { disk: "nvme01", minutes: 300 },
+    },
+    {
+      id: 38,
+      name: "Deadpool.and.Wolverine.2024.German.DL.1080p.BluRay.x264-ZeroTwo",
+      media: movie(533535, "Deadpool & Wolverine", 2024, "/chDpMyvXNDFMhg3yUknITnGUCUk.jpg"),
+      files: ["Deadpool.and.Wolverine.2024.German.DL.1080p.BluRay.x264-ZeroTwo.mkv"],
+      bytes: 12.4 * GB,
+      moved: { disk: "nvme03", minutes: 600 },
+    },
+    {
+      id: 39,
+      name: "Slow.Horses.S04.German.DL.1080p.WEB.H264-WvF",
+      media: show(95480, "Slow Horses", 2022, "/iGlInaVyhWQm3whmikpLHivO1Wd.jpg"),
+      files: Array.from(
+        { length: 6 },
+        (_, i) => `Season 04/Slow.Horses.S04E0${i + 1}.German.DL.1080p.WEB.H264-WvF.mkv`,
+      ),
+      bytes: 15.2 * GB,
+      moved: { disk: "nvme02", minutes: 1500 },
+    },
+    {
+      id: 40,
+      name: "Arcane.S02.German.DL.1080p.WEB.H264-WvF",
+      media: show(94605, "Arcane", 2021, "/fqldf2t8ztc9aiwn3k6mlX3tvRT.jpg"),
+      files: Array.from({ length: 9 }, (_, i) => `Season 02/Arcane.S02E0${i + 1}.German.DL.1080p.WEB.H264-WvF.mkv`),
+      bytes: 21 * GB,
+      moved: { disk: "nvme04", minutes: 2400 },
     },
   ];
 }
@@ -344,7 +393,9 @@ export function mockDownloads(): DownloadsResponse {
               (e) =>
                 `nvme02/shows/Severance (2022) [tmdbid-95396]/Season 02/${SEVERANCE.replace(".S02.", `.S02E0${e}.`)}.mkv`,
             ),
-            new: [5, 6, 7, 8, 9, 10].map((e) => `Season 02/S02E${String(e).padStart(2, "0")}`),
+            new: [5, 6, 7, 8, 9, 10].map(
+              (e) => `Season 02/${SEVERANCE.replace(".S02.", `.S02E${String(e).padStart(2, "0")}.`)}`,
+            ),
             exact: true,
             skip: 4,
             choices: ["skip"],
@@ -501,4 +552,39 @@ export function mockOrganize(): OrganizeResponse {
     }))
     .sort((a, b) => b.movedAt.localeCompare(a.movedAt));
   return { ready: true, libraryDir: "/library", disks, items, moved };
+}
+
+// The wishlist, as the Dashboard lists it (posters are real, from TMDB).
+export function mockRequests(): RequestsResponse {
+  const wish = (
+    mediaType: RequestItem["mediaType"],
+    tmdbId: number,
+    title: string,
+    year: number,
+    posterPath: string,
+    minutes: number,
+  ): RequestItem => ({
+    mediaType,
+    tmdbId,
+    title,
+    year,
+    releaseDate: `${year}-01-01`,
+    posterPath,
+    requestedAt: ago(minutes),
+    mine: true,
+    library: null,
+    availability: null,
+  });
+  return {
+    items: [
+      wish("tv", 123542, "Link Click", 2021, "/44cNZ5PmLOwTIOkYwlAewgzn8Bl.jpg", 35),
+      wish("movie", 1148365, "Matchbox: Der Film", 2026, "/fwMAJmJmTFtBN8wbgPJ2wfhnDEa.jpg", 180),
+      wish("movie", 1291595, "Insidious: Out of the Further", 2026, "/h1ezty0cBhJjoFP4Oj88hJ0u0Go.jpg", 60 * 24),
+      wish("movie", 1302904, "Practical Magic 2", 2026, "/gprNY1uglCDkiG0uqvAjTPT4GJ3.jpg", 60 * 24 * 2),
+      wish("movie", 1153576, "Street Fighter", 2026, "/6HNssAfOCjAO4uEqCqhzKHBApxN.jpg", 60 * 24 * 4),
+      wish("tv", 285322, "Below", 2026, "/vgLqqhMUbljp585qPp1EFCyJtcz.jpg", 60 * 24 * 6),
+    ],
+    all: false,
+    admin: true,
+  };
 }
