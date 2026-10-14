@@ -55,7 +55,7 @@ services:
     restart: unless-stopped
 ```
 
-Available for `linux/amd64` and `linux/arm64`.
+Available for `linux/amd64` and `linux/arm64`. Use `:1.2` to follow patch releases only, or pin an exact version like `:1.2.1`.
 
 ## Configuration
 

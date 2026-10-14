@@ -22,7 +22,7 @@ const SIZES = { strip: { min: 104, gap: 32 }, card: { min: 144, gap: 24 } };
 // more stats cost one line, not a card each); from sm up a card each (like
 // Analytics'), a hint under the value there, a mini card without it when it's
 // narrower than 13rem. The columns follow the width, the rows always evenly
-// filled (columnsFor). A single one fills a phone, 14rem from sm up. muted: nothing
+// filled (columnsFor). A single one fills the width. muted: nothing
 // to see ("—"). loading: the values aren't there yet.
 export function StatStrip({ stats, loading }: { stats: Stat[]; loading?: boolean }) {
   const n = stats.length;
@@ -49,7 +49,7 @@ export function StatStrip({ stats, loading }: { stats: Stat[]; loading?: boolean
       style={n > 1 ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
       className={cn(
         "gap-x-8 gap-y-3 sm:gap-6 max-sm:rounded-lg max-sm:border max-sm:bg-card max-sm:px-4 max-sm:py-3",
-        n > 1 ? "grid" : "sm:w-56",
+        n > 1 && "grid",
       )}
     >
       {stats.map((s) => (
