@@ -352,7 +352,20 @@ column in peach, and under the release name a tree like Organize's: the
 old files' folder, "−" what a Replace takes out, "=" (blue) what a
 Skip leaves as it is, "+" what comes (a
 movie's release name, a show's episodes as "S01E03", the archives'
-names being no file names, or a pack in one archive by its name). Its
+names being no file names, or a pack in one archive by its name). The
+archives of a DLC are often named by their uploader ("TeLa1080S04E01.rar"),
+which says nothing of the file inside, and the package's name may not be
+what the archives hold (another version). So a new package whose first
+archive isn't named like a release gets that archive's first bytes read
+once (`peekPendingPackages` in `lib/download-match.ts`, `peekName` in
+`lib/archive-peek.ts`: a range request for 64 KB of the hoster's download,
+listed with 7-Zip and the archive passwords, headers being encrypted;
+kept in `download_files.inner_name`; nothing found, nothing changes). Its
+name replaces the package's in `libraryOf`: a movie's `exact` and "+" go by
+it, a show's by its first episode's copies in the library; the other
+episodes the library has are then only taken to be the same release
+(`presumed`, "≈" in magenta in the tree, where the proven ones are "="
+blue), and the first episode's "+" is the real name. Its
 Status is a diffstat like the tree ("−1 +1" in red and green, with Skip
 "=4 +6"; "All in library"), unless the parts' check says something's
 off (red, or peach), which it shows then. One version of everything, so its ⋯ offers one way:
@@ -532,7 +545,7 @@ no thousands separator, "11281", "4.21 GB"; dates German-style,
 (`lib/api-client.ts`), the app's window events through `useWindowEvent`
 (`hooks/`). The look ("Konsole"): dense, the "Dusk" dark palette (a
 dark blue-violet grey, lavender as the one accent, soft mint, sand, coral
-and sky for states; `app/themes.css`, a few
+sky and, for what's only assumed, magenta for states; `app/themes.css`, a few
 `--p-*` colors that `app/globals.css` maps onto every UI token, so a new
 look is new values there; `viewport.themeColor` in `app/layout.tsx`
 repeats the sidebar's), Google Sans for titles, text, buttons and menus,

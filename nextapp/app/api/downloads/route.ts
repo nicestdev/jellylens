@@ -4,7 +4,14 @@ import { libraryOf } from "@/lib/download-library";
 import { DDOWNLOAD_LOGIN, DDOWNLOAD_PASSWORD, DOWNLOAD_DIR, REALDEBRID_TOKEN } from "@/lib/env";
 import { decryptDlc } from "@/lib/dlc";
 import { nameFromUrl, routeOf } from "@/lib/hosters";
-import { checkPendingFiles, matchName, matchPendingPackages, onlineOf, startIfNew } from "@/lib/download-match";
+import {
+  checkPendingFiles,
+  matchName,
+  matchPendingPackages,
+  onlineOf,
+  peekPendingPackages,
+  startIfNew,
+} from "@/lib/download-match";
 import { kickDownloads, liveProgress, packageDir, packageOutputs, pauseAllDownloads } from "@/lib/downloader";
 import {
   MAX_DOWNLOAD_SLOTS,
@@ -45,6 +52,7 @@ async function downloads(): Promise<DownloadsResponse> {
   // load.
   matchPendingPackages();
   checkPendingFiles();
+  peekPendingPackages();
   // Where an unfinished package's files come from.
   const sources = new Map<number, string[]>();
   for (const pkg of packages) {
@@ -67,7 +75,7 @@ async function downloads(): Promise<DownloadsResponse> {
         sources: sources.get(pkg.id) ?? [],
         outputs: pkg.status === "done" ? packageOutputs(pkg) : [],
         extractPercent: live.extracting.get(pkg.id) ?? null,
-        files: pkgFiles.map(({ packageId: _p, ...f }) => ({
+        files: pkgFiles.map(({ packageId: _p, innerName: _i, ...f }) => ({
           ...f,
           speed: live.speed.get(f.id) ?? null,
           checked: onlineOf(f.id),

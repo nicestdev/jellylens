@@ -12,6 +12,7 @@
    peach    open, waiting          green    better
    blue, yellow  two more chart colors
    sky      info                   pink     on the wishlist (the heart, = red)
+   magenta  assumed, not proven (a Skip's "≈" in Needs attention)
    Optional: card (else between base and surface0), border (else
    surface0), row (between a table's rows, else border) and table (behind
    a table's rows, else the page). */
@@ -38,4 +39,5 @@
   --p-yellow: #d9c27a;
   --p-sky: #8db8ea;
   --p-pink: var(--p-red);
+  --p-magenta: #d99bd0;
 }

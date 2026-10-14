@@ -256,6 +256,10 @@ const MIGRATIONS: string[] = [
   -- The incomplete shows are no sync stage of their own anymore.
   DELETE FROM sync_state WHERE stage = 'missing';
   `,
+  // A file's name inside its archive, read from the archive's first bytes.
+  `
+  ALTER TABLE download_files ADD COLUMN inner_name TEXT;
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

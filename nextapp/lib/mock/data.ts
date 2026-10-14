@@ -76,6 +76,7 @@ const otherMovie = (disk: string, folder: string, file: string, release: string)
   skip: 1,
   choices: ["replace"],
   disks: [disk],
+  presumed: [],
 });
 
 function pkg(
@@ -400,6 +401,11 @@ export function mockDownloads(): DownloadsResponse {
             skip: 4,
             choices: ["skip"],
             disks: ["nvme02"],
+            // The first archive's name proved episode 1; the rest is taken to be the same.
+            presumed: [2, 3, 4].map(
+              (e) =>
+                `nvme02/shows/Severance (2022) [tmdbid-95396]/Season 02/${SEVERANCE.replace(".S02.", `.S02E0${e}.`)}.mkv`,
+            ),
           },
         },
       ),
@@ -413,6 +419,7 @@ export function mockDownloads(): DownloadsResponse {
           skip: 1,
           choices: ["replace"],
           disks: ["nvme03"],
+          presumed: [],
         },
       }),
       pkg(17, PASTLIVES, "pending", movie(666277, "Past Lives", 2023), parts(PASTLIVES, 3, 3 * GB, "queued"), {
@@ -423,6 +430,7 @@ export function mockDownloads(): DownloadsResponse {
           skip: 1,
           choices: [],
           disks: ["nvme02"],
+          presumed: [],
         },
       }),
       pkg(

@@ -126,6 +126,7 @@ describe("PackageRow", () => {
           skip: 1,
           choices: ["replace"],
           disks: ["nvme03"],
+          presumed: [],
         },
       },
       vi.fn(),
@@ -150,6 +151,7 @@ describe("PackageRow", () => {
       skip: 1,
       choices: ["skip" as const],
       disks: ["nvme01"],
+      presumed: [],
     };
     const { unmount } = renderRow({ ...pkg, library }, vi.fn(), onAction);
     expect(screen.getByText("Silo.S01E02.German.1080p-GRP").parentElement).toHaveTextContent(/^\+/);

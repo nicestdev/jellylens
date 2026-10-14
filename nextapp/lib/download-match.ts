@@ -3,6 +3,7 @@ import { TMDB_LANGUAGE } from "./env";
 import { searchTmdbTitle } from "./tmdb";
 import { parseReleaseName, sameTitle, withUmlauts } from "./title-match";
 import { linkInfo } from "./hosters";
+import { peekName } from "./archive-peek";
 import { libraryOf } from "./download-library";
 import { kickDownloads } from "./downloader";
 import {
@@ -10,6 +11,7 @@ import {
   listFiles,
   listPackages,
   packagesToMatch,
+  setInnerName,
   setPackageMedia,
   startPackage,
   updateFile,
@@ -67,6 +69,8 @@ const g = globalThis as unknown as {
   __downloadChecking?: Promise<void> | null;
   __downloadChecked?: Map<number, number>;
   __downloadOnline?: Set<number>;
+  __downloadPeeking?: Promise<void> | null;
+  __downloadPeeked?: Set<number>;
 };
 
 export function matchPendingPackages() {
@@ -177,5 +181,40 @@ export function checkPendingFiles() {
     }
   })().finally(() => {
     g.__downloadChecking = null;
+  });
+}
+
+// A release's name ("Ted.Lasso.S04E01.GERMAN.1080p.x265-GRP.part1.rar"), not
+// an uploader's own abbreviation ("TeLa1080S04E01.rar"): dot-separated words.
+const isReleaseName = (name: string) => /^[^.\s]+(\.[^.\s]+){3,}/.test(name);
+
+// A new package whose archives aren't named like the release: its first
+// archive's real file name is read once (archive-peek.ts), for what the
+// library has of it (libraryOf). One at a time, in the background; one
+// that gave nothing isn't tried again until a restart.
+export function peekPendingPackages() {
+  if (g.__downloadPeeking) return;
+  const peeked = (g.__downloadPeeked ??= new Set());
+  const todo = listPackages()
+    .filter((p) => p.status === "pending" && !peeked.has(p.id))
+    .flatMap((p) => {
+      const first = listFiles(p.id)[0];
+      return first &&
+        first.status === "queued" &&
+        !first.innerName &&
+        !looksLikeLink(first.name) &&
+        !isReleaseName(first.name)
+        ? [first]
+        : [];
+    });
+  if (!todo.length) return;
+  g.__downloadPeeking = (async () => {
+    for (const f of todo) {
+      peeked.add(f.packageId);
+      const name = await peekName(f.url).catch(() => null);
+      if (name) setInnerName(f.id, name);
+    }
+  })().finally(() => {
+    g.__downloadPeeking = null;
   });
 }

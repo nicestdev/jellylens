@@ -17,6 +17,8 @@ export type DownloadFile = {
   // out at Start (already in the library).
   status: "queued" | "downloading" | "done" | "extracted" | "skipped" | "failed";
   error: string | null;
+  // The video's name inside its archive (archive-peek.ts), once looked at.
+  innerName: string | null;
 };
 export type DownloadPackage = {
   id: number;
@@ -75,7 +77,7 @@ type PackageRow = {
   moved_replaced: number;
   library_choice: LibraryChoice | null;
 };
-type FileRow = Omit<DownloadFile, "packageId"> & { package_id: number };
+type FileRow = Omit<DownloadFile, "packageId" | "innerName"> & { package_id: number; inner_name: string | null };
 
 const toPackage = (r: PackageRow): DownloadPackage => ({
   id: r.id,
@@ -97,7 +99,11 @@ const toPackage = (r: PackageRow): DownloadPackage => ({
   replaced: r.moved_replaced === 1,
   choice: r.library_choice,
 });
-const toFile = ({ package_id, ...r }: FileRow): DownloadFile => ({ ...r, packageId: package_id });
+const toFile = ({ package_id, inner_name, ...r }: FileRow): DownloadFile => ({
+  ...r,
+  packageId: package_id,
+  innerName: inner_name,
+});
 
 export function addPackage(pkg: {
   name: string;
@@ -178,6 +184,10 @@ export function updateFile(
     ...Object.values(changes),
     id,
   );
+}
+
+export function setInnerName(id: number, name: string) {
+  run("UPDATE download_files SET inner_name = ? WHERE id = ?", name, id);
 }
 
 export function setPackageStatus(id: number, status: DownloadStatus, error: string | null = null) {

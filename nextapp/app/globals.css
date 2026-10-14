@@ -42,6 +42,7 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
   --color-wish: var(--p-pink, var(--p-red));
+  --color-presumed: var(--p-magenta, var(--p-peach));
   --color-fc: var(--fc);
   --color-success: var(--success);
   --color-accent-foreground: var(--accent-foreground);
@@ -121,6 +122,10 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  /* No browser focus rectangle anywhere; components that show focus draw their own ring. */
+  :focus-visible {
+    outline: none;
   }
   body {
     @apply bg-background text-foreground;

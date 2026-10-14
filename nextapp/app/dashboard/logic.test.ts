@@ -161,6 +161,7 @@ describe("pendingNote", () => {
     skip: 0,
     choices: [],
     disks: ["nvme02"],
+    presumed: [],
     ...over,
   });
   const wait = (over: Partial<DownloadPackageItem>) =>

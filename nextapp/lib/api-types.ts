@@ -209,7 +209,7 @@ export type WcxAddResponse =
 // checked: what the hoster
 // said before it's started (lib/download-match.ts): online, unknown (asked,
 // no answer), null (not asked yet); an offline one is failed.
-export type DownloadFileItem = Omit<DownloadFile, "url" | "packageId"> & {
+export type DownloadFileItem = Omit<DownloadFile, "url" | "packageId" | "innerName"> & {
   url: string;
   speed: number | null;
   checked: "online" | "unknown" | null;
@@ -232,6 +232,9 @@ export type DownloadLibrary = {
   skip: number;
   choices: LibraryChoice[];
   disks: string[];
+  // Of old, the files only assumed to be from this release: a show's other
+  // episodes once the first one's archive proved it (not proven: lib/archive-peek.ts).
+  presumed: string[];
 };
 // sources: where an unfinished one's files come from ("ddownload",
 // "rapidgator.net via Real-Debrid", "no account"). outputs: a finished

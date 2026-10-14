@@ -19,6 +19,8 @@ const GLOBALS = [
   "__downloadChecking",
   "__downloadChecked",
   "__downloadOnline",
+  "__downloadPeeking",
+  "__downloadPeeked",
   "__wcxLinkState",
   "__wcxReleases",
   "__hideCx",

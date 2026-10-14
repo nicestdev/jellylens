@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "./db";
 import { libraryOf } from "./download-library";
-import { addPackage, getPackage, listFiles, setPackageMedia, type DownloadMedia } from "./store";
+import { addPackage, getPackage, listFiles, setInnerName, setPackageMedia, type DownloadMedia } from "./store";
 
 // A file of the library's (a row of media_files, what libraryCopies reads).
 let idx = 0;
@@ -77,6 +77,7 @@ describe("libraryOf", () => {
         skip: 1,
         choices: ["replace"],
         disks: ["nvme01", "nvme03"],
+        presumed: [],
       },
       owned: new Set(),
     });
@@ -121,6 +122,7 @@ describe("libraryOf", () => {
       skip: 3,
       choices: ["replace"],
       disks: ["nvme01"],
+      presumed: [],
     });
   });
 
@@ -138,6 +140,28 @@ describe("libraryOf", () => {
     });
     const all = pkg("Silo.S01.German.1080p-GRP", ["Silo1080S01E01.rar", "Silo1080S01E02.rar"]);
     expect(libraryOf(all.pkg, all.files).library).toMatchObject({ new: [], exact: true, choices: [] });
+  });
+
+  it("goes by the first archive's real name when it has one: its episode proven, the rest only presumed", () => {
+    const mine = (e: number) =>
+      copy("episode", 7, { season: 1, episode: e, fileName: `Silo.S01E0${e}.Titel.German.AAC.1080p.WEB-GRP.mkv` });
+    mine(1);
+    mine(2);
+    // The package's name says another release than the archives hold.
+    const a = pkg("Silo.S01.German.AACD.1080p.BluRay-GRP", ["Silo1080S01E01.rar", "Silo1080S01E02.rar"]);
+    expect(libraryOf(a.pkg, a.files).library).toMatchObject({ exact: false, choices: ["replace"] });
+    setInnerName(a.files[0].id, "Silo.S01E01.Titel.German.AAC.1080p.WEB-GRP.mkv");
+    const found = libraryOf(a.pkg, listFiles(a.pkg.id)).library;
+    expect(found).toMatchObject({ new: [], exact: true, choices: [] });
+    expect(found?.presumed).toEqual(["nvme01/shows/T/Silo.S01E02.Titel.German.AAC.1080p.WEB-GRP.mkv"]);
+    // The first archive holds another version: Replace, nothing presumed.
+    const b = pkg("Silo.S01.German.AAC.1080p.WEB-GRP", ["Silo1080S01E01.rar", "Silo1080S01E02.rar"]);
+    setInnerName(b.files[0].id, "Silo.S01E01.Titel.German.AAC.2160p.WEB-OTHER.mkv");
+    expect(libraryOf(b.pkg, listFiles(b.pkg.id)).library).toMatchObject({
+      exact: false,
+      choices: ["replace"],
+      presumed: [],
+    });
   });
 
   it("is nothing for a show's episodes you don't have", () => {
@@ -159,6 +183,7 @@ describe("libraryOf", () => {
         skip: 2,
         choices: ["replace"],
         disks: ["nvme01"],
+        presumed: [],
       },
       owned: new Set(),
     });

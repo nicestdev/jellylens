@@ -148,6 +148,7 @@ export function PackageRow({
   const at = lib?.old[0]?.split("/");
   // The old files' paths in the title's folder (a show's in Season NN/).
   const inFolder = lib?.old.map((p) => p.split("/").slice(3).join("/")) ?? [];
+  const presumedIn = lib?.presumed.map((p) => p.split("/").slice(3).join("/")) ?? [];
   const onDisk = lib?.disks.length ? lib.disks.join(", ") : null;
   const menu = <RowMenu pkg={pkg} onAction={onAction} onRemove={onRemove} />;
   const size = s.total ? formatBytes(s.total) : "—";
@@ -169,6 +170,7 @@ export function PackageRow({
                   folder={at[2]}
                   old={lib.exact ? [] : inFolder}
                   kept={lib.exact ? inFolder : []}
+                  presumed={presumedIn}
                   files={lib.new}
                 />
               </div>

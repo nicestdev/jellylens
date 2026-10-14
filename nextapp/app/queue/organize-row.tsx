@@ -85,19 +85,22 @@ export function TitleCell({
 // them (red), the new ones with a "+" (green), the whole line in its color. A season folder shows its
 // files under its name and a chevron, a click folds it.
 // kept: what the library has that stays (a Skip in Needs attention),
-// marked "=" (blue); the files are "+" then too.
+// marked "=" (blue); the files are "+" then too. presumed: of those, the
+// ones only taken to be the same release, "≈" in magenta.
 export function FileTree({
   root,
   folder,
   files,
   old = [],
   kept = [],
+  presumed = [],
 }: {
   root: ReactNode;
   folder: string;
   files: string[];
   old?: string[];
   kept?: string[];
+  presumed?: string[];
 }) {
   // key: unique in the tree (two seasons can hold a file of the same name).
   const line = (key: string, Icon: LucideIcon, text: ReactNode, depth: number, className?: string, mark?: string) => (
@@ -105,7 +108,13 @@ export function FileTree({
       key={key}
       className={cn(
         "flex min-w-0 items-center gap-1",
-        mark === "−" ? "text-destructive" : mark === "=" ? "text-info" : mark && "text-success",
+        mark === "−"
+          ? "text-destructive"
+          : mark === "="
+            ? "text-info"
+            : mark === "≈"
+              ? "text-presumed"
+              : mark && "text-success",
         className,
       )}
       style={{ paddingLeft: `${depth * 0.75}rem` }}
@@ -125,7 +134,7 @@ export function FileTree({
     dirs.set(dir, [...(dirs.get(dir) ?? []), { name: f.slice(cut + 1), mark }]);
   };
   for (const f of old) add(f, "−");
-  for (const f of kept) add(f, "=");
+  for (const f of kept) add(f, presumed.includes(f) ? "≈" : "=");
   for (const f of files) add(f, mark);
   // Every folder open, a click folds it (kept as which were clicked).
   const [flipped, setFlipped] = useState(new Set<string>());
