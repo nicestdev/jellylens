@@ -49,16 +49,35 @@ async function syncSceneGroup(group: ReleaseGroup): Promise<number> {
   return added;
 }
 
-// Looks up each new IMDb id xREL gave on TMDB: the candidate its titles are
+// Looks up each new IMDb id xREL (or WCX) gave on TMDB: the candidate its titles are
 // checked against. A failed lookup isn't stored, so the next sync retries.
 async function lookUpImdbIds(tmdbApiKey: string, language: string) {
   await mapWithConcurrency(unlookedImdbIds(), 5, async ({ imdbId, type }) => {
     try {
       saveImdbLookup(imdbId, await findTmdbByImdb(tmdbApiKey, imdbId, language, type === "tv" ? "tv" : "movie"));
     } catch (e) {
-      console.error("[releases-sync] TMDB lookup of " + imdbId + " failed:", (e as Error).message);
+      console.error("[title-match] TMDB lookup of " + imdbId + " failed:", (e as Error).message);
     }
   });
+}
+
+// New IMDb ids looked up and new titles checked on TMDB, after an xREL or a
+// WCX sync: one run at a time (one asked for while another runs follows
+// it), so the two never ask TMDB about the same titles at once. matching
+// is on meanwhile, for Discover's refresh.
+const globalForMatching = globalThis as unknown as { __titleMatching?: Promise<void> };
+export function matchNewTitles(tmdbApiKey: string, language: string): Promise<void> {
+  const run = (globalForMatching.__titleMatching ?? Promise.resolve()).then(async () => {
+    releaseSync().matching = true;
+    try {
+      if (tmdbApiKey) await lookUpImdbIds(tmdbApiKey, language);
+      await resolveTitles(tmdbApiKey, language);
+    } finally {
+      releaseSync().matching = false;
+    }
+  });
+  globalForMatching.__titleMatching = run.catch(() => {});
+  return run;
 }
 
 // Works out what every new title shows (or, with only, that one title;
@@ -78,7 +97,7 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
       if (verdictFor(t.titleKey) !== t.verdict) return;
       saveTitleMatch(t.titleKey, status, entry, fallback);
     } catch (e) {
-      console.error("[releases-sync] matching " + t.names[0] + " failed:", (e as Error).message);
+      console.error("[title-match] matching " + t.names[0] + " failed:", (e as Error).message);
     }
   });
 }
@@ -112,14 +131,10 @@ export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: strin
         }
       }
       releaseSync().groupId = null;
-      releaseSync().matching = true;
-      if (tmdbApiKey) await lookUpImdbIds(tmdbApiKey, language);
-      await resolveTitles(tmdbApiKey, language);
-      releaseSync().matching = false;
+      await matchNewTitles(tmdbApiKey, language);
     } while (nextGroup());
   } finally {
     releaseSync().groupId = null;
-    releaseSync().matching = false;
   }
   if (firstError) throw firstError;
   setSyncedAt("releases", new Date().toISOString());

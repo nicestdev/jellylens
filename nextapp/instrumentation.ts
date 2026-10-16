@@ -2,7 +2,8 @@
 // database (creating or migrating it), run the initial library scan -> tmdb
 // chain (each works out the incomplete shows at its end) and, beside it, the
 // xREL releases sync, then schedule each stage's own independent interval
-// (from the *_INTERVAL_HOURS env vars — see lib/sync-manager.ts).
+// (from the *_INTERVAL_HOURS env vars; WCX's first run comes later, at
+// its own time — see lib/sync-manager.ts).
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 

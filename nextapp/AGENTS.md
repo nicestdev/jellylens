@@ -13,7 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 A dashboard over a media library on disk, played with Jellyfin: movies and
 shows, missing episodes (checked against TMDB), what comes in through the
 download queue, per-user requests, and the releases of favorite P2P and scene
-groups (from xREL). The library is read from the disks themselves
+groups (from xREL) and WCX's latest. The library is read from the disks themselves
 (`LIBRARY_DIR`); Jellyfin is only asked for sign-in and to rescan after a
 move into the library.
 
@@ -57,7 +57,8 @@ until it's done. A stage started that way (`startByHand`) leaves no note
 once it's done (it was asked for and is seen running); any failed run,
 scheduled or not, leaves one (see Notes).
 `instrumentation.ts` opens the database at boot, runs library scan → TMDB
-(→ missing) and the releases sync, then installs the intervals.
+(→ missing) and the releases sync, then installs the intervals (WCX's is
+timed its own way, see 4.).
 
 1. **Library scan** (`lib/library-scan.ts`, stage `library`,
    `LIBRARY_SCAN_INTERVAL_HOURS`, default 6): `LIBRARY_DIR`'s disks, each
@@ -95,6 +96,13 @@ scheduled or not, leaves one (see Notes).
    which is also what catches episodes that aired since the last run.
 3. **Releases** (`lib/sync-releases.ts`, stage `releases`,
    `XREL_SYNC_INTERVAL_HOURS`, default 6), see below.
+4. **WCX** (`lib/sync-wcx.ts`, stage `wcx`, `WCX_SYNC_INTERVAL_HOURS`,
+   default 6, off without `WCX_API_URL`), see WCX's latest below. Not at
+   boot and never on the hour: `setJitteredSchedule` in `lib/scheduler.ts`
+   times each run anew (`nextRunAt`: the interval ±a sixth, one falling
+   between about midnight, from 23:30 on, and 8 waits for 8 to 9 o'clock,
+   in the container's `TZ`, Europe/Berlin in the compose files); at boot
+   the first is due after the last one, or a few minutes from now.
 
 The incomplete shows (`computeMissing` in `lib/compute-missing.ts`, the
 Dashboard's Incomplete shows) are no stage of their own: the last step of
@@ -102,7 +110,7 @@ every library scan (once TMDB has synced) and every TMDB sync, no network.
 Pure diffs (`ownedEpisodes`, `diffShow`) of the library against TMDB:
 aired episodes not owned (combined files via `episodeEnd`).
 
-## Releases (xREL)
+## Releases (xREL and WCX)
 
 Admins add favorite groups in Settings (`app/settings/release-groups.tsx`,
 `/api/release-groups`), a list each for P2P and scene; both live in
@@ -150,9 +158,14 @@ Discover shows everyone the releases as one tile per TMDB entry (key `movie:949`
 `app/discover/page.tsx`, its request and filter menus in
 `app/discover/releases.ts`), since one movie can end up as several titles; a title matched to nothing is a tile of its
 own (key: its `title_key`). `GET /api/releases` searches, filters (by
-xREL's type, movie or show, and by group), sorts and pages tiles in SQL, nothing cached; the filter
+type, movie or show, and by group: a favorite's name for xREL's, the
+name's own for WCX's, `GROUP` in `lib/store/releases.ts`), sorts and pages
+tiles in SQL, nothing cached; a tile counts a release xREL and WCX both
+have once (by name). The filter
 menu lists its values without counts, which would mean another scan of
-every release. `GET /api/releases/<key>` gives a tile's titles with their
+every release; the Group menu the favorite groups first, then a line
+(`divideAfter` on a `Facet`, `favoriteGroups` in the answer), then every
+other group, each A→Z. `GET /api/releases/<key>` gives a tile's titles with their
 releases and matches (the title page, `app/title/[kind]/[id]` with
 `components/title-view.tsx`, which the titles on Discover,
 the Wishlist and the Dashboard open, for admins, as an overlay
@@ -240,6 +253,36 @@ peach, what's there said beside it. `fromRelease` (`lib/release-labels.ts`)
 decides by the file's name: the release's, any case and separators; for
 an episode, the release's name before its `S01` and after it, the
 episode's title in between.
+
+### WCX's latest
+
+With `WCX_API_URL` set, the `wcx` stage adds WCX's latest movies and shows
+to Discover beside the favorite groups' (`lib/wcx.ts`, `lib/sync-wcx.ts`).
+WCX's lists (its /type/movie and /type/series) put an entry first
+whenever a release is added to it; the sync reads them as the site does
+(its query as it is, 21 a page, the site's headers), movies then shows,
+page by page with 4–20 s between pages (a minute when fewer than 5 of
+WCX's 60 calls a minute are left), until an entry that last changed
+before the last sync started (10 minutes' overlap; the first sync goes a
+week back). One that stops at its page limit (300 a list) doesn't move
+that time, so the next reads on from the same point. An entry's
+releases come along in the list: each is stored in `releases` with
+`group_id` NULL, id `wcx:<id>`, title `wcx:<uid>` (a movie's split by
+the year in its names, `wcx:<uid>~2012`, as xREL's are: WCX too files a
+remake under the original now and then), named as a release
+(`dottedName`: trimmed, `" - "` to `-`, a trailing "(DDL)" off, spaces to
+dots, as matching reads title and year from it), its quality and group
+read from that name (the group, `group_name`, only from a `-GRP` at its
+end and never "p2p", `groupOf`), dated when the entry last changed (the
+list has no date per release; the title page reads the real ones live),
+and the IMDb id WCX gives, so its titles go through `imdb_lookups` and
+`decideMatch` like xREL's (`matchNewTitles` in `lib/sync-releases.ts`,
+one run at a time for both syncs, so they never ask TMDB about the same
+titles at once). The entry's uid goes to `wcx` by its TMDB id, so a title
+page finds its WCX page without searching. A TMDB entry's title page
+lists only xREL's stored releases and titles (WCX's come live from its
+page, see above); a title matched to nothing lists WCX's stored ones,
+there being no live page to read.
 
 ## Queue
 
@@ -505,7 +548,7 @@ clicked back; a title page's poster has the same mark, smaller
 (`PosterWish`). A change pops up no note: the heart shows it where it was
 clicked. Notes that do pop up (a title page's Check or a failed match change,
 the background events) go through `toast()` in `lib/toast.ts`, shown by
-`components/toaster.tsx` bottom right, newest at the bottom, at most three:
+`components/toaster.tsx` bottom right (across the width on a phone), newest at the bottom, at most three:
 a card read like a table's title cell, the description (wrapped, never
 cut) in Mono for a release name (`mono`), its tone's color only on a thin
 stripe at the left (green done, peach waiting on a hand: a Check's "Needs
@@ -523,7 +566,8 @@ so a poll asked before an action and answered after it is dropped);
 skipping hidden tabs.
 Settings loads its status, config, preferences and groups together and
 polls them every 2 s while a sync runs, every 15 s otherwise (`pollDelay`
-in `app/settings/logic.ts`). Its sync stages are a card each (`StatTile`):
+in `app/settings/logic.ts`). Its sync stages (Library, TMDB, xREL, WCX) are a card each (`StatTile`,
+four in a row from lg up and on a phone on its side, two from sm):
 when it last synced, its schedule under it, and its Sync as an icon
 button at the top right, spinning while it runs. The two group tables
 share their last columns' widths (`SETTINGS_COLUMNS`), and a group's Last
@@ -650,7 +694,9 @@ side has them equal). Left, what comes in: the Queue when it has anything
 and a new one still checked, a row per title with where it's at in the
 Queue's words, Error in red, Needs attention in peach, a running download or
 move with its share, Ready to organize; the speed and time left in its
-heading; the details stay on the Queue, which a click opens), then the last
+heading; the details stay on the Queue, which a click opens; polled every
+second while something comes in or moves, as the Queue does, every 10 s
+otherwise), then the last
 7 days' imports as posters (`recentImports`, `importTiles`: a show's moves
 are one tile with its seasons, `seasonsLabel`). Right, how the library
 stands: the disks with what's free (red under 5 %), the wishlist's open

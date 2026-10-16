@@ -117,6 +117,7 @@ export default function DiscoverPage() {
     selected: filters[key],
     onToggle: (v: string) => toggle(key, v),
     format,
+    divideAfter: key === "group" ? releases.data?.favoriteGroups : undefined,
   }));
 
   // TMDB's results without the titles the releases show already.

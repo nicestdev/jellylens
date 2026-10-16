@@ -404,6 +404,21 @@ describe("/api/releases/<key>", () => {
     ]);
   });
 
+  it("leaves WCX's out of a TMDB entry's page (they come live), but lists them on an unmatched one", async () => {
+    await seed();
+    const store = await import("@/lib/store");
+    store.insertReleases(null, [
+      { ...release("wcx:1", "wcx:abc", "Heat.1995.German.DL.2160p.UHD.BluRay.x265-FuN", 300), group: "FuN" },
+      { ...release("wcx:2", "wcx:xyz", "Obscure.2020.German.1080p.WEB.x264-FuN", 300), group: "FuN" },
+    ]);
+    store.saveTitleMatch("wcx:abc", "verified", heat, { title: "Heat", year: 1995 });
+    const { GET } = await import("./releases/[key]/route");
+    const body = await (await GET(new Request("http://jellylens.test"), params("movie:949"))).json();
+    expect(body.titles.map((t: { titleKey: string }) => t.titleKey)).toEqual(["heat", "heat-sd"]);
+    const other = await (await GET(new Request("http://jellylens.test"), params("wcx:xyz"))).json();
+    expect(other.titles).toMatchObject([{ label: "Obscure (2020)", items: [{ id: "wcx:2", group: "FuN" }] }]);
+  });
+
   it("brings down only the qualities asked for, naming every quality the tile has", async () => {
     await seed();
     const store = await import("@/lib/store");

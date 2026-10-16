@@ -252,7 +252,7 @@ describe("syncReleases with scene groups", () => {
       },
     );
     await runWithoutWaits();
-    expect(releaseCounts()).toEqual({ groups: 0, releases: 0 });
+    expect(releaseCounts()).toEqual({ groups: 0, releases: 0, wcx: 0 });
   });
 
   it("syncs the other groups when a scene search fails, then reports the failure", async () => {

@@ -74,6 +74,7 @@ const STAGES: { stage: SyncStageName; title: string }[] = [
   { stage: "library", title: "Library" },
   { stage: "tmdb", title: "TMDB" },
   { stage: "releases", title: "xREL" },
+  { stage: "wcx", title: "WCX" },
 ];
 
 async function loadSettings() {
@@ -160,7 +161,7 @@ export default function SettingsPage() {
 
       {/* A card each: when it last synced, its schedule under it, and
           its Sync (spinning while it runs). One under another on a phone. */}
-      <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-3 sm:gap-6 phone-landscape:grid-cols-3">
+      <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 phone-landscape:grid-cols-4">
         {STAGES.map((st) => {
           const running = busy === st.stage || Boolean(status?.[st.stage].running);
           const syncedAt = status?.[st.stage].syncedAt ?? null;

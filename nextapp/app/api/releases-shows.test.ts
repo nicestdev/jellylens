@@ -94,6 +94,21 @@ describe("GET /api/releases", () => {
   });
 });
 
+describe("GET /api/releases with WCX's", () => {
+  it("files them under their own group, after the favorites, and counts one xREL has too once", async () => {
+    seed();
+    insertReleases(null, [
+      { ...release("wcx:1", "wcx:a", "Alpha.2001.German.1080p.BluRay.x264-GRPA", 400), group: "GRPA" },
+      { ...release("wcx:2", "wcx:d", "Delta.2004.German.1080p.WEB.x264-ZeroTwo", 50), group: "ZeroTwo" },
+    ]);
+    saveTitleMatch("wcx:a", "verified", entry(1, "Alpha", 2001), { title: "Alpha", year: 2001 });
+    const body = await releases();
+    expect(body).toMatchObject({ facets: { group: ["GRPA", "GRPB", "ZeroTwo"] }, favoriteGroups: 2 });
+    expect(body.items.find((t: { key: string }) => t.key === "movie:1")).toMatchObject({ releases: 1, latest: 400 });
+    expect(keys(await releases("group=ZeroTwo"))).toEqual(["wcx:d"]);
+  });
+});
+
 describe("GET /api/shows", () => {
   const shows = async () => {
     const { GET } = await import("./shows/route");

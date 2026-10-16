@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eventsAfter } from "./events";
-import { makeTrigger, setSchedule, start } from "./scheduler";
+import { makeTrigger, nextRunAt, setJitteredSchedule, setSchedule, start } from "./scheduler";
 
 describe("makeTrigger", () => {
   it("shares one run between overlapping calls", async () => {
@@ -173,5 +173,51 @@ describe("trigger state", () => {
     } finally {
       process.off("unhandledRejection", unhandled);
     }
+  });
+});
+
+describe("nextRunAt", () => {
+  const at = (h: number) => new Date(2026, 9, 16, h).getTime();
+  const hours = (ms: number) => ms / (60 * 60 * 1000);
+
+  it("comes after about the interval, a sixth either way", () => {
+    expect(hours(nextRunAt(at(10), 6, () => 0) - at(10))).toBe(5);
+    expect(hours(nextRunAt(at(10), 6, () => 0.999) - at(10))).toBeCloseTo(7, 2);
+  });
+
+  it("waits out the night for the morning, 8 to 9 o'clock", () => {
+    // 20:00 + 6 h = 2:00 → the next morning.
+    const run = new Date(nextRunAt(at(20), 6, () => 0.5));
+    expect([run.getDate(), run.getHours(), run.getMinutes()]).toEqual([17, 8, 30]);
+    // 18:00 + 5 h = 23:00 is still evening.
+    expect(new Date(nextRunAt(at(18), 6, () => 0)).getHours()).toBe(23);
+  });
+});
+
+describe("setJitteredSchedule", () => {
+  afterEach(() => {
+    setJitteredSchedule("test", 0, 0, async () => {});
+    vi.useRealTimers();
+  });
+
+  it("runs at first, then times each next run anew; another call or 0 hours replaces it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 16, 9));
+    const run = vi.fn(async () => {});
+    setJitteredSchedule("test", 6, Date.now() + 60_000, run);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(run).toHaveBeenCalledTimes(1);
+    // 9:01 + 5 to 7 hours: by 16:01 it ran again.
+    await vi.advanceTimersByTimeAsync(7 * 60 * 60 * 1000);
+    expect(run).toHaveBeenCalledTimes(2);
+
+    const other = vi.fn(async () => {});
+    setJitteredSchedule("test", 6, Date.now(), other);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(other).toHaveBeenCalledTimes(1);
+    setJitteredSchedule("test", 0, Date.now(), other);
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+    expect(other).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(2);
   });
 });

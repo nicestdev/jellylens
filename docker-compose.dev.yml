@@ -18,8 +18,10 @@ services:
       TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
       LIBRARY_SCAN_INTERVAL_HOURS: ${LIBRARY_SCAN_INTERVAL_HOURS:-6}
       TMDB_SYNC_INTERVAL_HOURS: ${TMDB_SYNC_INTERVAL_HOURS:-24}
-      MISSING_RECHECK_INTERVAL_HOURS: ${MISSING_RECHECK_INTERVAL_HOURS:-24}
       XREL_SYNC_INTERVAL_HOURS: ${XREL_SYNC_INTERVAL_HOURS:-6}
+      WCX_SYNC_INTERVAL_HOURS: ${WCX_SYNC_INTERVAL_HOURS:-6}
+      # The WCX sync keeps out of the night (0-8 o'clock) in this time zone.
+      TZ: ${TZ:-Europe/Berlin}
       # Sign-in for the dev server only (prod reads AUTH_ENABLED): a local
       # .env can turn it off with DEV_AUTH_ENABLED=false.
       AUTH_ENABLED: ${DEV_AUTH_ENABLED:-true}

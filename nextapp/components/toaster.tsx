@@ -39,7 +39,7 @@ export function Toaster() {
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(1rem+env(safe-area-inset-bottom))] z-50 flex w-[calc(100%-2rem)] flex-col items-end gap-2 sm:w-auto"
+      className="pointer-events-none fixed right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] z-50 flex flex-col items-end gap-2 sm:left-auto"
     >
       {toasts.map((t) => (
         <ToastCard

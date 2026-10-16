@@ -43,6 +43,7 @@ export type Release = {
   sizeMb?: number;
   titleKey: string;
   imdbId?: string;
+  group?: string; // a WCX release's, from its name; xREL's is its favorite group's
 };
 
 // Out of calls for this hour; resetAt is unix seconds. Says how long to

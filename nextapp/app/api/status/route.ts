@@ -17,5 +17,6 @@ export async function GET() {
     library: { ...stage("library"), movies: library.movies, shows: library.shows },
     tmdb: { ...stage("tmdb"), ...tmdb },
     releases: { ...stage("releases"), groups: releases.groups, releases: releases.releases },
+    wcx: { ...stage("wcx"), releases: releases.wcx },
   } satisfies StatusResponse);
 }

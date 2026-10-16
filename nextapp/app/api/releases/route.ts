@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
   const { matched, items } = queryTitles(filters, sort, asc, offset, PAGE_SIZE);
   const narrowed = Object.values(filters).some((values) => values.length > 0);
   const index = libraryIndex();
+  const { favorites, ...facets } = releaseFacets();
 
   return Response.json({
     // Not narrowed down, every tile matched.
@@ -55,7 +56,8 @@ export async function GET(req: NextRequest) {
       year: t.year ?? parseReleaseName(t.sample).year,
       library: t.tmdbId ? libraryItem(index.get(t.mediaType + ":" + t.tmdbId)) : null,
     })),
-    facets: releaseFacets(),
+    facets,
+    favoriteGroups: favorites,
     groups: releaseCounts().groups,
     syncing: releaseSync().groupId !== null || releaseSync().matching,
   } satisfies ReleasesResponse);

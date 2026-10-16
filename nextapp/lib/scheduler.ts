@@ -26,6 +26,7 @@ const SYNC_LABEL: Record<string, string> = {
   "library-scan": "Library scan",
   "tmdb-sync": "TMDB sync",
   "releases-sync": "Releases sync",
+  "wcx-sync": "WCX sync",
 };
 
 export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {
@@ -90,4 +91,34 @@ const timers: TimerMap = (globalForTimers.__jellylensTimers ??= {});
 export function setSchedule(key: string, hours: number, run: () => Promise<unknown>) {
   clearInterval(timers[key]);
   timers[key] = hours > 0 ? setInterval(() => run().catch(() => {}), hours * 60 * 60 * 1000) : undefined;
+}
+
+// When a run due `hours` after `from` happens: give or take a sixth of
+// that, and never at night. One that falls between about midnight (from
+// 23:30 on) and 8 waits for the morning, 8 to 9 o'clock. Local time (TZ).
+export function nextRunAt(from: number, hours: number, rand = Math.random): number {
+  const at = new Date(from + hours * 60 * 60 * 1000 * (5 / 6 + rand() / 3));
+  const morning = new Date(at);
+  if (at.getHours() >= 12) morning.setDate(morning.getDate() + 1);
+  morning.setHours(8, Math.floor(rand() * 60), Math.floor(rand() * 60), 0);
+  const night = new Date(morning);
+  night.setHours(0, -Math.floor(rand() * 30), 0, 0);
+  return at >= night && at < morning ? morning.getTime() : at.getTime();
+}
+
+// Like setSchedule, but each run is timed anew by nextRunAt, so it's never
+// at the same time twice; the first at `first` (unix ms, a past one soon).
+export function setJitteredSchedule(key: string, hours: number, first: number, run: () => Promise<unknown>) {
+  clearTimeout(timers[key]);
+  if (hours <= 0) return void (timers[key] = undefined);
+  const at = (when: number) => {
+    timers[key] = setTimeout(
+      () => {
+        run().catch(() => {});
+        at(nextRunAt(Date.now(), hours));
+      },
+      Math.max(0, when - Date.now()),
+    );
+  };
+  at(first);
 }

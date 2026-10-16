@@ -3,7 +3,8 @@ import { scanLibrary } from "./library-scan";
 import { syncNewTmdb, syncTmdb } from "./sync-tmdb";
 import { computeMissing } from "./compute-missing";
 import { syncReleases } from "./sync-releases";
-import { makeTrigger, setSchedule } from "./scheduler";
+import { syncWcx } from "./sync-wcx";
+import { makeTrigger, nextRunAt, setJitteredSchedule, setSchedule } from "./scheduler";
 import { pruneTmdbImages } from "./tmdb-image-cache";
 import {
   TMDB_API_KEY,
@@ -11,6 +12,8 @@ import {
   LIBRARY_SCAN_INTERVAL_HOURS,
   TMDB_SYNC_INTERVAL_HOURS,
   XREL_SYNC_INTERVAL_HOURS,
+  WCX_API_URL,
+  WCX_SYNC_INTERVAL_HOURS,
 } from "./env";
 
 export const triggerLibraryScan = makeTrigger("library-scan", async () => {
@@ -51,11 +54,20 @@ export const triggerReleasesSync = makeTrigger("releases-sync", async () => {
   return result;
 });
 
+// WCX's latest releases, then TMDB for new titles, like xREL's.
+export const triggerWcxSync = makeTrigger("wcx-sync", async () => {
+  if (!WCX_API_URL) throw new Error("WCX_API_URL is not configured on the backend.");
+  const result = await syncWcx({ tmdbApiKey: TMDB_API_KEY, language: TMDB_LANGUAGE });
+  pruneTmdbPosters();
+  return result;
+});
+
 // The stages by name, for /api/sync/<stage> and /api/status.
 export const stageTriggers = {
   library: triggerLibraryScan,
   tmdb: triggerTmdbSync,
   releases: triggerReleasesSync,
+  wcx: triggerWcxSync,
 };
 export type SyncStage = keyof typeof stageTriggers;
 
@@ -64,6 +76,14 @@ export function applySchedules() {
   setSchedule("library-scan", LIBRARY_SCAN_INTERVAL_HOURS, triggerLibraryScan);
   setSchedule("tmdb-sync", TMDB_SYNC_INTERVAL_HOURS, triggerTmdbSync);
   setSchedule("releases-sync", XREL_SYNC_INTERVAL_HOURS, triggerReleasesSync);
+  // Not at boot like the others: when it's due after the last one, or a
+  // few minutes from now if that's past (both kept out of the night).
+  if (WCX_API_URL) {
+    const last = syncedAt("wcx");
+    const due = last ? nextRunAt(Date.parse(last), WCX_SYNC_INTERVAL_HOURS) : 0;
+    const first = due > Date.now() ? due : nextRunAt(Date.now(), (2 + Math.random() * 13) / 60);
+    setJitteredSchedule("wcx-sync", WCX_SYNC_INTERVAL_HOURS, first, triggerWcxSync);
+  }
 }
 
 // A stage started by hand (Settings' Sync), in the

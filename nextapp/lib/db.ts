@@ -260,6 +260,33 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE download_files ADD COLUMN inner_name TEXT;
   `,
+  // WCX's releases (lib/sync-wcx.ts) belong to no favorite group: group_id
+  // NULL, their group by the name in group_name (NULL for xREL's, whose
+  // group is group_id's). SQLite can't loosen NOT NULL in place, so the
+  // table is copied; nothing references it.
+  `
+  CREATE TABLE releases_new (
+    id TEXT PRIMARY KEY,
+    group_id TEXT REFERENCES release_groups ON DELETE CASCADE,
+    group_name TEXT,
+    title_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    link TEXT NOT NULL,
+    type TEXT NOT NULL,
+    quality TEXT NOT NULL,
+    published_at INTEGER NOT NULL,
+    imdb_id TEXT,
+    search TEXT NOT NULL,
+    size_mb INTEGER
+  );
+  INSERT INTO releases_new (id, group_id, title_key, name, link, type, quality, published_at, imdb_id, search, size_mb)
+    SELECT id, group_id, title_key, name, link, type, quality, published_at, imdb_id, search, size_mb FROM releases;
+  DROP TABLE releases;
+  ALTER TABLE releases_new RENAME TO releases;
+  CREATE INDEX releases_group ON releases (group_id);
+  CREATE INDEX releases_title ON releases (title_key);
+  CREATE INDEX releases_imdb ON releases (imdb_id);
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

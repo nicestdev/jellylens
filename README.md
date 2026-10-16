@@ -20,12 +20,12 @@ a wishlist of what to add next.
 - 🎬 **Library**: your movies and shows as posters, read straight from your disks; search, sort, filter by genre or audio language.
 - 🧩 **Dashboard**: the Queue at a glance, incomplete shows (checked against TMDB), the wishlist, your disks and the last imports.
 - 📝 **Discover and Wishlist**: search TMDB, keep a wishlist per user.
-- 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to), with [WCX](#wcx-and-downloads) mirrors.
+- 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to) and [WCX](#wcx-and-downloads)'s latest, with WCX mirrors.
 - 📊 **Analytics**: your files by audio (German and English), resolution and codec, and release group.
 - 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked.
 - 🔔 **Notes**: a heads-up when something needs a hand: a download to organize, or a failure.
 - 🔐 **Jellyfin sign-in**: admin pages for Jellyfin admins only.
-- 🔄 **Automatic sync** of your disks, TMDB and xREL, on a schedule you set.
+- 🔄 **Automatic sync** of your disks, TMDB, xREL and WCX, on a schedule you set.
 - 📱 **Any device**: dark, responsive UI, on a phone's home screen too.
 
 ## Installation
@@ -55,7 +55,7 @@ services:
     restart: unless-stopped
 ```
 
-Available for `linux/amd64` and `linux/arm64`. Use `:1.2` to follow patch releases only, or pin an exact version like `:1.2.1`.
+Available for `linux/amd64` and `linux/arm64`. Use `:1.4` to follow patch releases only, or pin an exact version like `:1.4.0`.
 
 ## Configuration
 
@@ -74,6 +74,8 @@ Available for `linux/amd64` and `linux/arm64`. Use `:1.2` to follow patch releas
 | `AUTH_ENABLED` | | `true` | Sign in with Jellyfin accounts; `false` opens Jellylens to anyone who can reach it |
 | `WCX_URL` | | | WCX site address, for the links to its pages |
 | `WCX_API_URL` | | | WCX API address; unset turns the WCX lookups off |
+| `WCX_SYNC_INTERVAL_HOURS` | | `6` | About how many hours between syncs of WCX's latest releases (never at night), `0` = off |
+| `TZ` | | | Time zone, e.g. `Europe/Berlin`: the night the WCX sync keeps out of (0–8 o'clock) |
 | `DDOWNLOAD_LOGIN` | | | ddownload.com premium account, for the Queue |
 | `DDOWNLOAD_PASSWORD` | | | Its password |
 | `REALDEBRID_TOKEN` | | | [Real-Debrid API token](https://real-debrid.com/apitoken), for links on every other hoster |
@@ -84,7 +86,7 @@ All data is kept in `/app/data`: the SQLite database `jellylens.db` (library, fi
 
 ### WCX and downloads
 
-Both are optional and stay out of the way until configured. Without `WCX_API_URL`, title pages show xREL's releases only. The Queue needs `DDOWNLOAD_LOGIN`/`DDOWNLOAD_PASSWORD`, `REALDEBRID_TOKEN` or both, depending on the hosters you use.
+Both are optional and stay out of the way until configured. Without `WCX_API_URL`, Discover and title pages show xREL's releases only; with it, Discover also gets WCX's latest movies and shows (the first sync goes a week back), and title pages its mirrors. The Queue needs `DDOWNLOAD_LOGIN`/`DDOWNLOAD_PASSWORD`, `REALDEBRID_TOKEN` or both, depending on the hosters you use.
 
 #### Supported hosters
 
@@ -117,13 +119,13 @@ Every title needs its own folder named `Name (Year) [tmdbid-N]`, and every episo
 
 ### Organize
 
-Finished downloads wait on the Queue page under *Ready to organize*. Each gets the disk that already has the title, else the first one it fits on; you can pick another.
+Finished downloads wait on the Queue page under *Ready to organize*. Each gets the disk that already has the title; for a new title you pick one.
 
 A movie goes to `movies/Name (Year) [tmdbid-N]/`, a show's episodes to `shows/Name (Year) [tmdbid-N]/Season NN/`, named with TMDB's title as TMDB writes it. A disk with a folder for that TMDB id already, whatever it's called, gets the files in that folder. Only videos and subtitles go, not samples, `.nfo` or other extras; a movie's video named with spaces gets the release's name instead.
 
 If the library has the title already, you choose: **Replace** takes the old files out once the new ones are in, or **Delete** the download.
 
-After a move, Jellylens scans the library again and asks Jellyfin to do the same, so point your Jellyfin libraries at the same folders (or a pool over them). **Rescan library** in the Queue page's ⋯ menu does it by hand.
+After a move, Jellylens scans the library again and asks Jellyfin to do the same, so point your Jellyfin libraries at the same folders (or a pool over them). **Sync** on Settings' Library card does it by hand.
 
 ### Exposing Jellylens to the internet
 

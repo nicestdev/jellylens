@@ -49,6 +49,18 @@ describe("FacetMenu", () => {
     expect(onToggle).toHaveBeenCalledWith("VECTOR");
   });
 
+  it("draws a line after divideAfter values (Discover's favorite groups)", async () => {
+    render(<FacetMenu facet={facet({ values: ["VECTOR", "AAA", "ZZZ"], divideAfter: 1 })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Genre: All" }));
+    const items = screen.getByRole("menu").querySelectorAll("[role=menuitemcheckbox], [role=separator]");
+    expect([...items].map((el) => el.getAttribute("role"))).toEqual([
+      "menuitemcheckbox",
+      "separator",
+      "menuitemcheckbox",
+      "menuitemcheckbox",
+    ]);
+  });
+
   it("shows nothing without values", () => {
     const { container } = render(<FacetMenu facet={facet({ values: [] })} />);
     expect(container).toBeEmptyDOMElement();

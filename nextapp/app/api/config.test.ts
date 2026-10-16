@@ -14,6 +14,7 @@ const env = vi.hoisted(() => ({
   REALDEBRID_TOKEN: "",
   ARCHIVE_PASSWORDS: [] as string[],
   P2P_GROUPS: [] as string[],
+  WCX_API_URL: "",
 }));
 vi.mock("@/lib/env", async (original) => {
   const real = await original<typeof import("@/lib/env")>();
@@ -89,7 +90,7 @@ describe("GET /api/config", () => {
       passwords: ["example.com"],
     });
     expect(JSON.stringify(body)).not.toContain("env-one");
-    expect(body.intervals).toEqual({ library: 6, tmdb: 24, releases: 6 });
+    expect(body.intervals).toEqual({ library: 6, tmdb: 24, releases: 6, wcx: 0 });
   });
 
   it("is kept from users who aren't admins (proxy.ts)", async () => {

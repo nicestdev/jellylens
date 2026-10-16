@@ -15,6 +15,8 @@ function hours(name: string, fallback: number): number {
 export const LIBRARY_SCAN_INTERVAL_HOURS = hours("LIBRARY_SCAN_INTERVAL_HOURS", 6);
 export const TMDB_SYNC_INTERVAL_HOURS = hours("TMDB_SYNC_INTERVAL_HOURS", 24);
 export const XREL_SYNC_INTERVAL_HOURS = hours("XREL_SYNC_INTERVAL_HOURS", 6);
+// About that often (±1 h of 6), never at night (see nextRunAt in lib/scheduler.ts).
+export const WCX_SYNC_INTERVAL_HOURS = hours("WCX_SYNC_INTERVAL_HOURS", 6);
 
 // Sign-in with Jellyfin accounts; on unless set to "false" (or 0/no/off).
 // Off, Jellylens is open to anyone who can reach it, as a single admin.

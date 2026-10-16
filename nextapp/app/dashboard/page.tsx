@@ -6,7 +6,8 @@ import { useLoad } from "@/hooks/use-load";
 import { useWindowEvent } from "@/hooks/use-window-event";
 import { MissingTable } from "./missing-table";
 import { QueueTable, DisksTable, ImportsTable, WishlistTable } from "./rail";
-import { queueLine, sections } from "@/app/queue/logic";
+import { isActive, queueLine, sections } from "@/app/queue/logic";
+import { isMoving } from "@/app/queue/organize-logic";
 import { usePoll } from "@/hooks/use-poll";
 import { missingShows, openWishlist, queueRows, recentImports } from "./logic";
 import { ErrorAlert } from "@/components/error-alert";
@@ -25,7 +26,9 @@ export default function DashboardPage() {
   const requests = useLoad(loadRequests);
   const organize = useLoad(loadOrganize);
   const downloads = useLoad(loadDownloads);
-  usePoll(downloads.reload, 10000);
+  // As the Queue does: every second while something comes in or moves.
+  usePoll(downloads.reload, downloads.data && isActive(downloads.data.packages) ? 1000 : 10000);
+  usePoll(organize.reload, organize.data && isMoving(organize.data) ? 1000 : 10000);
   useWindowEvent(REQUESTS_CHANGED, () => void requests.reload());
   useWindowEvent(IGNORES_CHANGED, () => void missing.reload());
   const shows = missing.data?.shows ?? [];

@@ -49,6 +49,7 @@ export type StatusResponse = {
   library: StageStatus & { movies: number; shows: number };
   tmdb: StageStatus & { movies: number; shows: number };
   releases: StageStatus & { groups: number; releases: number };
+  wcx: StageStatus & { releases: number };
 };
 export type SyncStageName = keyof StatusResponse;
 
@@ -101,6 +102,7 @@ export type ReleasesResponse = {
   matched: number;
   items: ReleaseTitle[];
   facets: ReleaseFacets;
+  favoriteGroups: number; // how many of facets.group are favorites (they come first)
   groups: number;
   syncing: boolean;
 };

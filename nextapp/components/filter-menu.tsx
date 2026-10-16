@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { Check, X } from "lucide-react";
 import { ChevronDownIcon } from "@/components/design-icons";
 import { buttonVariants } from "@/components/ui/button";
@@ -24,45 +25,48 @@ export type Facet = {
   onToggle: (value: string) => void;
   format?: (value: string) => string;
   single?: boolean;
+  divideAfter?: number; // a line after that many values (Discover's favorite groups)
 };
 
 function FacetOptions({ facet }: { facet: Facet }) {
   const format = facet.format ?? ((v: string) => v);
-  return facet.values.map((value) => {
+  return facet.values.map((value, i) => {
     const checked = facet.selected.has(value);
     return (
-      <DropdownMenuCheckboxItem
-        key={value}
-        checked={checked}
-        onCheckedChange={() => facet.onToggle(value)}
-        // Swap the built-in trailing check for a leading checkbox, the usual
-        // look for a multi-select list.
-        className="gap-2.5 pr-2 [&>[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden"
-      >
-        {facet.single ? (
-          <span
-            className={cn(
-              "grid size-4 shrink-0 place-items-center rounded-full border transition-colors",
-              checked ? "border-primary" : "border-input",
-            )}
-          >
-            {checked ? <span className="size-2 rounded-full bg-primary" /> : null}
-          </span>
-        ) : (
-          <span
-            className={cn(
-              "grid size-4 shrink-0 place-items-center rounded-[4px] border transition-colors",
-              checked ? "border-primary bg-primary text-primary-foreground" : "border-input",
-            )}
-          >
-            {checked ? <Check className="size-3" /> : null}
-          </span>
-        )}
-        <span className="flex-1">{format(value)}</span>
-        {facet.counts ? (
-          <span className="ml-6 text-xs text-muted-foreground tabular-nums">{facet.counts.get(value) ?? 0}</span>
-        ) : null}
-      </DropdownMenuCheckboxItem>
+      <Fragment key={value}>
+        {i > 0 && i === facet.divideAfter ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuCheckboxItem
+          checked={checked}
+          onCheckedChange={() => facet.onToggle(value)}
+          // Swap the built-in trailing check for a leading checkbox, the usual
+          // look for a multi-select list.
+          className="gap-2.5 pr-2 [&>[data-slot=dropdown-menu-checkbox-item-indicator]]:hidden"
+        >
+          {facet.single ? (
+            <span
+              className={cn(
+                "grid size-4 shrink-0 place-items-center rounded-full border transition-colors",
+                checked ? "border-primary" : "border-input",
+              )}
+            >
+              {checked ? <span className="size-2 rounded-full bg-primary" /> : null}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "grid size-4 shrink-0 place-items-center rounded-[4px] border transition-colors",
+                checked ? "border-primary bg-primary text-primary-foreground" : "border-input",
+              )}
+            >
+              {checked ? <Check className="size-3" /> : null}
+            </span>
+          )}
+          <span className="flex-1">{format(value)}</span>
+          {facet.counts ? (
+            <span className="ml-6 text-xs text-muted-foreground tabular-nums">{facet.counts.get(value) ?? 0}</span>
+          ) : null}
+        </DropdownMenuCheckboxItem>
+      </Fragment>
     );
   });
 }

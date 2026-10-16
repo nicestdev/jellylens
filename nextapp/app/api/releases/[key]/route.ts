@@ -81,13 +81,21 @@ const partsOf = (key: string, titleKey: string) =>
   tileTitleKeys(key).filter((k) => xrelTitle(k) === xrelTitle(titleKey));
 
 async function detail(key: string, resolutions: string[] = []): Promise<ReleaseDetail> {
+  // On a TMDB entry's page WCX's releases come live from its page
+  // (app/api/wcx-releases), so the stored ones are left out there, and a
+  // title with only those with them; elsewhere they're all there is.
+  const live = TMDB_TILE.test(key);
   const byTitle = Map.groupBy(tileTitleKeys(key), xrelTitle);
-  const titles = [...byTitle.values()].map((keys) => {
-    const releases = keys.flatMap(titleReleases).sort((a, b) => b.publishedAt - a.publishedAt);
+  const titles = [...byTitle.values()].flatMap((keys) => {
+    const releases = keys
+      .flatMap(titleReleases)
+      .filter((r) => !live || !r.id.startsWith("wcx:"))
+      .sort((a, b) => b.publishedAt - a.publishedAt);
+    if (!releases.length) return [];
     const items = groupEpisodes(releases);
     const { title, year } = parseReleaseName(items[0]?.name ?? "");
     const label = year && keys.length === 1 ? `${title} (${year})` : title;
-    return { titleKey: keys[0], label, match: matchInfo(keys[0]), items };
+    return [{ titleKey: keys[0], label, match: matchInfo(keys[0]), items }];
   });
   const head = await headOf(key, titles);
   const available = namesByResolution(titles.flatMap((t) => t.items.map(xrelRow)));
@@ -104,7 +112,7 @@ async function detail(key: string, resolutions: string[] = []): Promise<ReleaseD
 // ?resolution=1080p&resolution=2160p, repeated.
 const resolutionsOf = (req: Request) => new URL(req.url).searchParams.getAll("resolution");
 
-// GET /api/releases/<key>?resolution=… — the xREL titles on one tile, each
+// GET /api/releases/<key>?resolution=… — the titles on one tile, each
 // with its releases (newest first, of the qualities asked for, else all) and
 // how its match came about, for the title page the tile opens; admin only.
 export async function GET(req: Request, { params }: Params) {

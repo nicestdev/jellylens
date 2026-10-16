@@ -74,20 +74,22 @@ export function markGroupSynced(id: string, at: string) {
 }
 
 export function releaseCounts() {
-  return one<{ groups: number; releases: number }>(
-    "SELECT (SELECT count(*) FROM release_groups) AS groups, (SELECT count(*) FROM releases) AS releases",
+  return one<{ groups: number; releases: number; wcx: number }>(
+    `SELECT (SELECT count(*) FROM release_groups) AS groups, (SELECT count(*) FROM releases WHERE group_id IS NOT NULL) AS releases,
+            (SELECT count(*) FROM releases WHERE group_id IS NULL) AS wcx`,
   )!;
 }
 
-// Adds one page of a group's releases. known: some were stored already,
+// Adds one page of a group's releases (groupId null: WCX's, of no favorite
+// group, each by its own group's name). known: some were stored already,
 // which tells an incremental sync it has caught up. A stored one without
 // a size gets it now (stored before sizes were).
-export function insertReleases(groupId: string, releases: Release[]): { added: number; known: boolean } {
+export function insertReleases(groupId: string | null, releases: Release[]): { added: number; known: boolean } {
   return tx(() => {
     const exists = db().prepare("SELECT 1 FROM releases WHERE id = ?");
     const upsert = db().prepare(
-      `INSERT INTO releases (id, group_id, title_key, name, link, type, quality, published_at, imdb_id, search, size_mb)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO releases (id, group_id, group_name, title_key, name, link, type, quality, published_at, imdb_id, search, size_mb)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET size_mb = excluded.size_mb WHERE releases.size_mb IS NULL`,
     );
     let added = 0;
@@ -96,6 +98,7 @@ export function insertReleases(groupId: string, releases: Release[]): { added: n
       upsert.run(
         r.id,
         groupId,
+        r.group ?? null,
         r.titleKey,
         r.name,
         r.link,
@@ -323,7 +326,7 @@ export type TitleFilters = { words: string[]; type: string[]; group: string[] };
 // One tile per TMDB entry: xREL sometimes keeps two titles for one movie
 // (old SD rips and later releases, named a little differently), and those
 // belong on one tile. A title matched to nothing on TMDB is a tile of its
-// own. Tile keys: "movie:949", "tv:1399", or the xREL title key.
+// own. Tile keys: "movie:949", "tv:1399", or the title key (xREL's, or "wcx:<uid>").
 const TILE = "CASE WHEN t.tmdb_id IS NOT NULL THEN t.media_type || ':' || t.tmdb_id ELSE r.title_key END";
 const TMDB_TILE = /^(movie|tv):(\d+)$/;
 
@@ -347,12 +350,15 @@ export type TitleRow = {
 // LIKE patterns match literally: % and _ in a word are escaped.
 const likeWord = (w: string) => "%" + w.replace(/[\\%_]/g, "\\$&") + "%";
 
+// A release's group: the favorite's (xREL), else the one in its name (WCX).
+const GROUP = "coalesce(g.name, r.group_name)";
+
 const FROM = `FROM releases r
-  JOIN release_groups g ON g.id = r.group_id
+  LEFT JOIN release_groups g ON g.id = r.group_id
   LEFT JOIN title_matches t ON t.title_key = r.title_key`;
 
 // Every word must be in a release name or the checked titles; any of the
-// types (xREL's: movie, tv) and any of the groups.
+// types (movie, tv) and any of the groups.
 function where(f: TitleFilters): { sql: string; params: unknown[] } {
   const clauses: string[] = [shownReleases()];
   const params: unknown[] = [];
@@ -365,7 +371,7 @@ function where(f: TitleFilters): { sql: string; params: unknown[] } {
     params.push(...f.type);
   }
   if (f.group.length) {
-    clauses.push(`g.name IN (${f.group.map(() => "?").join(", ")})`);
+    clauses.push(`${GROUP} IN (${f.group.map(() => "?").join(", ")})`);
     params.push(...f.group);
   }
   return { sql: "WHERE " + clauses.join(" AND "), params };
@@ -385,8 +391,8 @@ export function queryTitles(
     `SELECT ${TILE} AS key, ${title} AS title,
             max(t.year) AS year, max(t.poster_path) AS posterPath,
             max(t.media_type) AS mediaType, max(t.tmdb_id) AS tmdbId,
-            count(*) AS releases, group_concat(DISTINCT r.quality) AS qualities,
-            group_concat(DISTINCT g.name) AS groups, max(r.published_at) AS latest, max(r.name) AS sample,
+            count(DISTINCT lower(r.name)) AS releases, group_concat(DISTINCT r.quality) AS qualities,
+            group_concat(DISTINCT ${GROUP}) AS groups, max(r.published_at) AS latest, max(r.name) AS sample,
             count(*) OVER () AS matched
        ${FROM} ${w.sql}
       GROUP BY key
@@ -408,7 +414,7 @@ export function queryTitles(
       tmdbId: r.tmdbId,
       releases: r.releases,
       qualities: r.qualities.split(",").filter(Boolean),
-      groups: r.groups.split(","),
+      groups: (r.groups ?? "").split(",").filter(Boolean),
       latest: r.latest,
       sample: r.sample,
     })),
@@ -423,18 +429,25 @@ function countTitles(w: { sql: string; params: unknown[] }): number {
 export const tileCount = () => countTitles(where({ words: [], type: [], group: [] }));
 
 // What the filter menu offers, over everything so it doesn't shrink as you
-// narrow it down, A→Z.
+// narrow it down: the favorite groups first, then every other group a
+// release is from (WCX's), each A→Z. favorites: how many come first.
 export type ReleaseFacets = Record<"type" | "group", string[]>;
 
-export function releaseFacets(): ReleaseFacets {
-  const groups = all<{ name: string }>(
-    `SELECT name FROM release_groups g WHERE EXISTS (SELECT 1 FROM releases r WHERE r.group_id = g.id AND ${shownReleases()})
-      ORDER BY lower(name)`,
+export function releaseFacets(): ReleaseFacets & { favorites: number } {
+  const groups = all<{ name: string; favorite: number }>(
+    `SELECT n.name, EXISTS (SELECT 1 FROM release_groups f WHERE lower(f.name) = lower(n.name)) AS favorite
+       FROM (SELECT DISTINCT ${GROUP} AS name FROM releases r LEFT JOIN release_groups g ON g.id = r.group_id
+              WHERE ${shownReleases()} AND ${GROUP} IS NOT NULL) n
+      ORDER BY favorite DESC, lower(n.name)`,
   );
   const types = all<{ type: string }>(
     `SELECT DISTINCT type FROM releases r WHERE ${shownReleases()} AND type IN ('movie', 'tv') ORDER BY type`,
   );
-  return { type: types.map((t) => t.type), group: groups.map((g) => g.name) };
+  return {
+    type: types.map((t) => t.type),
+    group: groups.map((g) => g.name),
+    favorites: groups.filter((g) => g.favorite).length,
+  };
 }
 
 // episodes: how many episodes one entry stands for (groupEpisodes in
@@ -451,11 +464,11 @@ export type TitleRelease = {
   episodes?: number;
 };
 
-// Every release of one title, newest first.
+// Every release of one title, newest first (WCX's ids start "wcx:").
 export function titleReleases(titleKey: string): TitleRelease[] {
   return all<TitleRelease>(
-    `SELECT r.id, r.name, r.link, r.quality, r.published_at AS publishedAt, g.name AS "group", r.size_mb AS sizeMb
-       FROM releases r JOIN release_groups g ON g.id = r.group_id
+    `SELECT r.id, r.name, r.link, r.quality, r.published_at AS publishedAt, ${GROUP} AS "group", r.size_mb AS sizeMb
+       FROM releases r LEFT JOIN release_groups g ON g.id = r.group_id
       WHERE r.title_key = ? AND ${shownReleases()} ORDER BY r.published_at DESC`,
     titleKey,
   );

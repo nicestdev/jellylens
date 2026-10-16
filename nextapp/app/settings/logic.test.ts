@@ -8,6 +8,7 @@ const status = (running: Partial<Record<keyof StatusResponse, boolean>> = {}): S
   library: { ...stage, running: Boolean(running.library), movies: 1, shows: 1 },
   tmdb: { ...stage, running: Boolean(running.tmdb), movies: 1, shows: 1 },
   releases: { ...stage, running: Boolean(running.releases), groups: 1, releases: 1 },
+  wcx: { ...stage, running: Boolean(running.wcx), releases: 1 },
 });
 const group = (over: Partial<ReleaseGroupItem> = {}): ReleaseGroupItem => ({
   id: "g1",

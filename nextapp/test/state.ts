@@ -7,6 +7,7 @@ const GLOBALS = [
   "__jellyfinAccounts",
   "__movieReleases",
   "__releaseSync",
+  "__titleMatching",
   "__jellylensTriggers",
   "__jellylensDownloader",
   "__jellylensMoves",

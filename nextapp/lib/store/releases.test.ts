@@ -63,7 +63,7 @@ describe("groups", () => {
       { id: "g2", kind: "p2p", name: "VECTOR", count: 0, syncedAt: null, complete: false },
       { id: "g1", kind: "p2p", name: "FuN", count: 2, syncedAt: "2026-06-15T00:00:00Z", complete: true },
     ]);
-    expect(releaseCounts()).toEqual({ groups: 2, releases: 2 });
+    expect(releaseCounts()).toEqual({ groups: 2, releases: 2, wcx: 0 });
   });
 
   it("keeps scene groups alongside, by name, and tells the kinds apart", () => {
@@ -77,14 +77,14 @@ describe("groups", () => {
     expect(hasGroupNamed("vector", "p2p")).toBe(true);
     expect(hasGroupNamed("vector", "scene")).toBe(false);
     expect(hasGroupNamed("wayne", "scene")).toBe(true);
-    expect(releaseCounts()).toEqual({ groups: 2, releases: 1 });
+    expect(releaseCounts()).toEqual({ groups: 2, releases: 1, wcx: 0 });
   });
 
   it("takes a group's releases along when it's removed", () => {
     addGroup("g1", "FuN");
     insertReleases("g1", [release("1")]);
     removeGroup("g1");
-    expect(releaseCounts()).toEqual({ groups: 0, releases: 0 });
+    expect(releaseCounts()).toEqual({ groups: 0, releases: 0, wcx: 0 });
   });
 
   it("stores no group of a kind it doesn't know", () => {
@@ -218,10 +218,10 @@ describe("releaseFacets", () => {
       release("2", { titleKey: "a", type: "tv" }),
     ]);
     insertReleases("g2", [release("3", { titleKey: "b" })]);
-    expect(releaseFacets()).toEqual({ type: ["movie", "tv"], group: ["FuN", "VECTOR"] });
+    expect(releaseFacets()).toEqual({ type: ["movie", "tv"], group: ["FuN", "VECTOR"], favorites: 2 });
     expect(tileCount()).toBe(2);
     removeGroup("g1");
-    expect(releaseFacets()).toEqual({ type: ["movie"], group: ["VECTOR"] });
+    expect(releaseFacets()).toEqual({ type: ["movie"], group: ["VECTOR"], favorites: 1 });
     expect(tileCount()).toBe(1);
   });
 });
@@ -418,7 +418,7 @@ describe("releases below 720p", () => {
 
   it("stores them, but leaves them off the page and the panel", () => {
     seed();
-    expect(releaseCounts()).toEqual({ groups: 2, releases: 4 });
+    expect(releaseCounts()).toEqual({ groups: 2, releases: 4, wcx: 0 });
     const { matched, items } = queryTitles(noFilters, "date", false, 0, 10);
     expect(matched).toBe(1);
     expect(items.map((t) => [t.key, t.releases, t.qualities])).toEqual([["heat", 1, ["HD-1080p"]]]);

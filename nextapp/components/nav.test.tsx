@@ -17,6 +17,7 @@ const status: StatusResponse = {
   library: { ...stage, movies: 649, shows: 88 },
   tmdb: { ...stage, movies: 120, shows: 80 },
   releases: { ...stage, groups: 4, releases: 900 },
+  wcx: { ...stage, releases: 300 },
 };
 const request = (tmdbId: number, over: Partial<RequestItem> = {}): RequestItem => ({
   mediaType: "movie",
