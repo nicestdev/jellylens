@@ -9,6 +9,8 @@ import { candidates, byPreference } from "@/lib/mirrors";
 import { addPackage, setPackageMedia, wcxUid, type DownloadMedia } from "@/lib/store";
 import { TMDB_LANGUAGE } from "@/lib/env";
 import { fetchTmdbEntry } from "@/lib/tmdb";
+import { log } from "@/lib/log";
+import { plural } from "@/lib/format";
 
 // A release as WCX's detail answer has it. links: per hoster, plain hoster
 // links (some with stray spaces); crypted_links (filecrypt, hide.cx): per
@@ -165,7 +167,8 @@ async function releasesOf(tmdbId: string): Promise<Release[]> {
         quality: resolutionOf(r.fulltitle),
         seasons: seasonsOf(r.fulltitle),
         seasonEpisodes: Number(r.options?.episode_count_in_season) || null,
-        size: r.size || null,
+        // WCX has the odd size a million times too big (1.3 PB for a 1.3 GB film).
+        size: r.size && r.size < 1e13 ? r.size : null,
         createdAt: r.created_at ?? null,
         mirrors: mirrors.sort(byPreference),
         links,
@@ -278,7 +281,10 @@ export async function POST(req: Request) {
   for (const { release, mirror } of candidates(copies)) {
     const r = release as Release;
     await checkMirror(r, mirror);
-    if (mirror.offline) continue;
+    if (mirror.offline) {
+      log.info("wcx", `Mirror offline: ${mirror.hoster} (${mirror.source}) of ${r.name}`);
+      continue;
+    }
     let urls: string[];
     if (mirror.source === "hide.cx") {
       try {
@@ -297,6 +303,7 @@ export async function POST(req: Request) {
     const packageId = addPackage({ name: r.name, dir: packageDir(r.name), files });
     if (media) setPackageMedia(packageId, media);
     const started = await startIfNew(packageId);
+    log.info("wcx", `Added ${r.name}`, `· ${mirror.hoster} (${mirror.source}) · ${plural(files.length, "file")}`);
     return Response.json({
       result: "added",
       packageId,
@@ -310,6 +317,7 @@ export async function POST(req: Request) {
     .flatMap((r) => r.mirrors)
     .filter((m) => m.source === "filecrypt" && m.container)
     .sort(byPreference)[0];
+  log.warn("wcx", crypted ? `Only behind a captcha: ${copies[0].name}` : `No mirror online: ${copies[0].name}`);
   return Response.json(
     (crypted
       ? { result: "captcha", url: crypted.container!, hoster: crypted.hoster }

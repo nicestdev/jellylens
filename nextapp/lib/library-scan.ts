@@ -20,6 +20,7 @@ import {
   type LibraryMovie,
   type LibraryShow,
 } from "./store";
+import { log } from "./log";
 
 // The library as it is on disk: LIBRARY_DIR's disks, each with movies/ and
 // shows/, a folder per title named "Name (Year) [tmdbid-N]" (as Organize names
@@ -118,7 +119,7 @@ async function probeAll(files: ScanFile[]): Promise<Map<string, Probe>> {
   }
   await mapWithConcurrency(todo, PROBES_AT_ONCE, async (f) => {
     const probe = await ffprobe(path.join(LIBRARY_DIR, f.rel)).catch((e) => {
-      console.error(`[library-scan] ffprobe failed for ${f.rel}:`, (e as Error).message);
+      log.error("library", `ffprobe failed for ${f.rel}`, e);
       return { seconds: null, codec: "", languages: [] } satisfies Probe;
     });
     setProbe(f.rel, { size: f.size, mtime: f.mtime, probe });
@@ -302,8 +303,8 @@ export async function scanLibrary(tmdb: { apiKey: string; language: string } | n
   const syncedAt = new Date().toISOString();
   replaceLibrary({ movies, shows, episodes, files: storedFiles([...movieItems, ...episodeItems]) }, syncedAt);
   dropFulfilledRequests();
-  if (untagged.length) console.warn(`[library-scan] ${untagged.length} folders without [tmdbid-N]:`, untagged);
-  if (unnamed.length) console.warn(`[library-scan] ${unnamed.length} show files without SxxEyy:`, unnamed);
+  if (untagged.length) log.warn("library", `${untagged.length} folders without [tmdbid-N]:`, untagged.join(", "));
+  if (unnamed.length) log.warn("library", `${unnamed.length} show files without SxxEyy:`, unnamed.join(", "));
   return {
     movies: movies.length,
     shows: shows.length,

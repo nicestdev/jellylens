@@ -24,6 +24,7 @@ a wishlist of what to add next.
 - 📊 **Analytics**: your files by audio (German and English), resolution and codec, and release group.
 - 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked.
 - 🔔 **Notes**: a heads-up when something needs a hand: a download to organize, or a failure.
+- 📜 **Logs**: what happened, kept two weeks, searchable by level and area, ready to copy.
 - 🔐 **Jellyfin sign-in**: admin pages for Jellyfin admins only.
 - 🔄 **Automatic sync** of your disks, TMDB, xREL and WCX, on a schedule you set.
 - 📱 **Any device**: dark, responsive UI, on a phone's home screen too.
@@ -75,7 +76,7 @@ Available for `linux/amd64` and `linux/arm64`. Use `:1.4` to follow patch releas
 | `WCX_URL` | | | WCX site address, for the links to its pages |
 | `WCX_API_URL` | | | WCX API address; unset turns the WCX lookups off |
 | `WCX_SYNC_INTERVAL_HOURS` | | `6` | About how many hours between syncs of WCX's latest releases (never at night), `0` = off |
-| `TZ` | | | Time zone, e.g. `Europe/Berlin`: the night the WCX sync keeps out of (0–8 o'clock) |
+| `TZ` | | | Time zone, e.g. `Europe/Vienna`: the night the WCX sync keeps out of (0–8 o'clock) |
 | `DDOWNLOAD_LOGIN` | | | ddownload.com premium account, for the Queue |
 | `DDOWNLOAD_PASSWORD` | | | Its password |
 | `REALDEBRID_TOKEN` | | | [Real-Debrid API token](https://real-debrid.com/apitoken), for links on every other hoster |

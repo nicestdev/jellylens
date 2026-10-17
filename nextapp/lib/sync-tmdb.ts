@@ -3,6 +3,7 @@ import { getTmdbShows, matchedShows, addTmdb, replaceTmdb, syncedAt, type TmdbSe
 import { mapWithConcurrency } from "./async";
 import { refreshDetails } from "./library-scan";
 import { releaseWindow } from "./dates";
+import { log } from "./log";
 
 // Asks TMDB again about every title in the library (name, genres, poster,
 // a show's status; lib/library-scan.ts), then pulls, for every show, its
@@ -45,8 +46,9 @@ export async function syncTmdb({ tmdbApiKey, language }: { tmdbApiKey: string; l
     try {
       const seasons = await fetchSeasons(tmdbApiKey, tmdbId, today);
       return seasons ? ([id, { tmdbId, seasons }] as const) : null;
-    } catch {
+    } catch (e) {
       failed++;
+      log.warn("tmdb", `Seasons of show ${tmdbId} failed, kept the last sync's`, e);
       return previousShows[id] ? ([id, previousShows[id]] as const) : null;
     }
   });
@@ -67,7 +69,10 @@ export async function syncNewTmdb(tmdbApiKey: string) {
     matchedShows().filter(({ id }) => !knownShows[id]),
     5,
     async ({ id, tmdbId }) => {
-      const seasons = await fetchSeasons(tmdbApiKey, tmdbId, today).catch(() => null);
+      const seasons = await fetchSeasons(tmdbApiKey, tmdbId, today).catch((e) => {
+        log.warn("tmdb", `Seasons of new show ${tmdbId} failed, left for the next TMDB sync`, e);
+        return null;
+      });
       return seasons ? ([id, { tmdbId, seasons }] as const) : null;
     },
   );

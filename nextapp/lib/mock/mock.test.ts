@@ -1,3 +1,4 @@
+import { mockLogs } from "./logs";
 import { describe, expect, it } from "vitest";
 import { sections } from "@/app/queue/logic";
 import { mockDownloads, mockOrganize } from "./data";
@@ -25,5 +26,12 @@ describe("mock data", () => {
     expect(groups.some((g) => g.syncing && !g.complete)).toBe(true);
     expect(groups.some((g) => !g.syncing && !g.complete)).toBe(true);
     expect(mockPreferences()).toEqual({ showSdReleases: false });
+  });
+
+  it("logs every level, and filters the way the route does", () => {
+    const logs = (q = "") => mockLogs(new URL("http://x/api/logs" + q)).entries;
+    expect(new Set(logs().map((e) => e.level))).toEqual(new Set(["info", "warn", "error"]));
+    expect(logs("?level=error").every((e) => e.level === "error")).toBe(true);
+    expect(logs("?after=1")).toEqual([]);
   });
 });

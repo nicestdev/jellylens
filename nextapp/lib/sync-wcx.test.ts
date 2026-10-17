@@ -42,7 +42,7 @@ describe("syncWcx", () => {
       [entry("d", hoursAgo(24 * 9), ["Older.2000.German.720p.WEB.x264-OLD"])],
     ]);
 
-    expect(await run()).toEqual({ pages: 4, added: 2 });
+    expect(await run()).toMatchObject({ pages: 4, added: 2 });
     expect(fetch).toHaveBeenCalledTimes(4);
     // As the site's own pages ask, from WCX_URL.
     expect(fetch.mock.calls[0][1]?.headers).toMatchObject({ Origin: "https://wcx.test", Referer: "https://wcx.test/" });
@@ -69,7 +69,7 @@ describe("syncWcx", () => {
       ],
     );
 
-    expect(await run()).toEqual({ pages: 2, added: 2 });
+    expect(await run()).toMatchObject({ pages: 2, added: 2 });
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(titleReleases("wcx:s")).toMatchObject([{ group: "TVS" }]);
   });

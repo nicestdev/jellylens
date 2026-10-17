@@ -3,7 +3,19 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { ChartPie, Compass, Film, Heart, Layers, Lock, Rocket, Settings, Tv, type LucideIcon } from "lucide-react";
+import {
+  ChartPie,
+  Compass,
+  Film,
+  Heart,
+  Layers,
+  Lock,
+  Rocket,
+  ScrollText,
+  Settings,
+  Tv,
+  type LucideIcon,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -54,6 +66,7 @@ const sections: NavSection[] = [
     label: "Administration",
     links: [
       { href: "/analytics", label: "Analytics", icon: ChartPie, admin: true },
+      { href: "/logs", label: "Logs", icon: ScrollText, admin: true },
       { href: "/settings", label: "Settings", icon: Settings, admin: true },
     ],
   },

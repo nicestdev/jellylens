@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { log } from "./log";
 
 // Shared by the image caches (lib/tmdb-image-cache.ts).
 
@@ -23,7 +24,7 @@ export async function writeAtomically(file: string, body: Buffer, label: string)
     await fs.writeFile(file + ".tmp", body);
     await fs.rename(file + ".tmp", file);
   } catch (e) {
-    console.error(`[${label}] failed to cache ${path.basename(file)}:`, (e as Error).message);
+    log.error("images", `Caching ${path.basename(file)} (${label}) failed`, e);
   }
 }
 

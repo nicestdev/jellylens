@@ -62,6 +62,7 @@ describe("Sidebar", () => {
       "Discover",
       "Wishlist",
       "Analytics",
+      "Logs",
       "Settings",
     ]);
     expect(sidebar().getByText("Library")).toBeInTheDocument();
@@ -173,6 +174,7 @@ describe("MobileBar", () => {
       "Discover",
       "Wishlist",
       "Analytics",
+      "Logs",
       "Settings",
     ]);
   });

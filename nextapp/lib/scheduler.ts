@@ -1,4 +1,6 @@
 import { notify } from "./events";
+import { log, took } from "./log";
+import type { LogArea } from "./log-areas";
 
 // A sync stage's run, shared by every caller: overlapping calls (a manual
 // "Sync" racing a scheduled tick) join the one in flight instead of
@@ -21,12 +23,19 @@ type Trigger<T> = {
 type TriggerState = { inFlight: Promise<unknown> | null; next?: Promise<unknown> | null; lastError: string | null };
 const globalForTriggers = globalThis as unknown as { __jellylensTriggers?: Record<string, TriggerState> };
 
-// How a run is named in a note when it fails (lib/events.ts).
+// How a run is named in a note when it fails (lib/events.ts), and the log's
+// area for it.
 const SYNC_LABEL: Record<string, string> = {
   "library-scan": "Library scan",
   "tmdb-sync": "TMDB sync",
   "releases-sync": "Releases sync",
   "wcx-sync": "WCX sync",
+};
+const SYNC_AREA: Record<string, LogArea> = {
+  "library-scan": "library",
+  "tmdb-sync": "tmdb",
+  "releases-sync": "xrel",
+  "wcx-sync": "wcx",
 };
 
 export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {
@@ -34,17 +43,20 @@ export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {
   const trigger = () => {
     const s = state();
     if (!s.inFlight) {
-      console.log("[" + name + "] started");
+      const area = SYNC_AREA[name] ?? "app";
+      const label = SYNC_LABEL[name] ?? name;
+      const start = Date.now();
+      log.info(area, `${label} started`);
       s.inFlight = fn()
         .then((result) => {
-          console.log("[" + name + "] done", result);
+          log.info(area, `${label} done in ${took(start)}`, result);
           s.lastError = null;
           return result;
         })
         .catch((e) => {
-          console.error("[" + name + "] failed:", (e as Error).message);
+          log.error(area, `${label} failed after ${took(start)}`, e);
           s.lastError = (e as Error).message;
-          notify(`${SYNC_LABEL[name] ?? name} failed`, { description: s.lastError, tone: "error" });
+          notify(`${label} failed`, { description: s.lastError, tone: "error" });
           throw e;
         })
         .finally(() => {

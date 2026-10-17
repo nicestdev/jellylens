@@ -11,14 +11,18 @@ export async function register() {
   const { triggerLibraryScan, triggerTmdbSync, triggerReleasesSync, applySchedules } =
     await import("./lib/sync-manager");
   const { JELLYFIN_URL, JELLYFIN_API_KEY, AUTH_ENABLED } = await import("./lib/env");
+  const { log, logStart } = await import("./lib/log");
+  const { pruneLogs } = await import("./lib/store");
+
+  db();
+  logStart();
+  pruneLogs();
 
   // Jellyfin is only asked for sign-in and to rescan after a move into
   // the library.
   if (AUTH_ENABLED && (!JELLYFIN_URL || !JELLYFIN_API_KEY)) {
-    console.error("JELLYFIN_URL and JELLYFIN_API_KEY are required for sign-in (or set AUTH_ENABLED=false).");
+    log.error("app", "JELLYFIN_URL and JELLYFIN_API_KEY are required for sign-in (or set AUTH_ENABLED=false)");
   }
-
-  db();
 
   triggerLibraryScan()
     .then(() => triggerTmdbSync())

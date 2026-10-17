@@ -90,6 +90,41 @@ describe("fetchGroupReleases", () => {
     await expect(xrel.fetchGroupReleases("g1", 2)).resolves.toBeDefined();
   });
 
+  it("waits out a 429 that leaves calls this hour (the searches' own limit), and asks again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      let calls = 0;
+      const fetch = mockFetch(() =>
+        ++calls === 1
+          ? new Response("", { status: 429, headers: limitHeaders(500) })
+          : json(
+              { total_count: 0, pagination: { current_page: 1, per_page: 100, total_pages: 1 }, list: [] },
+              { headers: limitHeaders(499) },
+            ),
+      );
+      const page = xrel.fetchGroupReleases("g1", 1);
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(page).resolves.toMatchObject({ totalPages: 1 });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up on that 429 after two more tries", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      const fetch = mockFetch(() => new Response("", { status: 429, headers: limitHeaders(500) }));
+      const page = xrel.fetchGroupReleases("g1", 1);
+      const failed = expect(page).rejects.toBeInstanceOf(xrel.RateLimitError);
+      await vi.advanceTimersByTimeAsync(10_000);
+      await failed;
+      expect(fetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("turns a 429 into a rate limit error", async () => {
     mockFetch(() => new Response("", { status: 429, headers: limitHeaders(0) }));
     await expect(xrel.fetchGroupReleases("g1", 1)).rejects.toBeInstanceOf(xrel.RateLimitError);
@@ -175,22 +210,23 @@ describe("scene groups", () => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     try {
       const typo = xrel.findSceneGroup("nope");
-      await vi.advanceTimersByTimeAsync(2500);
+      await vi.advanceTimersByTimeAsync(3000);
       expect(await typo).toBeNull();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("spaces searches 2.5 s apart", async () => {
+  it("spaces searches 3 s apart", async () => {
     vi.useFakeTimers();
     try {
       const fetch = mockFetch(() => json({ results: [] }));
       const first = xrel.findSceneGroup("A");
       const second = xrel.findSceneGroup("B");
       await first;
+      await vi.advanceTimersByTimeAsync(2900);
       expect(fetch).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(2500);
+      await vi.advanceTimersByTimeAsync(100);
       await second;
       expect(fetch).toHaveBeenCalledTimes(2);
     } finally {

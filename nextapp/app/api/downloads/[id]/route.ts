@@ -14,6 +14,7 @@ import {
   type DownloadPackage,
   type DownloadStatus,
 } from "@/lib/store";
+import { log } from "@/lib/log";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -109,6 +110,8 @@ export async function POST(req: Request, { params }: Params) {
   if (!action.from.includes(pkg.status)) return Response.json({ error: action.error }, { status: 409 });
   const refused = action.run(pkg, body);
   if (refused) return Response.json({ error: refused }, { status: 409 });
+  const choice = typeof body.choice === "string" ? ` (${body.choice})` : "";
+  log.info("downloads", `${body.action[0].toUpperCase()}${body.action.slice(1)}: ${pkg.name}${choice}`);
   kickDownloads();
   return Response.json({ ok: true });
 }
@@ -124,5 +127,6 @@ export async function DELETE(req: Request, { params }: Params) {
   deletePackage(pkg.id);
   const withFiles = new URL(req.url).searchParams.get("files") === "delete";
   if (pkg.status !== "done" || withFiles) fs.rmSync(packagePath(pkg), { recursive: true, force: true });
+  log.info("downloads", `${withFiles ? "Deleted" : "Removed"}: ${pkg.name}`, `· was ${pkg.status}`);
   return Response.json({ ok: true });
 }

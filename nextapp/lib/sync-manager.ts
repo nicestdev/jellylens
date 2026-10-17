@@ -6,6 +6,8 @@ import { syncReleases } from "./sync-releases";
 import { syncWcx } from "./sync-wcx";
 import { makeTrigger, nextRunAt, setJitteredSchedule, setSchedule } from "./scheduler";
 import { pruneTmdbImages } from "./tmdb-image-cache";
+import { pruneLogs } from "./store";
+import { log } from "./log";
 import {
   TMDB_API_KEY,
   TMDB_LANGUAGE,
@@ -33,7 +35,7 @@ export const triggerLibraryScan = makeTrigger("library-scan", async () => {
 // The posters a scan, TMDB or releases sync may have left unused; in the
 // background.
 function pruneTmdbPosters() {
-  pruneTmdbImages(tmdbPosterPaths()).catch((e) => console.error("[tmdb-images] prune failed:", (e as Error).message));
+  pruneTmdbImages(tmdbPosterPaths()).catch((e) => log.error("images", "Pruning posters failed", e));
 }
 
 export const triggerTmdbSync = makeTrigger("tmdb-sync", async () => {
@@ -76,6 +78,7 @@ export function applySchedules() {
   setSchedule("library-scan", LIBRARY_SCAN_INTERVAL_HOURS, triggerLibraryScan);
   setSchedule("tmdb-sync", TMDB_SYNC_INTERVAL_HOURS, triggerTmdbSync);
   setSchedule("releases-sync", XREL_SYNC_INTERVAL_HOURS, triggerReleasesSync);
+  setSchedule("log-prune", 24, async () => pruneLogs());
   // Not at boot like the others: when it's due after the last one, or a
   // few minutes from now if that's past (both kept out of the night).
   if (WCX_API_URL) {
@@ -91,5 +94,6 @@ export function applySchedules() {
 // failure has its own (makeTrigger's). fresh: not joining a run that's
 // under way (Trigger's fresh).
 export function startByHand(stage: SyncStage, fresh = false) {
+  log.info(stage === "releases" ? "xrel" : stage, fresh ? "Sync asked for after a move" : "Sync started by hand");
   void (fresh ? stageTriggers[stage].fresh : stageTriggers[stage])().catch(() => {});
 }

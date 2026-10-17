@@ -681,3 +681,18 @@ describe("GET /api/xrel-link", () => {
     expect((await get("tmdbId=heat")).status).toBe(400);
   });
 });
+
+describe("GET /api/logs", () => {
+  const get = async (query = "") =>
+    (await (await import("./logs/route")).GET(new Request(`http://x/api/logs${query}`))).json();
+
+  it("hands out the log newest first, filtered, a page before an id", async () => {
+    const { addLog } = await import("@/lib/store");
+    addLog("info", "xrel", "Releases sync started");
+    addLog("error", "xrel", "Releases sync failed");
+    addLog("info", "downloads", "Added Heat");
+    expect((await get()).entries.map((e: { id: number }) => e.id)).toEqual([3, 2, 1]);
+    expect(await get("?level=error,warn&area=xrel")).toMatchObject({ entries: [{ id: 2 }], more: false });
+    expect((await get("?q=releases&before=2")).entries.map((e: { id: number }) => e.id)).toEqual([1]);
+  });
+});

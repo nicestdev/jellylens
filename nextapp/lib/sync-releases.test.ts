@@ -104,7 +104,7 @@ describe("syncReleases", () => {
       },
     );
 
-    expect(await run()).toEqual({ groups: 1, added: 2 });
+    expect(await run()).toMatchObject({ groups: 1, added: 2 });
 
     expect(listGroups()[0]).toMatchObject({ count: 2, complete: true });
     expect(titles().map((t) => [t.title, t.tmdbId])).toEqual([
@@ -123,7 +123,7 @@ describe("syncReleases", () => {
     const fetch = apis({
       g1: [[p2p(3, "C.2020.German-VECTOR"), p2p(2, "B.2020.German-VECTOR")], [p2p(1, "A.2020.German-VECTOR")]],
     });
-    expect(await run("")).toEqual({ groups: 1, added: 1 });
+    expect(await run("")).toMatchObject({ groups: 1, added: 1 });
     expect(fetch.mock.calls.filter(([u]) => String(u).includes("api.xrel.to"))).toHaveLength(1);
     expect(releaseCounts().releases).toBe(3);
   });
@@ -171,7 +171,7 @@ describe("syncReleases", () => {
       return new Response("", { status: 404 });
     });
 
-    expect(await run()).toEqual({ groups: 2, added: 2 });
+    expect(await run()).toMatchObject({ groups: 2, added: 2 });
     expect(listGroups().map((g) => [g.name, g.count, g.complete])).toEqual([
       ["VECTOR", 1, true],
       ["FuN", 1, true],
@@ -217,7 +217,7 @@ describe("syncReleases with scene groups", () => {
       },
     );
 
-    expect(await runWithoutWaits()).toEqual({ groups: 2, added: 2 });
+    expect(await runWithoutWaits()).toMatchObject({ groups: 2, added: 2 });
     expect(listGroups().map((g) => [g.name, g.count, g.complete])).toEqual([
       ["VECTOR", 1, true],
       ["WAYNE", 1, true],
@@ -234,7 +234,7 @@ describe("syncReleases with scene groups", () => {
     apis({}, {}, {}, { WAYNE: [scene(1, "A.S01E01.GERMAN.1080P.WEB.H264-WAYNE", "WAYNE")] });
     await runWithoutWaits();
     apis({}, {}, {}, { WAYNE: [scene(2, "A.S01E02.GERMAN.1080P.WEB.H264-WAYNE", "WAYNE")] });
-    expect(await runWithoutWaits()).toEqual({ groups: 1, added: 1 });
+    expect(await runWithoutWaits()).toMatchObject({ groups: 1, added: 1 });
     expect(releaseCounts().releases).toBe(2);
   });
 

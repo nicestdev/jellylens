@@ -12,7 +12,7 @@ services:
       XREL_SYNC_INTERVAL_HOURS: ${XREL_SYNC_INTERVAL_HOURS:-6}
       WCX_SYNC_INTERVAL_HOURS: ${WCX_SYNC_INTERVAL_HOURS:-6}
       # The WCX sync keeps out of the night (0-8 o'clock) in this time zone.
-      TZ: ${TZ:-Europe/Berlin}
+      TZ: ${TZ:-Europe/Vienna}
       AUTH_ENABLED: ${AUTH_ENABLED:-true}
       WCX_URL: ${WCX_URL:-}
       WCX_API_URL: ${WCX_API_URL:-}

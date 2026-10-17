@@ -1,6 +1,7 @@
 import { P2P_GROUPS, SCENE_GROUPS } from "./env";
 import { addGroup, hasGroupNamed, sceneGroupId, type GroupKind } from "./store";
 import { findGroup, findSceneGroup } from "./xrel";
+import { log } from "./log";
 
 // A favorite group as xREL has it, by name (a P2P group's API id; a scene
 // group has none, so its id is made from the name).
@@ -25,13 +26,13 @@ export async function addEnvGroups(): Promise<number> {
       try {
         const group = await findGroupOf(kind, name);
         if (!group) {
-          console.warn(`[release-groups] xREL doesn't list a ${kind} group called ${name}`);
+          log.warn("xrel", `xREL doesn't list a ${kind} group called ${name}`);
           continue;
         }
         addGroup(group.id, group.name, kind);
         added++;
       } catch (e) {
-        console.warn(`[release-groups] couldn't add ${name}: ${(e as Error).message}`);
+        log.warn("xrel", `Couldn't add group ${name}`, e);
       }
     }
   }

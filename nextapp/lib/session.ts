@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { DATA_DIR, JELLYFIN_API_KEY, JELLYFIN_URL } from "./env";
 import { jfGet, type JellyfinUser } from "./jellyfin";
+import { log } from "./log";
 
 // Who's signed in. The Jellyfin password is checked once at sign-in (see
 // app/api/auth/login); after that Jellylens keeps its own signed cookie and
@@ -86,7 +87,7 @@ async function jellyfinAccounts(): Promise<Map<string, Account> | null> {
           ]),
         );
       })
-      .catch((e) => console.error("[auth] couldn't refresh Jellyfin users:", (e as Error).message))
+      .catch((e) => log.error("auth", "Couldn't refresh Jellyfin's users", e))
       .finally(() => {
         accounts.at = Date.now();
         accounts.pending = undefined;

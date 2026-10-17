@@ -1,5 +1,6 @@
 import { sleep } from "./async";
 import { parseReleaseName } from "./title-match";
+import { log } from "./log";
 
 // xREL's public API (no key needed): https://www.xrel.to/wiki/1681/API.html
 // Limits: 900 calls per hour per IP, and search calls at most 2 per 5 seconds.
@@ -59,12 +60,34 @@ export class RateLimitError extends Error {
 // before it would use up the last few, so the Settings page's own calls
 // (adding a group) still get through.
 const RESERVE = 10;
-const globalForLimit = globalThis as unknown as { __xrelLimit?: { remaining: number; resetAt: number } };
+// calls: how many this process made, for the log (a sync's share).
+type Limit = { remaining: number; resetAt: number; calls: number };
+const globalForLimit = globalThis as unknown as { __xrelLimit?: Limit };
+const limitState = () => (globalForLimit.__xrelLimit ??= { remaining: 900, resetAt: 0, calls: 0 });
 
-async function call<T>(path: string, params: Record<string, string | number>, reserve = 0): Promise<T> {
-  const limit = (globalForLimit.__xrelLimit ??= { remaining: 900, resetAt: 0 });
+// For the log: calls made so far, and what xREL said is left this hour.
+export function xrelUsage() {
+  const { calls, remaining, resetAt } = limitState();
+  return { calls, remaining, resetAt: resetAt ? new Date(resetAt * 1000).toISOString() : null };
+}
+
+function limitReached(limit: Limit, path: string): RateLimitError {
+  const e = new RateLimitError(limit.resetAt || Date.now() / 1000 + 3600);
+  log.warn("xrel", `Hourly limit reached on ${path}`, xrelUsage());
+  return e;
+}
+
+// A 429 with calls left this hour is the searches' own limit (2 per 5 s),
+// hit when the network bunches two of them up: waited out and asked again,
+// SHORT_TRIES times at most.
+const SHORT_WAIT_MS = 5000;
+const SHORT_TRIES = 2;
+
+async function call<T>(path: string, params: Record<string, string | number>, reserve = 0, tries = 0): Promise<T> {
+  const limit = limitState();
+  limit.calls = (limit.calls ?? 0) + 1;
   const now = Date.now() / 1000;
-  if (limit.resetAt > now && limit.remaining <= reserve) throw new RateLimitError(limit.resetAt);
+  if (limit.resetAt > now && limit.remaining <= reserve) throw limitReached(limit, path);
 
   const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
   const res = await fetch(API + path + "?" + qs);
@@ -74,7 +97,12 @@ async function call<T>(path: string, params: Record<string, string | number>, re
     limit.remaining = remaining;
     limit.resetAt = resetAt;
   }
-  if (res.status === 429) throw new RateLimitError(limit.resetAt || now + 3600);
+  if (res.status === 429 && remaining > reserve && tries < SHORT_TRIES) {
+    log.warn("xrel", `Too many searches at once on ${path}, asking again in 5 s`, `remaining=${remaining}`);
+    await sleep(SHORT_WAIT_MS);
+    return call(path, params, reserve, tries + 1);
+  }
+  if (res.status === 429) throw limitReached(limit, path);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error("xREL " + path + " failed: " + (body.error_description || "HTTP " + res.status));
@@ -105,12 +133,13 @@ export async function fetchGroupReleases(groupId: string, page: number) {
   return { releases: data.list.map(toRelease), totalPages: data.pagination.total_pages };
 }
 
-// Search calls one after another, 2.5 s apart (xREL allows 2 per 5 s). The
-// queue lives on globalThis like the limit, looked up on every call.
+// Search calls one after another, 3 s apart (xREL allows 2 per 5 s; 2.5 s
+// was too close, a slow answer bunched two up). The queue lives on
+// globalThis like the limit, looked up on every call.
 const globalForSearch = globalThis as unknown as { __xrelSearchQueue?: Promise<unknown> };
 function throttledSearch<T>(fn: () => Promise<T>): Promise<T> {
   const run = (globalForSearch.__xrelSearchQueue ?? Promise.resolve()).then(fn);
-  globalForSearch.__xrelSearchQueue = run.catch(() => {}).then(() => sleep(2500));
+  globalForSearch.__xrelSearchQueue = run.catch(() => {}).then(() => sleep(3000));
   return run;
 }
 

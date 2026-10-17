@@ -30,7 +30,7 @@ move into the library.
   connection when a `next dev` reload brings a new one; never edit one that has
   shipped, add a new one). Data access is in `lib/store/`, one module per area
   (library, files, tmdb, missing, ignored, requests, preferences, releases,
-  posters, sync-state, downloads, scan), all re-exported by `lib/store/index.ts`; SQL helpers in
+  posters, sync-state, downloads, scan, logs), all re-exported by `lib/store/index.ts`; SQL helpers in
   `lib/store/sql.ts`. Every read goes to the database, so a page always sees
   what the last sync wrote; each sync replaces its data in one transaction.
   Library items are stored with only the fields Jellylens reads
@@ -101,7 +101,7 @@ timed its own way, see 4.).
    boot and never on the hour: `setJitteredSchedule` in `lib/scheduler.ts`
    times each run anew (`nextRunAt`: the interval ±a sixth, one falling
    between about midnight, from 23:30 on, and 8 waits for 8 to 9 o'clock,
-   in the container's `TZ`, Europe/Berlin in the compose files); at boot
+   in the container's `TZ`, Europe/Vienna in the compose files); at boot
    the first is due after the last one, or a few minutes from now.
 
 The incomplete shows (`computeMissing` in `lib/compute-missing.ts`, the
@@ -126,8 +126,12 @@ every releases sync when the database doesn't have them yet
 with them and one missed because xREL was out of calls comes in with a
 later sync; one removed on Settings is back after the next sync while the
 variable names it. xREL allows 900 calls an hour: the client reads
-`x-ratelimit-*` and a sync stops with 10 left; searches are spaced 2.5 s
-apart.
+`x-ratelimit-*` and a sync stops with 10 left. Searches have a limit of
+their own, 2 per 5 s: they're spaced 3 s apart (2.5 s was too close, a
+slow answer bunched two up), and a 429 that leaves calls this hour by its
+headers is that limit, waited out (5 s) and asked again twice at most; only
+the hour's limit ends a sync. Each sync's result says how many calls it
+made and how many are left (`xrelUsage`, in the log).
 
 One sync does both kinds. A P2P group's first sync walks its whole list
 (100 per page); later ones stop at the first page with a release already
@@ -211,7 +215,9 @@ the season is complete; on a phone it joins the line under the name.
 `GET /api/wcx-releases?tmdbId=`
 reads the WCX page (`/start/d/<uid>`, kept 10 minutes, so going back and
 forth between title pages asks WCX once): its releases with their
-mirrors, unchecked, their plain hoster links staying on the server.
+mirrors, unchecked, their plain hoster links staying on the server, and
+their size (none when WCX gives 10 TB or more: now and then it has one a
+million times too big).
 WCX keeps a release's links from when it was posted, so after a re-upload
 they're gone, and now and then it lists fewer parts than were posted,
 while its filecrypt or hide.cx container has them all. So each hoster can
@@ -317,7 +323,10 @@ the container: `./downloads` next to the compose file (a bind mount), or
 the host folder `DOWNLOADS_PATH` names. The download queue (`lib/downloader.ts`)
 runs 1–10 files at a time and extracts each archive set with 7-Zip as soon
 as its parts are in, trying the archive passwords set on Settings in turn,
-then `ARCHIVE_PASSWORDS`. A file that fails fails its package at once, with
+then `ARCHIVE_PASSWORDS`. A file whose connection drops mid-way
+("terminated", or fewer bytes than its length) goes back in line and is
+resumed from what's on disk (HTTP Range), as long as each try gets further.
+A file that fails otherwise fails its package at once, with
 each failed file's name and error (no more of its files start; Retry
 fetches just those). Reset deletes what's downloaded and puts the package
 back among the new ones. How many files come in at once (Options' Parallel
@@ -402,7 +411,9 @@ what the archives hold (another version). So a new package whose first
 archive isn't named like a release gets that archive's first bytes read
 once (`peekPendingPackages` in `lib/download-match.ts`, `peekName` in
 `lib/archive-peek.ts`: a range request for 64 KB of the hoster's download,
-listed with 7-Zip and the archive passwords, headers being encrypted;
+listed with 7-Zip and the archive passwords, headers being encrypted; the
+first video in it, since an uploader's ad, "ddownload Premium Account.URL",
+may come first;
 kept in `download_files.inner_name`; nothing found, nothing changes). Its
 name replaces the package's in `libraryOf`: a movie's `exact` and "+" go by
 it, a show's by its first episode's copies in the library; the other
@@ -488,6 +499,37 @@ for a release name), only
 what happened after the page opened, and fires `COUNTS_STALE` so the
 sidebar asks for its counts again (a title page's Check fires it too when
 it adds a package).
+
+## Logs
+
+Everything worth reading when something went wrong goes through `log.info`,
+`log.warn` and `log.error` (`lib/log.ts`; never `console.*` directly): the
+console (docker logs) and the `logs` table (`lib/store/logs.ts`), kept 14
+days (pruned at boot and daily, `log-prune`). A line has a level, an area
+(`LOG_AREAS` in `lib/log-areas.ts`, the only ones `log` takes, each with its
+label: xREL, WCX, Sign-in …) and a message, details after it: an Error as
+": its message", an object as `key=value …` (a sync's result). What's
+logged: the start (`logStart`: the version, "first start" or "updated from
+<version>" by the last start's line, Node, TZ, the container's host name), a
+migration; every sync's start, end with how long it took and its result,
+failure, and one asked for by hand or after a move; xREL's limits; TMDB's
+seasons a show didn't get; a package added (DLC or links), matched, started
+or why it waits for a hand, peeked into, each file's start, end with its
+speed, drop and resume or failure, each extraction, the package done or
+failed, every hand on it (Start, Pause, Retry, Reset, Remove, Delete); a
+WCX Check's mirrors; a move queued, done (what it took out) or not; sign-ins
+and lockouts; the wishlist, groups, ignores, match verdicts and settings
+(archive passwords only by count; never a secret). A new feature logs the
+same way, where it helps find an error later; Next's own errors stay in the
+console. Administration › Logs (`app/logs/`, `GET /api/logs?level=&area=&q=&before=&after=`,
+admin only) lists it newest first, 200 at a time, a `TableFrame` a day
+("Today", "Yesterday", "Thursday, 15.10.2026"; `logDays`): the message in
+Mono, red for an error and peach for a warning like its Level, the area, the
+time with its date ("06:32:25 17.10.2026", the browser's zone), the columns
+fixed so the days line up; a search, a Level and an Area menu, older lines as
+it's scrolled, new ones every 5 s; its ⋯ Copy puts what's shown on the
+clipboard, oldest first, each line with its zone ("2026-10-17 06:32:25
++02:00 ERROR [xrel] …"), to hold against the server's UTC.
 
 ## Images
 
@@ -670,7 +712,7 @@ differ: search, sort, a menu's chevron), `dev-tools` (see
 Development). `nav` is
 the sidebar from md up (`Sidebar`: the Dashboard and the Queue on top
 without a heading, then Library (Movies, Shows, Discover, Wishlist) and
-Administration (Analytics, Settings), an icon before each, sections a
+Administration (Analytics, Logs, Settings), an icon before each, sections a
 user has nothing in left out; the logo goes to the user's start page;
 counts, all muted and only when above 0, from `/api/status`, the wishlist's open requests and
 the Queue's packages not in the library yet (`DOWNLOADS_CHANGED` from
@@ -751,8 +793,8 @@ menu panel, above Sign out): Admin (a cookie, `lib/dev-cookie.ts`, read by
 an admin, sign-in off too), Test toasts pops up every note the app
 shows, one after another, with made-up text (keep its list current when a
 `toast()` or `notify()` is added), and Mock data (remembered in the
-browser, a reload on each change): while it's on, the Queue, the wishlist and Settings show made-up data
-(`lib/mock/data.ts`, `lib/mock/settings.ts`, answered in the browser by
+browser, a reload on each change): while it's on, the Queue, the wishlist, Settings and Logs show made-up data
+(`lib/mock/data.ts`, `lib/mock/settings.ts`, `lib/mock/logs.ts`, answered in the browser by
 `lib/mock/fetch.ts`; their actions, Sync and ignoring a show are refused,
 nothing reaches the database), every state they can show. The routes are
 mocked whoever asks, so the Dashboard's Queue, imports, wishlist and disks are the
@@ -766,6 +808,7 @@ data in the same change, a new state gets an example there
 ## Tests
 
 Vitest (`vitest.config.mts`, `npm test`), next to the code as `*.test.ts(x)`.
+Tests run in UTC (`TZ` in its env), so local times read the same everywhere.
 `test/setup.ts` gives every test a fresh in-memory database, fails any fetch
 a test didn't mock (`mockFetch` in `test/http.ts`), and drops server state
 kept on `globalThis` (`test/state.ts`). Modules keep such state (rate limits,

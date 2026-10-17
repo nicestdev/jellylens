@@ -12,6 +12,8 @@ const ADMIN_ONLY = [
   "/api/organize",
   "/api/events",
   "/settings",
+  "/logs",
+  "/api/logs",
   "/api/config",
   "/api/sync",
   "/api/ignored",

@@ -2,6 +2,7 @@ import { insertReleases, setSyncedAt, setWcxUid, syncedAt } from "./store";
 import { sleep } from "./async";
 import { matchNewTitles } from "./sync-releases";
 import { fetchLatest, toReleases, type WcxType } from "./wcx";
+import { log } from "./log";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // Room for the server's and WCX's clocks to differ; what's read twice is
@@ -32,6 +33,7 @@ export async function syncWcx({ tmdbApiKey, language }: { tmdbApiKey: string; la
     for (let page = 1; ; page++) {
       // Cut off: what's left unread comes with the next sync, from the same point.
       if (page > MAX_PAGES) {
+        log.warn("wcx", `Stopped at ${MAX_PAGES} pages of ${type}s, the rest comes with the next sync`);
         caughtUp = false;
         break;
       }
@@ -39,6 +41,7 @@ export async function syncWcx({ tmdbApiKey, language }: { tmdbApiKey: string; la
       const latest = await fetchLatest(type, page);
       const { entries, lastPage } = latest;
       remaining = latest.remaining;
+      if (remaining < 5) log.warn("wcx", `${remaining} calls left this minute, waiting a minute`);
       pages++;
       const fresh = entries.filter((e) => Date.parse(e.updated_at) >= since);
       for (const e of fresh) {
@@ -50,5 +53,5 @@ export async function syncWcx({ tmdbApiKey, language }: { tmdbApiKey: string; la
     }
   await matchNewTitles(tmdbApiKey, language);
   if (caughtUp) setSyncedAt("wcx", startedAt);
-  return { pages, added };
+  return { pages, added, callsLeft: remaining };
 }

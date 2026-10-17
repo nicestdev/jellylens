@@ -4,6 +4,7 @@ import type { OrganizeDisk, OrganizeItem, OrganizeResponse } from "@/lib/api-typ
 import { LIBRARY_DIR } from "@/lib/env";
 import { libraryTargets, moveOf, movePlan, ownedFiles, startMove } from "@/lib/library-move";
 import { deletePackage, getPackage, listPackages, type DownloadPackage } from "@/lib/store";
+import { log } from "@/lib/log";
 
 // The library's disks (LIBRARY_DIR's folders) with their free and total
 // bytes; [] if it's unset or unreadable.
@@ -119,6 +120,8 @@ export async function POST(req: Request) {
 // files are there, their download folders gone already); answers with the
 // page.
 export async function DELETE() {
-  for (const p of listPackages()) if (p.movedTo) deletePackage(p.id);
+  const done = listPackages().filter((p) => p.movedTo);
+  for (const p of done) deletePackage(p.id);
+  log.info("organize", `Cleared ${done.length} done`);
   return Response.json((await organizePage()) satisfies OrganizeResponse);
 }

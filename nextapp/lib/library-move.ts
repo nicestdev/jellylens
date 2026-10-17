@@ -4,12 +4,13 @@ import path from "path";
 import { Writable } from "stream";
 import { pipeline } from "stream/promises";
 import { LIBRARY_DIR } from "./env";
-import { formatBytes } from "./format";
+import { formatBytes, plural } from "./format";
 import { notify } from "./events";
 import { packageOutputs, packagePath, safeName } from "./downloader";
 import { isLibraryFile, isVideo, libraryFolderName, releaseFileNames, seasonFolder, seasonOf } from "./library-names";
 import { EPISODE, videosIn } from "./library-scan";
 import { getPackage, libraryCopies, setPackageMoved, type DownloadPackage } from "./store";
+import { log, took } from "./log";
 
 // Moving a finished download into the library, only ever by hand: its
 // videos and subtitles are copied into the title's folder on the disk
@@ -259,6 +260,11 @@ export async function startMove(pkg: DownloadPackage, target: string, replace?: 
     error: null,
   });
   s.chain = s.chain.then(() => runMove(pkg.id));
+  log.info(
+    "organize",
+    `${replace ? "Replace" : "Move"} queued: ${pkg.name}`,
+    `· to ${path.relative(LIBRARY_DIR, target)} · ${formatBytes(plan.bytes)}`,
+  );
   return null;
 }
 
@@ -357,6 +363,7 @@ async function runMove(pkgId: number) {
   const pkg = getPackage(pkgId);
   if (!move || !pkg) return void s.moves.delete(pkgId);
   move.running = true;
+  const started = Date.now();
   try {
     const plan = movePlan(pkg);
     if (plan.error) throw new Error(plan.error);
@@ -369,6 +376,7 @@ async function runMove(pkgId: number) {
     // rather than become a second version.
     if (move.replace === undefined && (await ownedFiles(pkg, plan)).length) {
       s.moves.delete(pkgId);
+      log.warn("organize", `Not moved, the library has it by now: ${pkg.name}`);
       notify("Not moved", { description: `${titleOf(pkg)}: the library has it already`, tone: "warning" });
       return;
     }
@@ -398,10 +406,17 @@ async function runMove(pkgId: number) {
       replaced: move.replace ?? false,
     });
     s.moves.delete(pkgId);
+    log.info(
+      "organize",
+      `${move.replace ? "Replaced" : "Moved"} in ${took(started)}: ${pkg.name}`,
+      `· to ${path.relative(LIBRARY_DIR, titleDir)} · ${plural(plan.files.length, "file")}` +
+        (replaced.length ? ` · took out ${replaced.map((o) => path.basename(o.path)).join(", ")}` : ""),
+    );
     remove(root, () => fs.rmSync(root, { recursive: true, force: true }));
   } catch (e) {
     move.running = false;
     move.error = errorText(e);
+    log.error("organize", `Move failed after ${took(started)}: ${pkg.name}`, e);
     notify("Move failed", { description: `${titleOf(pkg)}: ${move.error}`, tone: "error" });
   } finally {
     // Once the queue is through, the library is scanned again (and Jellyfin
@@ -425,7 +440,7 @@ function remove(what: string, rm: () => void, quiet = false): boolean {
     rm();
     return true;
   } catch (e) {
-    if (!quiet) console.error("[organize] left", what, e);
+    if (!quiet) log.error("organize", `Left ${what} behind`, e);
     return false;
   }
 }

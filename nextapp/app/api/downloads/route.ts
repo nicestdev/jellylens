@@ -11,6 +11,7 @@ import {
   onlineOf,
   peekPendingPackages,
   startIfNew,
+  logMatch,
 } from "@/lib/download-match";
 import { kickDownloads, liveProgress, packageDir, packageOutputs, pauseAllDownloads } from "@/lib/downloader";
 import {
@@ -22,6 +23,8 @@ import {
   setDownloadSettings,
   setPackageMedia,
 } from "@/lib/store";
+import { log } from "@/lib/log";
+import { plural } from "@/lib/format";
 
 // How a link would be fetched now ("ddownload", "rapidgator.net via
 // Real-Debrid"), null if nothing can.
@@ -117,6 +120,8 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   }
+  if (passwords !== undefined) log.info("settings", `Archive passwords changed, ${(passwords as string[]).length} now`);
+  if (slots !== undefined) log.info("settings", `Parallel downloads set to ${slots}`);
   if (passwords !== undefined) {
     setDownloadSettings({ passwords: [...new Set((passwords as string[]).map((p) => p.trim()).filter(Boolean))] });
   }
@@ -167,6 +172,7 @@ export async function POST(req: Request) {
         });
       }
     } catch (e) {
+      log.warn("downloads", `Couldn't read DLC ${entry.name}`, e);
       return Response.json({ error: `${entry.name}: ${(e as Error).message}` }, { status: 400 });
     }
   }
@@ -187,6 +193,7 @@ export async function POST(req: Request) {
   for (const p of packages) {
     const fetchable = await Promise.all(p.files.map(async (f) => Boolean(await routeLabel(f.url))));
     if (!fetchable.some(Boolean)) {
+      log.warn("downloads", `Not added, nothing can fetch it: ${p.name}`);
       unfetchable++;
       continue;
     }
@@ -195,6 +202,13 @@ export async function POST(req: Request) {
     const media = await matchName(p.name).catch(() => null);
     const id = addPackage({ name: p.name, dir: packageDir(p.name), files });
     setPackageMedia(id, media);
+    log.info(
+      "downloads",
+      `Added ${p.name}`,
+      `· ${plural(files.length, "file")} from ${links.length && p === packages.at(-1) ? "links" : "a DLC"}` +
+        (fetchable.includes(false) ? ` · ${fetchable.filter((f) => !f).length} without an account` : ""),
+    );
+    logMatch(p.name, media);
     await startIfNew(id);
     added++;
   }

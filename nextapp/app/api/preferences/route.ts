@@ -1,4 +1,5 @@
 import { getPreferences, setPreferences, type Preferences } from "@/lib/store";
+import { log } from "@/lib/log";
 
 // The Settings page's display options; admin only (see proxy.ts).
 export async function GET() {
@@ -19,5 +20,6 @@ export async function PATCH(req: Request) {
     else return Response.json({ error: "Expected { showSdReleases?: boolean }." }, { status: 400 });
   }
   setPreferences(changes);
+  log.info("settings", "Preferences changed", changes);
   return Response.json(getPreferences());
 }

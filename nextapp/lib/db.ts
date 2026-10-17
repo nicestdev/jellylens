@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 import { DATA_DIR } from "./env";
+import { log } from "./log";
 
 // All of Jellylens' state lives in one SQLite file in DATA_DIR. Library and
 // TMDB items keep the handful of fields we look things up by as columns and
@@ -287,6 +288,17 @@ const MIGRATIONS: string[] = [
   CREATE INDEX releases_title ON releases (title_key);
   CREATE INDEX releases_imdb ON releases (imdb_id);
   `,
+  // What happened, for Logs (lib/log.ts): kept 14 days.
+  `
+  CREATE TABLE logs (
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL,
+    level TEXT NOT NULL,
+    area TEXT NOT NULL,
+    message TEXT NOT NULL
+  );
+  CREATE INDEX logs_at ON logs (at);
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.
@@ -298,11 +310,16 @@ export function openDatabase(file: string): Database.Database {
   conn.pragma("foreign_keys = ON");
   // Dev and prod may share the data volume; wait for the other's write.
   conn.pragma("busy_timeout = 5000");
-  migrate(conn);
+  const from = migrate(conn);
+  // Once db() has the connection, so the line lands in it too.
+  if (from < MIGRATIONS.length && file !== ":memory:") queueMicrotask(() => logMigrated(from));
   return conn;
 }
 
-function migrate(conn: Database.Database) {
+const logMigrated = (from: number) => log.info("db", `Migrated from schema version ${from} to ${MIGRATIONS.length}`);
+
+// The version it was at.
+function migrate(conn: Database.Database): number {
   const version = conn.pragma("user_version", { simple: true }) as number;
   // Newer than this code knows: a newer Jellylens wrote it. Rather than run
   // on a schema it doesn't match, stop here.
@@ -317,8 +334,8 @@ function migrate(conn: Database.Database) {
       conn.exec(MIGRATIONS[v]);
       conn.pragma(`user_version = ${v + 1}`);
     })();
-    console.log(`[db] migrated to schema version ${v + 1}`);
   }
+  return version;
 }
 
 // One connection per process, opened on first use. Kept on globalThis so
@@ -329,7 +346,8 @@ const globalForDb = globalThis as unknown as { __jellylensDb?: Database.Database
 export function db(): Database.Database {
   globalForDb.__jellylensDb ??= openDatabase(DB_FILE);
   if (globalForDb.__jellylensMigrated !== MIGRATIONS.length) {
-    migrate(globalForDb.__jellylensDb);
+    const from = migrate(globalForDb.__jellylensDb);
+    if (from < MIGRATIONS.length) logMigrated(from);
     globalForDb.__jellylensMigrated = MIGRATIONS.length;
   }
   return globalForDb.__jellylensDb;

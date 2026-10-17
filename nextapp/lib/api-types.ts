@@ -8,6 +8,8 @@ import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
 import type { AudioMix, FilePart, LibraryTotals, QualityCell } from "./store";
 import type { DownloadFile, DownloadMedia, DownloadPackage, LibraryChoice, LibraryCopy } from "./store";
+import type { LogEntry, LogLevel } from "./store";
+export type { LogEntry, LogLevel };
 export type { LibraryChoice };
 import type { SeasonAiring } from "./tmdb";
 import type { LibraryTarget, MoveProgress, OwnedFile } from "./library-move";
@@ -305,3 +307,7 @@ export type OrganizeResponse = {
 // the id asked for, and the last id there is; boot: the server's run the
 // ids are from.
 export type EventsResponse = { boot: string; last: number; events: AppEvent[] };
+
+// GET /api/logs — the log (lib/log.ts), newest first, a page at a time;
+// more: there are older ones.
+export type LogsResponse = { entries: LogEntry[]; more: boolean };

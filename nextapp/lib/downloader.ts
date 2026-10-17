@@ -21,6 +21,7 @@ import {
   type DownloadFile,
   type DownloadPackage,
 } from "./store";
+import { log, took } from "./log";
 
 // The download queue: as many files at a time as there are slots, oldest
 // package first. A file is written as "<name>.part" and renamed once
@@ -127,6 +128,8 @@ async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
   // What's on disk until the hoster answers: paused before that, it keeps
   // its partial download.
   let received = file.received;
+  // Where this try's bytes started; -1 until the hoster answered.
+  let from = -1;
 
   try {
     const link = await resolveLink(file.url);
@@ -146,8 +149,16 @@ async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
     const target = path.join(dir, `${name}.part`);
     if (!resumed && partial !== target) fs.rmSync(partial, { force: true });
     updateFile(file.id, { name, size, received: resumed ? have : 0 });
+    const host = new URL(file.url).hostname;
+    const started = Date.now();
+    log.info(
+      "downloads",
+      resumed ? `Resuming ${name} at ${formatBytes(have)}` : `Downloading ${name}`,
+      `· ${size ? formatBytes(size) : "size unknown"} · ${host} · ${pkg.name}`,
+    );
 
     received = resumed ? have : 0;
+    from = received;
     let lastSave = Date.now();
     let windowStart = Date.now();
     let windowBytes = 0;
@@ -172,6 +183,12 @@ async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
       throw new Error(`The download broke off at ${formatBytes(received)} of ${formatBytes(size)}`);
     fs.renameSync(target, path.join(dir, name));
     updateFile(file.id, { status: "done", received, size: size ?? received });
+    const secs = (Date.now() - started) / 1000;
+    log.info(
+      "downloads",
+      `Downloaded ${name} in ${took(started)}`,
+      `· ${formatBytes(received - from)} · ${formatBytes((received - from) / Math.max(secs, 0.001))}/s`,
+    );
   } catch (e) {
     if (abort.signal.aborted) {
       // Paused: back in line, resumed from the bytes on disk later. (Removed
@@ -179,7 +196,19 @@ async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
       if (abort.signal.reason === "pause") updateFile(file.id, { status: "queued", received });
       return;
     }
+    // The connection dropped mid-file ("terminated" is fetch's word for it):
+    // back in line, resumed from the bytes on disk, as long as each try gets further.
+    if (
+      from >= 0 &&
+      received > from &&
+      (errorText(e) === "terminated" || errorText(e).startsWith("The download broke off"))
+    ) {
+      updateFile(file.id, { status: "queued", received });
+      log.warn("downloads", `Connection dropped on ${file.name} at ${formatBytes(received)}, resuming`, e);
+      return;
+    }
     updateFile(file.id, { status: "failed", error: errorText(e) });
+    log.error("downloads", `${file.name} failed at ${formatBytes(received)}`, e);
   } finally {
     // Unless a new try of this file (Reset, then Start, while this one was
     // still asking the hoster) has taken its place.
@@ -279,6 +308,8 @@ async function extractSet(pkgId: number, set: ArchiveSet) {
     if (!pkg || pkg.status === "failed" || pkg.status === "done" || !set.first || !setReady(pkgId, set)) return;
     const dir = packagePath(pkg);
     s.extracting.set(pkgId, { percent: 0, child: null });
+    const started = Date.now();
+    log.info("downloads", `Extracting ${set.first}`, `· ${set.members.length} parts`);
     const error = await extract7z(path.join(dir, set.first), dir, pkgId);
     // Removed, reset or failed meanwhile: leave it.
     if (!getPackage(pkgId) || getPackage(pkgId)?.status === "failed" || !setReady(pkgId, set)) return;
@@ -287,6 +318,7 @@ async function extractSet(pkgId: number, set: ArchiveSet) {
       fs.rmSync(path.join(dir, f.name), { force: true });
       updateFile(f.id, { status: "extracted" });
     }
+    log.info("downloads", `Extracted ${set.first} in ${took(started)}`);
   } catch (e) {
     if (getPackage(pkgId)) finish(pkgId, "failed", errorText(e));
   } finally {
@@ -332,6 +364,8 @@ function finish(pkgId: number, status: "done" | "failed", error: string | null =
   setPackageStatus(pkgId, status, error);
   const pkg = getPackage(pkgId);
   const name = pkg?.media ? `${pkg.media.title}${pkg.media.year ? ` (${pkg.media.year})` : ""}` : (pkg?.name ?? "");
+  if (status === "done") log.info("downloads", `Package done: ${pkg?.name}`);
+  else log.error("downloads", `Package failed: ${pkg?.name}`, error ?? undefined);
   if (status === "done") notify("Ready to organize", { description: name, mono: true, tone: "success" });
   else
     notify("Download failed", {
@@ -354,7 +388,7 @@ export function kickDownloads() {
     // Marks the file as downloading before its first await, so the next
     // round of this loop picks another.
     downloadFile(file, pkg)
-      .catch((e) => console.error("[downloads]", e))
+      .catch((e) => log.error("downloads", `${file.name} broke the queue`, e))
       .finally(() => {
         settlePackage(pkg.id);
         kickDownloads();
@@ -366,6 +400,7 @@ export function kickDownloads() {
 // for every one it applies to. Pausing stops what comes in (its partial
 // files stay, to resume from).
 export function pauseAllDownloads(paused: boolean) {
+  log.info("downloads", paused ? "Paused all" : "Resumed all");
   if (paused) {
     const ids = new Set(pauseAllPackages());
     for (const live of state().live.values()) if (ids.has(live.packageId)) live.abort.abort("pause");

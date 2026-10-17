@@ -292,6 +292,33 @@ describe("kickDownloads", () => {
     expect(fs.readFileSync(path.join(DOWNLOAD_DIR, "Pkg", "Heat.1995.mkv"), "utf8")).toBe("hello");
   });
 
+  it("resumes a file whose connection dropped, from the bytes it got", async () => {
+    let tries = 0;
+    let sent = 0;
+    const fetch = serve(() =>
+      ++tries === 1
+        ? new Response(
+            new ReadableStream({
+              // The bytes, then a moment later the drop (right away, it would discard them).
+              async pull(c) {
+                if (!sent++) return c.enqueue(new TextEncoder().encode("hel"));
+                await new Promise((r) => setTimeout(r, 20));
+                c.error(new TypeError("terminated"));
+              },
+            }),
+            { headers: { "content-length": "5" } },
+          )
+        : new Response("lo", { status: 206, headers: { "content-length": "2" } }),
+    );
+    const id = queued("Heat.1995.mkv");
+    kickDownloads();
+    await settled(id);
+    const downloads = fetch.mock.calls.filter(([u]) => String(u).startsWith("https://cdn.example.net"));
+    expect(downloads[1]?.[1]?.headers).toEqual({ Range: "bytes=3-" });
+    expect(listFiles(id)[0]).toMatchObject({ status: "done", received: 5 });
+    expect(fs.readFileSync(path.join(DOWNLOAD_DIR, "Pkg", "Heat.1995.mkv"), "utf8")).toBe("hello");
+  });
+
   it("keeps a partial file's progress when paused while the link is still being asked for", async () => {
     writeFiles("Pkg", { "Heat.1995.mkv.part": "hel" });
     let link!: () => void;

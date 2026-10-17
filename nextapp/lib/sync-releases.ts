@@ -11,11 +11,12 @@ import {
   verdictFor,
   type ReleaseGroup,
 } from "./store";
-import { fetchGroupReleases, fetchSceneReleases, RateLimitError } from "./xrel";
+import { fetchGroupReleases, fetchSceneReleases, RateLimitError, xrelUsage } from "./xrel";
 import { fetchTmdbTitles, findTmdbByImdb, searchTmdbTitle } from "./tmdb";
 import { mapWithConcurrency } from "./async";
 import { addEnvGroups } from "./release-groups";
 import { decideMatch, type TitleLookup } from "./title-match";
+import { log } from "./log";
 
 // What the sync is doing right now, for Settings and Discover:
 // the group being fetched, or matching titles to TMDB. Looked up on every
@@ -56,7 +57,7 @@ async function lookUpImdbIds(tmdbApiKey: string, language: string) {
     try {
       saveImdbLookup(imdbId, await findTmdbByImdb(tmdbApiKey, imdbId, language, type === "tv" ? "tv" : "movie"));
     } catch (e) {
-      console.error("[title-match] TMDB lookup of " + imdbId + " failed:", (e as Error).message);
+      log.error("match", `TMDB lookup of ${imdbId} failed`, e);
     }
   });
 }
@@ -97,7 +98,7 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
       if (verdictFor(t.titleKey) !== t.verdict) return;
       saveTitleMatch(t.titleKey, status, entry, fallback);
     } catch (e) {
-      console.error("[title-match] matching " + t.names[0] + " failed:", (e as Error).message);
+      log.error("match", `Matching ${t.names[0]} failed`, e);
     }
   });
 }
@@ -112,6 +113,7 @@ export async function resolveTitles(tmdbApiKey: string, language: string, only?:
 // the next run carries on (a first sync that was cut off walks the list
 // again, adding what's missing).
 export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: string; language: string }) {
+  const callsBefore = xrelUsage().calls;
   await addEnvGroups();
   const done = new Set<string>();
   const nextGroup = () => listGroups().find((g) => !done.has(g.id));
@@ -127,7 +129,7 @@ export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: strin
         } catch (e) {
           if (e instanceof RateLimitError) throw e;
           firstError ??= e as Error;
-          console.error("[releases-sync] " + group.name + " failed:", (e as Error).message);
+          log.error("xrel", `Group ${group.name} failed`, e);
         }
       }
       releaseSync().groupId = null;
@@ -138,5 +140,6 @@ export async function syncReleases({ tmdbApiKey, language }: { tmdbApiKey: strin
   }
   if (firstError) throw firstError;
   setSyncedAt("releases", new Date().toISOString());
-  return { groups: done.size, added };
+  const { calls, remaining, resetAt } = xrelUsage();
+  return { groups: done.size, added, xrelCalls: calls - callsBefore, xrelLeft: remaining, resetAt };
 }

@@ -4,6 +4,7 @@ import { RateLimitError } from "@/lib/xrel";
 import { findGroupOf as find } from "@/lib/release-groups";
 import { releaseSync } from "@/lib/sync-releases";
 import { triggerReleasesSync } from "@/lib/sync-manager";
+import { log } from "@/lib/log";
 
 // The Settings page's favorite groups, P2P and scene; admin only (see
 // proxy.ts). syncing: its releases are being fetched right now; matching:
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
       return Response.json({ error }, { status: 404 });
     }
     addGroup(group.id, group.name, kind);
+    log.info("xrel", `Added ${kind} group ${group.name}`);
     triggerReleasesSync().catch(() => {}); // already logged by makeTrigger
   }
   return Response.json(list());
@@ -56,6 +58,8 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const body = await req.json().catch(() => ({}));
   if (typeof body.id !== "string") return Response.json({ error: "Expected { id }." }, { status: 400 });
+  const gone = listGroups().find((g) => g.id === body.id);
   removeGroup(body.id);
+  log.info("xrel", `Removed group ${gone?.name ?? body.id}`);
   return Response.json(list());
 }

@@ -15,6 +15,7 @@ import type { SessionUser } from "@/lib/session";
 import { TMDB_LANGUAGE } from "@/lib/env";
 import { libraryIndex, libraryRef } from "@/lib/store";
 import { withAvailability } from "@/lib/availability";
+import { log } from "@/lib/log";
 
 // Each user sees their own requests. Admins get everyone's instead (all:
 // true), each with who asked, so they see what's wanted most; mine marks
@@ -99,6 +100,7 @@ export async function POST(req: Request) {
   } else if (AUTH_ENABLED) {
     addRequester(body.mediaType, body.tmdbId, me);
   }
+  log.info("wishlist", `${user.name} wishlisted ${body.title}`, `· TMDB ${body.mediaType} ${body.tmdbId}`);
   return listResponse(user);
 }
 
@@ -112,5 +114,9 @@ export async function DELETE(req: Request) {
   const everyone = !AUTH_ENABLED || (body.everyone === true && user.admin);
   if (everyone) removeRequest(body.mediaType, body.tmdbId);
   else removeRequester(body.mediaType, body.tmdbId, user.id);
+  log.info(
+    "wishlist",
+    `${user.name} took TMDB ${body.mediaType} ${body.tmdbId} off ${everyone ? "the wishlist" : "their wishlist"}`,
+  );
   return listResponse(user);
 }

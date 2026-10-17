@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { DATA_DIR } from "./env";
 import { dedupe, writeAtomically, type CachedImage } from "./file-cache";
+import { log } from "./log";
 
 // TMDB posters (the Wishlist, Discover, the Dashboard, title pages), fetched server-side on first
 // view and kept on disk, so browsers only ever talk to Jellylens and one
@@ -60,6 +61,6 @@ export async function pruneTmdbImages(keep: Set<string>, now = Date.now()) {
       removed++;
     }
   }
-  if (removed) console.log("[tmdb-images] pruned " + removed + " unused posters");
+  if (removed) log.info("images", `Pruned ${removed} unused posters`);
   return removed;
 }

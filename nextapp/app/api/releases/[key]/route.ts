@@ -16,6 +16,7 @@ import { TMDB_LANGUAGE } from "@/lib/env";
 import { TMDB_API_KEY } from "@/lib/env";
 import { parseReleaseName } from "@/lib/title-match";
 import { fetchAiredEpisodes, fetchTmdbEntry, type SeasonAiring } from "@/lib/tmdb";
+import { log } from "@/lib/log";
 
 type Params = { params: Promise<{ key: string }> };
 
@@ -134,6 +135,7 @@ export async function POST(req: Request, { params }: Params) {
     return Response.json({ error: 'Expected { titleKey, verdict: "wrong" | "xrel" | null }.' }, { status: 400 });
   }
   if (!tileTitleKeys(key).includes(titleKey)) return Response.json({ error: "No such title." }, { status: 404 });
+  log.info("match", `Verdict on ${titleKey}: ${verdict ?? "cleared"}`);
   for (const part of partsOf(key, titleKey)) {
     setVerdict(part, verdict);
     await resolveTitles(TMDB_API_KEY, TMDB_LANGUAGE, part);

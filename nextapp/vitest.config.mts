@@ -25,6 +25,8 @@ export default defineConfig({
       TMDB_LANGUAGE: "de-DE",
       WCX_URL: "https://wcx.test",
       WCX_API_URL: "https://api.wcx.test",
+      // Local times the same on every machine (CI is UTC, the dev container Vienna).
+      TZ: "UTC",
     },
     restoreMocks: true,
     unstubGlobals: true,

@@ -17,6 +17,7 @@ import {
   updateFile,
   type DownloadMedia,
 } from "./store";
+import { log } from "./log";
 
 // Looking a new package over: which movie or show it is (TMDB), and what
 // its files are (the hoster; checkPendingFiles below).
@@ -38,6 +39,14 @@ const releaseName = (name: string) =>
     .replace(/\.S(\d{1,2})(?:[+-]S?\d{1,2})+(?=\.)/i, ".S$1");
 
 const isShowName = (name: string) => /\.S\d{1,2}(E\d{1,3})?\./i.test(`${releaseName(name)}.`);
+
+// What a package was matched to, for the log.
+export function logMatch(name: string, media: DownloadMedia | null) {
+  if (media) {
+    const year = media.year ? ` (${media.year})` : "";
+    log.info("downloads", `Matched ${name}`, `· ${media.title}${year} · TMDB ${media.type} ${media.tmdbId}`);
+  } else log.warn("downloads", `Found nothing on TMDB for ${name}`);
+}
 
 export async function matchName(name: string): Promise<DownloadMedia | null> {
   if (!TMDB_API_KEY) return null;
@@ -79,7 +88,12 @@ export function matchPendingPackages() {
   if (!todo.length) return;
   g.__downloadMatching = (async () => {
     for (const pkg of todo) {
-      setPackageMedia(pkg.id, await matchName(pkg.name).catch(() => null));
+      const media = await matchName(pkg.name).catch((e) => {
+        log.error("downloads", `TMDB search failed for ${pkg.name}`, e);
+        return null;
+      });
+      setPackageMedia(pkg.id, media);
+      logMatch(pkg.name, media);
     }
   })().finally(() => {
     g.__downloadMatching = null;
@@ -118,7 +132,10 @@ async function nameFiles(packageId: number): Promise<boolean> {
         checked.set(f.id, Date.now());
         const info = await linkInfo(f.url).catch(() => null);
         if (!info) return;
-        if (!info.online) return updateFile(f.id, { status: "failed", error: "The hoster doesn't have it anymore" });
+        if (!info.online) {
+          log.warn("downloads", `Offline at the hoster: ${f.name}`);
+          return updateFile(f.id, { status: "failed", error: "The hoster doesn't have it anymore" });
+        }
         online.add(f.id);
         updateFile(f.id, { size: f.size ?? info.size, ...(info.name ? { name: info.name } : {}) });
       }),
@@ -132,10 +149,18 @@ async function nameFiles(packageId: number): Promise<boolean> {
 // replacement, the rest of a season), or one matched to nothing, waits in
 // Needs attention for a hand. Whether it was started.
 export async function startIfNew(packageId: number): Promise<boolean> {
-  if (!getPackage(packageId)?.media || !(await nameFiles(packageId))) return false;
+  const pkg = getPackage(packageId);
+  const wait = (why: string) => {
+    log.info("downloads", `Waits for a hand: ${pkg?.name}`, `· ${why}`);
+    return false;
+  };
+  if (!pkg?.media) return wait("not matched to TMDB");
+  if (!(await nameFiles(packageId))) return wait("files without a name");
   const files = listFiles(packageId);
   // A failed file (offline, no account for its hoster) would fail it once started.
-  if (files.some((f) => f.status === "failed") || libraryOf(getPackage(packageId)!, files).library) return false;
+  if (files.some((f) => f.status === "failed")) return wait("a file failed");
+  if (libraryOf(getPackage(packageId)!, files).library) return wait("the library has some of it");
+  log.info("downloads", `Started: ${pkg.name}`, "· new to the library");
   startPackage(packageId);
   kickDownloads();
   return true;
@@ -170,6 +195,7 @@ export function checkPendingFiles() {
       const file = listFiles(f.packageId).find((x) => x.id === f.id);
       if (!file || file.status !== "queued" || file.received > 0) continue;
       if (!info.online) {
+        log.warn("downloads", `Offline at the hoster: ${file.name}`);
         updateFile(f.id, { status: "failed", error: "The hoster doesn't have it anymore" });
         continue;
       }
@@ -212,6 +238,7 @@ export function peekPendingPackages() {
     for (const f of todo) {
       peeked.add(f.packageId);
       const name = await peekName(f.url).catch(() => null);
+      log.info("downloads", `Peeked into ${f.name}`, name ? `· holds ${name}` : "· nothing found");
       if (name) setInnerName(f.id, name);
     }
   })().finally(() => {
