@@ -104,7 +104,22 @@ const timers: TimerMap = (globalForTimers.__jellylensTimers ??= {});
 
 export function setSchedule(key: string, hours: number, run: () => Promise<unknown>) {
   clearInterval(timers[key]);
-  timers[key] = hours > 0 ? setInterval(() => run().catch(() => {}), hours * 60 * 60 * 1000) : undefined;
+  clearTimeout(timers[`${key}:retry`]);
+  timers[key] = hours > 0 ? setInterval(() => runScheduled(key, run), hours * 60 * 60 * 1000) : undefined;
+}
+
+// A scheduled run that fails (TMDB or a site down a while) is tried again
+// in about half an hour, never at night, until one gets through, rather
+// than waiting out its whole interval.
+const RETRY_HOURS = 0.5;
+function runScheduled(key: string, run: () => Promise<unknown>) {
+  clearTimeout(timers[`${key}:retry`]);
+  run().catch(() => {
+    timers[`${key}:retry`] = setTimeout(
+      () => runScheduled(key, run),
+      Math.max(0, nextRunAt(Date.now(), RETRY_HOURS) - Date.now()),
+    );
+  });
 }
 
 // When a run due `hours` after `from` happens: give or take a sixth of
@@ -124,11 +139,12 @@ export function nextRunAt(from: number, hours: number, rand = Math.random): numb
 // at the same time twice; the first at `first` (unix ms, a past one soon).
 export function setJitteredSchedule(key: string, hours: number, first: number, run: () => Promise<unknown>) {
   clearTimeout(timers[key]);
+  clearTimeout(timers[`${key}:retry`]);
   if (hours <= 0) return void (timers[key] = undefined);
   const at = (when: number) => {
     timers[key] = setTimeout(
       () => {
-        run().catch(() => {});
+        runScheduled(key, run);
         at(nextRunAt(Date.now(), hours));
       },
       Math.max(0, when - Date.now()),

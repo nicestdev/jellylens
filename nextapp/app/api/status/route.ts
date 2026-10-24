@@ -1,4 +1,4 @@
-import { dloadCounts, libraryCounts, syncedAt, tmdbCounts } from "@/lib/store";
+import { dloadThreadCount, libraryCounts, syncedAt, tmdbCounts } from "@/lib/store";
 import { releaseCounts } from "@/lib/store";
 import { stageTriggers, type SyncStage } from "@/lib/sync-manager";
 import type { StageStatus, StatusResponse } from "@/lib/api-types";
@@ -18,6 +18,6 @@ export async function GET() {
     tmdb: { ...stage("tmdb"), ...tmdb },
     releases: { ...stage("releases"), groups: releases.groups, releases: releases.releases },
     wcx: { ...stage("wcx"), releases: releases.wcx },
-    dload: { ...stage("dload"), threads: dloadCounts().threads },
+    dload: { ...stage("dload"), threads: dloadThreadCount() },
   } satisfies StatusResponse);
 }

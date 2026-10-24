@@ -18,3 +18,22 @@ export async function mapWithConcurrency<T, R>(
 }
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Gives up on a service once `limit` calls in a row failed: `down` is then
+// the error, and a caller skips what's left. For syncs over many titles, so
+// an outage ends them in seconds instead of a timeout per title.
+export function outage(limit = 5) {
+  let streak = 0;
+  let down: Error | null = null;
+  return {
+    get down() {
+      return down;
+    },
+    ok() {
+      streak = 0;
+    },
+    failed(e: unknown) {
+      if (++streak >= limit) down ??= new Error(`unreachable, ${limit} calls in a row failed: ${(e as Error).message}`);
+    },
+  };
+}

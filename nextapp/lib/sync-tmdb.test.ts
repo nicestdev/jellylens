@@ -110,6 +110,26 @@ describe("syncTmdb", () => {
     expect(getTmdbShows()["10"]).toEqual(before);
   });
 
+  it("gives up when TMDB is down, failing and keeping everything", async () => {
+    tmdb();
+    await sync();
+    const before = getTmdbShows();
+    replaceLibrary(
+      {
+        movies: Array.from({ length: 20 }, (_, i) => movie({ id: String(i + 1), tmdbId: String(i + 1) })),
+        shows: [show({ id: "10", tmdbId: "10" })],
+        episodes: [],
+      },
+      "2026-06-15T00:00:00Z",
+    );
+    const fetch = mockFetch(() => {
+      throw new TypeError("fetch failed");
+    });
+    await expect(sync()).rejects.toThrow("TMDB unreachable, 5 calls in a row failed: fetch failed");
+    expect(fetch.mock.calls.length).toBeLessThan(21);
+    expect(getTmdbShows()).toEqual(before);
+  });
+
   it("drops what TMDB no longer has", async () => {
     replaceTmdb({ "10": { tmdbId: "10", seasons: [] } }, "2026-06-01T00:00:00Z");
     tmdb({ "/3/tv/10": () => new Response("", { status: 404 }) });

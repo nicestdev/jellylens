@@ -55,7 +55,10 @@ timeout); `GET /api/status` has each stage's last sync, `running` and
 `error`, and `runSync()` in `lib/api-client.ts` starts a stage and polls
 until it's done. A stage started that way (`startByHand`) leaves no note
 once it's done (it was asked for and is seen running); any failed run,
-scheduled or not, leaves one (see Notes).
+scheduled or not, leaves one (see Notes). A scheduled run that fails is
+tried again in about half an hour, never at night, until one gets through
+(`runScheduled` in `lib/scheduler.ts`), rather than after its whole
+interval.
 `instrumentation.ts` opens the database at boot, runs library scan → TMDB
 (→ missing) and the releases sync, then installs the intervals (WCX's and
 DLoad's are timed their own way, see 4.).
@@ -92,7 +95,10 @@ DLoad's are timed their own way, see 4.).
    `TMDB_LANGUAGE` (also what every other TMDB request uses). A show whose
    request fails keeps the last sync's
    data (a hiccup must not turn into missing episodes);
-   only a 404 drops it. Then the incomplete shows are worked out again,
+   only a 404 drops it. Five calls in a row that fail (`outage` in
+   `lib/async.ts`) take TMDB for down: the sync ends there, failed,
+   nothing replaced (a library scan only skips the TMDB calls left and
+   goes by the folders). Then the incomplete shows are worked out again,
    which is also what catches episodes that aired since the last run.
 3. **Releases** (`lib/sync-releases.ts`, stage `releases`,
    `XREL_SYNC_INTERVAL_HOURS`, default 6), see below.
@@ -360,7 +366,10 @@ when bigger, `sizeTone`; only the movie or the very season, not an episode
 or a pack of several) and its links after a dot (an arrow after each, like the title page's); besides the group menus a search (titles and groups), a
 Type and a Quality menu (the target's releases' resolution by their names,
 `offerQuality`; a row keeps only the picked ones), Size (default, biggest
-first) or Title. Nothing is remembered between visits.
+first) or Title. Nothing is remembered between visits. 100 rows are drawn,
+the next 100 as the list is scrolled near its end (`LoadMore`; all of them
+at once made the page slow, a phone turned too), back to 100 when the view
+changes; the heading counts them all.
 
 ## Queue
 
@@ -789,7 +798,7 @@ a mini card without its hint when narrow), `stat-strip` (the Queue's numbers),
 `library-toolbar`'s search, filters and sort; each page gives its load,
 view and tile),
 `sync-notice` (data still to come with a sync, and its Sync), `load-more`
-(the next page once a list is scrolled near its end: Discover's releases;
+(the next page once a list is scrolled near its end: Discover's releases, Migrations;
 `test/intersection.ts` scrolls in tests),
 `design-icons` (the design canvas's own stroke icons where lucide's
 differ: search, sort, a menu's chevron), `dev-tools` (see

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRightLeft, ArrowUpRight, RefreshCw, SearchX } from "lucide-react";
 import { Dot, Dots } from "@/components/dot";
 import { EmptyState } from "@/components/empty-state";
+import { LoadMore } from "@/components/load-more";
 import { ErrorAlert } from "@/components/error-alert";
 import { FacetMenu, FilterChips } from "@/components/filter-menu";
 import { CELL, type Column, ROW, TITLE_CELL } from "@/components/library-table";
@@ -19,7 +20,7 @@ import { usePoll } from "@/hooks/use-poll";
 import { apiFetch } from "@/lib/api-client";
 import type { MigrationsResponse } from "@/lib/api-types";
 import { toggled, type SortDir } from "@/lib/facets";
-import { formatBytes, plural, relativeTime, seasonCode } from "@/lib/format";
+import { formatBytes, seasonCode } from "@/lib/format";
 import { titlePath } from "@/lib/title-path";
 import { cn } from "@/lib/utils";
 import {
@@ -58,6 +59,7 @@ function Links({ links }: { links: { label: string; href: string }[] }) {
 // One column: the title, what the library has and the target's releases
 // in lines under it.
 const COLUMNS: Column[] = [{ label: "Title" }];
+const PAGE = 100;
 
 const load = () => apiFetch<MigrationsResponse>("/api/migrations");
 
@@ -84,6 +86,10 @@ export default function MigrationsPage() {
   const [types, setTypes] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<{ key: MigrationSortKey; dir: SortDir }>({ key: "size", dir: "desc" });
   const [actionError, setError] = useState("");
+  // Rows rendered, a page more as the list is scrolled near its end (some
+  // thousand at once make the page slow, a phone turned too); back to one
+  // page whenever the view changes.
+  const [paging, setPaging] = useState({ view: "", limit: PAGE });
   const error = actionError || dload?.error || (page.error && `Failed to load: ${page.error}`);
   usePoll(page.reload, dload?.running ? 2000 : 30_000);
 
@@ -113,7 +119,8 @@ export default function MigrationsPage() {
   };
   const shown = data ? migrationView(data.rows, filters, sort.key, sort.dir) : null;
   const filtered = Boolean(query.trim() || types.size || sourcePick.size || targetPick.size);
-  const dloadShown = dload?.groups.some((g) => (!to.yes.size || to.yes.has(g)) && !to.no.has(g));
+  const view = JSON.stringify([query, [...sourcePick], [...targetPick], [...types], sort]);
+  const limit = paging.view === view ? paging.limit : PAGE;
   const groupMenus = [
     {
       key: "source",
@@ -221,24 +228,7 @@ export default function MigrationsPage() {
             />
           )
         ) : (
-          <TableFrame
-            title="Migrations"
-            count={
-              data && dload
-                ? [
-                    shown?.length ?? 0,
-                    ...(dloadShown
-                      ? [
-                          `DLoad ${plural(dload.threads, "thread")}`,
-                          dload.running ? "Syncing" : `synced ${relativeTime(dload.syncedAt)}`,
-                        ]
-                      : []),
-                  ]
-                : undefined
-            }
-            columns={COLUMNS}
-            busy={dload?.running}
-          >
+          <TableFrame title="Migrations" count={shown?.length} columns={COLUMNS} busy={dload?.running}>
             {shown === null
               ? Array.from({ length: 8 }, (_, i) => (
                   <tr key={i} className={ROW}>
@@ -247,7 +237,7 @@ export default function MigrationsPage() {
                     </td>
                   </tr>
                 ))
-              : shown.map((r) => (
+              : shown.slice(0, limit).map((r) => (
                   <tr key={rowKey(r)} className={cn(ROW, "h-auto align-baseline")}>
                     <td className={cn(TITLE_CELL, "py-2")}>
                       <div className="flex items-baseline gap-1.5">
@@ -287,6 +277,9 @@ export default function MigrationsPage() {
                 ))}
           </TableFrame>
         )}
+        {shown && shown.length > limit ? (
+          <LoadMore shown={limit} onMore={() => setPaging({ view, limit: limit + PAGE })} />
+        ) : null}
       </div>
     </main>
   );

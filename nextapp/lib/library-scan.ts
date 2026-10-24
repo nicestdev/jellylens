@@ -4,7 +4,7 @@ import { LIBRARY_DIR } from "./env";
 import { ffprobe, type Probe } from "./ffprobe";
 import { fetchTmdbDetails, type TmdbDetails } from "./tmdb";
 import { storedFiles, type MediaFile, type MediaItem } from "./analytics";
-import { mapWithConcurrency } from "./async";
+import { mapWithConcurrency, outage } from "./async";
 import {
   dropFulfilledRequests,
   getDetails,
@@ -142,17 +142,26 @@ async function fetchDetails(
   const unique = [...new Map(wanted.map((t) => [`${t.kind}:${t.tmdbId}`, t])).entries()];
   const todo = unique.filter(([key]) => refresh || !known.has(key)).map(([, t]) => t);
   let failed = 0;
+  const net = outage();
   const found = await mapWithConcurrency(todo, TMDB_AT_ONCE, async (t) => {
+    if (net.down) {
+      failed++;
+      return null;
+    }
     try {
       const details = await fetchTmdbDetails(tmdb.apiKey, t.kind, t.tmdbId, tmdb.language);
+      net.ok();
       if (!details) return null;
       const { seasons: _seasons, ...rest } = details;
       return { mediaType: t.kind, tmdbId: t.tmdbId, details: rest };
-    } catch {
+    } catch (e) {
+      net.failed(e);
       failed++;
       return null;
     }
   });
+  // A TMDB sync ends there, failed; a scan goes on by the folders' names.
+  if (refresh && net.down) throw new Error(`TMDB ${net.down.message}`);
   setDetails(found.filter((f) => f !== null));
   return failed;
 }

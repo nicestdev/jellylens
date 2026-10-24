@@ -115,6 +115,27 @@ describe("setSchedule", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  it("tries a failed run again in about half an hour, until one gets through", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 16, 9));
+    let failures = 2;
+    const run = vi.fn(async () => {
+      if (failures-- > 0) throw new Error("fetch failed");
+    });
+    setSchedule("test", 6, run);
+    await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(run).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(40 * 60 * 1000);
+    expect(run).toHaveBeenCalledTimes(3);
+    // Through: nothing more until the next interval.
+    await vi.advanceTimersByTimeAsync(3 * 60 * 60 * 1000);
+    expect(run).toHaveBeenCalledTimes(3);
+  });
+
   it("doesn't let a failed run escape as an unhandled rejection", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     const unhandled = vi.fn();

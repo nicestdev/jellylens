@@ -327,10 +327,10 @@ export type LogsResponse = { entries: LogEntry[]; more: boolean };
 // GET /api/migrations — every target's (the DLoad uploaders' groups, then
 // the favorite P2P groups, `targets` by name) rows: the library's movies
 // and seasons it offers, from anyone else (replace) or its own WEB it has a
-// BluRay of (upgrade). dload: the threads' sync, how many it knows and how
-// many of them have a TMDB title, and the uploaders' groups.
+// BluRay of (upgrade). dload: whether the DLoad sync runs, and how it last
+// failed.
 export type MigrationsResponse = {
   rows: MigrationRow[];
   targets: string[];
-  dload: { threads: number; matched: number; groups: string[] } & StageStatus;
+  dload: Omit<StageStatus, "syncedAt">;
 };

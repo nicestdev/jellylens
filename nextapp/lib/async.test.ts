@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapWithConcurrency } from "./async";
+import { mapWithConcurrency, outage } from "./async";
 
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,4 +48,14 @@ describe("mapWithConcurrency", () => {
       }),
     ).rejects.toThrow("boom");
   });
+});
+
+it("gives up on a service after five failures in a row, a success between them starting over", () => {
+  const net = outage();
+  for (let i = 0; i < 4; i++) net.failed(new Error("fetch failed"));
+  net.ok();
+  for (let i = 0; i < 4; i++) net.failed(new Error("fetch failed"));
+  expect(net.down).toBeNull();
+  net.failed(new Error("fetch failed"));
+  expect(net.down?.message).toBe("unreachable, 5 calls in a row failed: fetch failed");
 });

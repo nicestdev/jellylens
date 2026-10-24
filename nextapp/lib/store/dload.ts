@@ -78,11 +78,7 @@ export function hasDloadThread(id: number): boolean {
   return Boolean(one("SELECT 1 FROM dload_threads WHERE id = ?", id));
 }
 
-export function dloadCounts(): { threads: number; matched: number } {
-  return one<{ threads: number; matched: number }>(
-    "SELECT COUNT(*) AS threads, COUNT(tmdb_id) AS matched FROM dload_threads",
-  )!;
-}
+export const dloadThreadCount = () => one<{ n: number }>("SELECT COUNT(*) AS n FROM dload_threads")!.n;
 
 // The threads of a TMDB title, newest first, with their uploader's id (the
 // title page lists them).

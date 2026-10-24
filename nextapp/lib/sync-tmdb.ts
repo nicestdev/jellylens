@@ -1,6 +1,6 @@
 import { fetchTmdbSeason, fetchTmdbShow } from "./tmdb";
 import { getTmdbShows, matchedShows, addTmdb, replaceTmdb, syncedAt, type TmdbSeason } from "./store";
-import { mapWithConcurrency } from "./async";
+import { mapWithConcurrency, outage } from "./async";
 import { refreshDetails } from "./library-scan";
 import { releaseWindow } from "./dates";
 import { log } from "./log";
@@ -42,17 +42,23 @@ export async function syncTmdb({ tmdbApiKey, language }: { tmdbApiKey: string; l
   const { today } = releaseWindow();
   const previousShows = getTmdbShows();
 
+  const net = outage();
   const series = await mapWithConcurrency(matchedShows(), 5, async ({ id, tmdbId }) => {
+    if (net.down) return null;
     try {
       const seasons = await fetchSeasons(tmdbApiKey, tmdbId, today);
+      net.ok();
       return seasons ? ([id, { tmdbId, seasons }] as const) : null;
     } catch (e) {
       failed++;
+      net.failed(e);
       log.warn("tmdb", `Seasons of show ${tmdbId} failed, kept the last sync's`, e);
       return previousShows[id] ? ([id, previousShows[id]] as const) : null;
     }
   });
 
+  // Down: nothing replaced, the sync failed (tried again soon, lib/scheduler.ts).
+  if (net.down) throw new Error(`TMDB ${net.down.message}`);
   const byShowId = Object.fromEntries(series.filter((s) => s !== null));
   const at = new Date().toISOString();
   replaceTmdb(byShowId, at);
