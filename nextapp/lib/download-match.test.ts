@@ -74,6 +74,25 @@ describe("matchName", () => {
     expect(await matchName("Death.Race.3.Inferno.2016.German.AC3.DL.1080p.BluRay.x265-FuN")).toBeNull();
   });
 
+  it("finds a first part without its 1, before taking a search's first hit", async () => {
+    const twoCars = {
+      id: 51896,
+      title: "Two Cars, One Night",
+      original_title: "Two Cars, One Night",
+      release_date: "2004-06-09",
+    };
+    const knockOff = { id: 7, title: "Os Carrinhos", original_title: "Os Carrinhos", release_date: "2006-06-20" };
+    const cars = { id: 920, title: "Cars", original_title: "Cars", release_date: "2006-06-08" };
+    tmdb({ "Cars 1": [twoCars, knockOff], Cars: [cars] });
+    expect(await matchName("Cars.1.2006.German.DL.AC3.1080p.BluRay.x265-FuN - funxd.site")).toMatchObject({
+      tmdbId: 920,
+      title: "Cars",
+    });
+    // Nothing fits anywhere: the name's own search's first hit within a year, not one two years off.
+    tmdb({ "Cars 1": [twoCars, knockOff] });
+    expect(await matchName("Cars.1.2006.German.DL.AC3.1080p.BluRay.x265-FuN")).toMatchObject({ tmdbId: 7 });
+  });
+
   it("takes only a hit that fits from the search with umlauts", async () => {
     tmdb({ "Die Brücke": [{ ...mazeRunner, title: "Something Else", original_title: "Something Else" }] });
     expect(await matchName("Die.Bruecke.2008.German.1080p.BluRay.x264-GRP")).toBeNull();

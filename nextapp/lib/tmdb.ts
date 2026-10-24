@@ -224,7 +224,7 @@ export const fetchTmdbTrending = (apiKey: string, language: string, page = 1) =>
 // ---- Matching releases (lib/title-match.ts)
 
 // A movie or show from TMDB's find or search, for Discover.
-type TmdbFindResult = Omit<TmdbResult, "posterPath"> & { posterPath: string | null; originalTitle: string };
+export type TmdbFindResult = Omit<TmdbResult, "posterPath"> & { posterPath: string | null; originalTitle: string };
 
 function toFindResult(mediaType: "movie" | "tv", r: RawResult): TmdbFindResult {
   const date = dateOf(r);

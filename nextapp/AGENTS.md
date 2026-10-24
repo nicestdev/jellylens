@@ -394,7 +394,10 @@ no Content-Disposition). A new package is looked over before it's started: its
 TMDB entry from its name (`matchName` in `lib/download-match.ts`, a movie
 also without its year when nothing fits with it, then only a hit within a
 year of it: TMDB dates "Death.Race.3.Inferno.2012" 2013; searched
-again with umlauts for a German name that spells them out, "Auserwaehlten";
+again with umlauts for a German name that spells them out, "Auserwaehlten",
+and without a first part's "1", "Cars.1.2006" being TMDB's "Cars"; only
+when no search has a title that fits, its own search's first hit, a
+movie's within a year: for "Cars 1" that's "Two Cars, One Night";
 once per package, and once more for one found nothing for before
 `MATCHING_CHANGED`, moved on whenever the matching gets better), and every
 file is asked about at the hoster once, its size known or not, like

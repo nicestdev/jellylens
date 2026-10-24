@@ -1,6 +1,6 @@
 import { TMDB_API_KEY } from "./env";
 import { TMDB_LANGUAGE } from "./env";
-import { searchTmdbTitle } from "./tmdb";
+import { searchTmdbTitle, type TmdbFindResult } from "./tmdb";
 import { parseReleaseName, sameTitle, withUmlauts } from "./title-match";
 import { linkInfo } from "./hosters";
 import { peekName } from "./archive-peek";
@@ -59,20 +59,31 @@ export async function matchName(name: string): Promise<DownloadMedia | null> {
   // the first air date: search without it if nothing fits with it. A
   // movie's may be a year off TMDB's (a release of 2012 TMDB dates
   // 2013-01-04): without it too, then only a hit that fits within a year.
+  // Then with umlauts, and without a first part's "1" ("Cars.1.2006" is
+  // TMDB's "Cars"). Only when no search has one that fits, the name's own
+  // search's first hit (a movie's within a year): its first hit for "Cars 1"
+  // is "Two Cars, One Night".
   const years = parsed.year ? [parsed.year, null] : [null];
   const near = (r: { year: number | null }) =>
     type === "tv" || !parsed.year || (r.year !== null && Math.abs(r.year - parsed.year) <= 1);
-  const umlauts = withUmlauts(parsed.title);
-  for (const query of umlauts === parsed.title ? [parsed.title] : [parsed.title, umlauts]) {
+  const queries = [...new Set([parsed.title, withUmlauts(parsed.title), parsed.title.replace(/ 1$/, "")])];
+  const media = (hit: TmdbFindResult): DownloadMedia => ({
+    type,
+    tmdbId: hit.tmdbId,
+    title: hit.title,
+    year: hit.year,
+    posterPath: hit.posterPath,
+  });
+  let loose: TmdbFindResult | undefined;
+  for (const query of queries) {
     for (const year of years) {
       const results = await searchTmdbTitle(TMDB_API_KEY, type, query, year, language);
       const fits = results.find((r) => (sameTitle(r.title, query) || sameTitle(r.originalTitle, query)) && near(r));
-      const loose = query === parsed.title && (year !== null || type === "tv" || !parsed.year);
-      const hit = fits ?? (loose ? results[0] : undefined);
-      if (hit) return { type, tmdbId: hit.tmdbId, title: hit.title, year: hit.year, posterPath: hit.posterPath };
+      if (fits) return media(fits);
+      if (query === parsed.title && (year !== null || type === "tv" || !parsed.year)) loose ??= results.find(near);
     }
   }
-  return null;
+  return loose ? media(loose) : null;
 }
 
 // Packages not looked up yet, in the background (one at a time, deduped
