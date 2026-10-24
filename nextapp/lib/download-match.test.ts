@@ -45,10 +45,33 @@ describe("matchName", () => {
       .map(([u]) => new URL(String(u)))
       .filter((u) => u.pathname === "/3/search/movie")
       .map((u) => u.searchParams.get("query"));
+    // With the year and without (TMDB may date it a year off), then with umlauts.
     expect(queries).toEqual([
+      "Maze Runner Die Auserwaehlten im Labyrinth",
       "Maze Runner Die Auserwaehlten im Labyrinth",
       "Maze Runner Die Auserwählten im Labyrinth",
     ]);
+  });
+
+  it("finds a movie TMDB dates a year off, without the year, only one that fits", async () => {
+    const inferno = {
+      id: 156717,
+      title: "Death Race: Inferno",
+      original_title: "Death Race: Inferno",
+      release_date: "2013-01-04",
+    };
+    const fetch = mockFetch((url) => {
+      if (url.pathname !== "/3/search/movie") return undefined;
+      return json({ results: url.searchParams.get("year") ? [] : [inferno] });
+    });
+    expect(await matchName("Death.Race.3.Inferno.2012.German.AC3.DL.1080p.BluRay.x265-FuN - funxd.site")).toMatchObject(
+      {
+        tmdbId: 156717,
+        year: 2013,
+      },
+    );
+    expect(fetch.mock.calls.length).toBe(2);
+    expect(await matchName("Death.Race.3.Inferno.2016.German.AC3.DL.1080p.BluRay.x265-FuN")).toBeNull();
   });
 
   it("takes only a hit that fits from the search with umlauts", async () => {

@@ -14,6 +14,7 @@ export function mockStatus(): StatusResponse {
     tmdb: { syncedAt: ago(60 * 20), running: true, error: null, movies: 1824, shows: 312 },
     releases: { syncedAt: null, running: false, error: null, groups: 7, releases: 4618 },
     wcx: { syncedAt: ago(60 * 3), running: false, error: null, releases: 2190 },
+    dload: { syncedAt: ago(60 * 7), running: false, error: null, threads: 3291 },
   };
 }
 
@@ -27,11 +28,13 @@ export function mockConfig(): ConfigResponse {
     ddownloadLogin: "jellylens",
     ddownloadPassword: "********",
     realDebridToken: "",
+    dloadUser: "jellylens",
+    dloadPassword: "********",
     archivePasswords: 2,
     p2pGroups: 3,
     sceneGroups: 0,
     downloadDir: "/downloads",
-    intervals: { library: 6, tmdb: 24, releases: 0, wcx: 6 },
+    intervals: { library: 6, tmdb: 24, releases: 0, wcx: 6, dload: 12 },
     downloadSlots: 3,
     maxDownloadSlots: 10,
     passwords: ["serienjunkies.org", "hd-area.org"],

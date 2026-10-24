@@ -15,6 +15,9 @@ const env = vi.hoisted(() => ({
   ARCHIVE_PASSWORDS: [] as string[],
   P2P_GROUPS: [] as string[],
   WCX_API_URL: "",
+  DLOAD_URL: "",
+  DLOAD_USER: "",
+  DLOAD_PASSWORD: "",
 }));
 vi.mock("@/lib/env", async (original) => {
   const real = await original<typeof import("@/lib/env")>();
@@ -34,6 +37,9 @@ beforeEach(() => {
     REALDEBRID_TOKEN: "",
     ARCHIVE_PASSWORDS: [],
     P2P_GROUPS: [],
+    DLOAD_URL: "",
+    DLOAD_USER: "",
+    DLOAD_PASSWORD: "",
   });
 });
 
@@ -76,6 +82,16 @@ describe("GET /api/config", () => {
     }
   });
 
+  it("never shows the DLoad password, and syncs DLoad only with its address and user", async () => {
+    env.DLOAD_USER = "anna";
+    env.DLOAD_PASSWORD = "Qz9-dload";
+    expect(await config()).toMatchObject({ dloadUser: "anna", dloadPassword: "********", intervals: { dload: 0 } });
+    env.DLOAD_URL = "https://dload.test";
+    const body = await config();
+    expect(body.intervals.dload).toBe(12);
+    expect(JSON.stringify(body)).not.toContain("Qz9");
+  });
+
   it("counts ARCHIVE_PASSWORDS without listing them, but lists the Settings ones", async () => {
     env.ARCHIVE_PASSWORDS = ["env-one", "env-two"];
     env.P2P_GROUPS = ["VECTOR"];
@@ -90,7 +106,7 @@ describe("GET /api/config", () => {
       passwords: ["example.com"],
     });
     expect(JSON.stringify(body)).not.toContain("env-one");
-    expect(body.intervals).toEqual({ library: 6, tmdb: 24, releases: 6, wcx: 0 });
+    expect(body.intervals).toEqual({ library: 6, tmdb: 24, releases: 6, wcx: 0, dload: 0 });
   });
 
   it("is kept from users who aren't admins (proxy.ts)", async () => {

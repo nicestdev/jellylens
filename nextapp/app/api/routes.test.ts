@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { json, mockFetch } from "@/test/http";
 import type { SessionUser } from "@/lib/session";
 import { storedFiles, type MediaFile, type MediaItem } from "@/lib/analytics";
-import { addGroup, replaceLibrary, saveImdbLookup } from "@/lib/store";
+import { addDloadUser, addGroup, replaceLibrary, saveImdbLookup } from "@/lib/store";
 import { movie, show } from "@/test/fixtures";
 
 // Route handlers, called directly with a Request. Who's signed in comes
@@ -363,6 +363,36 @@ describe("/api/release-groups", () => {
   });
 });
 
+describe("/api/dload-users", () => {
+  const route = () => import("./dload-users/route");
+
+  it("adds an uploader by their profile's link and starts the DLoad sync", async () => {
+    // The sync signs in first; the forum isn't there in a test.
+    const fetch = mockFetch(() => new Response("", { status: 503 }));
+    const { POST } = await route();
+    const res = await POST(post("/api/dload-users", { link: " https://dload.test/members/some-one.12345/ " }));
+    expect(await res.json()).toEqual({ items: [{ id: 12345, name: "some-one", group: "some-one", threads: 0 }] });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(String(fetch.mock.calls[0][0])).toBe("https://dload.test/login/");
+  });
+
+  it("refuses what isn't a profile's link", async () => {
+    const { POST } = await route();
+    for (const link of ["some-one", "https://dload.test/threads/heat.42/", "", 7])
+      expect((await POST(post("/api/dload-users", { link }))).status).toBe(400);
+  });
+
+  it("removes an uploader by id", async () => {
+    addDloadUser(1, "anna");
+    addDloadUser(2, "ben");
+    const { DELETE, GET } = await route();
+    const res = await DELETE(post("/api/dload-users", { id: 2 }, "DELETE"));
+    expect((await res.json()).items.map((u: { name: string }) => u.name)).toEqual(["anna"]);
+    expect((await (await GET()).json()).items).toHaveLength(1);
+    expect((await DELETE(post("/api/dload-users", { id: "2" }, "DELETE"))).status).toBe(400);
+  });
+});
+
 describe("/api/releases/<key>", () => {
   const heat = {
     mediaType: "movie" as const,
@@ -678,6 +708,25 @@ describe("GET /api/xrel-link", () => {
   it("falls back to xREL's search for the title, and refuses a bad id", async () => {
     const res = await get("tmdbId=movie:1&title=Heat");
     expect(res.headers.get("location")).toBe("https://www.xrel.to/search.html?xrel_search_query=Heat");
+    expect((await get("tmdbId=heat")).status).toBe(400);
+  });
+});
+
+describe("GET /api/funxd-link", () => {
+  const get = async (query: string) =>
+    (await import("./funxd-link/route")).GET(new Request(`http://x/api/funxd-link?${query}`));
+
+  it("redirects to FunXD's search for the IMDb id, else the title, and refuses a bad id", async () => {
+    saveImdbLookup("tt0113277", {
+      mediaType: "movie",
+      tmdbId: 949,
+      title: "Heat",
+      originalTitle: "Heat",
+      year: 1995,
+      posterPath: null,
+    });
+    expect((await get("tmdbId=movie:949&title=Heat")).headers.get("location")).toBe("https://funxd.site/?s=tt0113277");
+    expect((await get("tmdbId=movie:1&title=Heat")).headers.get("location")).toBe("https://funxd.site/?s=Heat");
     expect((await get("tmdbId=heat")).status).toBe(400);
   });
 });

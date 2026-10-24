@@ -1,5 +1,6 @@
 import { releaseGroupOf } from "./analytics";
 import { WCX_API_URL, WCX_URL } from "./env";
+import { dottedName } from "./release-name";
 import { parseReleaseName } from "./title-match";
 import { sceneQuality, type Release } from "./xrel";
 
@@ -86,12 +87,3 @@ export function groupOf(name: string): string | undefined {
   const group = releaseGroupOf(name);
   return group && name.endsWith("-" + group) && group.toLowerCase() !== "p2p" ? group : undefined;
 }
-
-// A name typed with spaces as a release name (" Heat 1995 1080p x264 -
-// GRP (DDL)" → "Heat.1995.1080p.x264-GRP").
-export const dottedName = (name: string) =>
-  name
-    .trim()
-    .replace(/(\s*\([^)]*\))+$/, "")
-    .replace(/\s*-\s*/g, "-")
-    .replace(/\s+/g, ".");

@@ -27,7 +27,6 @@ const progress = (over: Partial<MoveProgress> = {}): MoveProgress => ({
   target: "/library/nvme02/shows",
   done: 1.5 * GB,
   total: 3 * GB,
-  phase: "copying",
   speed: 100e6,
   running: true,
   error: null,

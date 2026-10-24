@@ -204,7 +204,6 @@ describe("queueRows", () => {
     target: "",
     done: 1,
     total: 4,
-    phase: "copying",
     speed: 0,
     running: true,
     error: null,
@@ -222,7 +221,7 @@ describe("queueRows", () => {
   const pkg = (id: number, status: DownloadPackageItem["status"], error: string | null = null) =>
     ({ id, name: `Pkg.${id}`, media: null, status, error, files: [] }) as unknown as DownloadPackageItem;
 
-  it("says where each is at: a failure's reason, a download's state, Ready, a move's phase", () => {
+  it("says where each is at: a failure's reason, a download's state, Ready, a move's state", () => {
     const rows = queueRows([
       {
         title: "Needs attention",
@@ -235,7 +234,7 @@ describe("queueRows", () => {
       {
         title: "Ready to organize",
         packages: [],
-        items: [item(5, null), item(6, {}), item(7, { phase: "verifying" }), item(8, { running: false })],
+        items: [item(5, null), item(6, {}), item(8, { running: false })],
         moved: [],
         pending: [],
       },
@@ -247,7 +246,6 @@ describe("queueRows", () => {
       ["Paused·0\u202f%", undefined],
       ["Ready to organize", undefined],
       ["Moving·25\u202f%", "success"],
-      ["Verifying·25\u202f%", "info"],
       ["Waiting·25\u202f%", undefined],
     ]);
   });

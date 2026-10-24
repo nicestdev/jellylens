@@ -15,6 +15,21 @@ export function targetOf(item: OrganizeItem, picked?: string): LibraryTarget | n
   return (chosen && item.targets.find((t) => t.path === chosen)) || defaultTarget(item);
 }
 
+// What Replace all moves: every item ready to go (no error, no move) that
+// the library has already, with the disk it goes to; owned false, what Move
+// all moves: every one the library has nothing of whose disk is known (a
+// new title's picked by hand).
+export function replaceable(
+  items: OrganizeItem[],
+  picked: Record<number, string>,
+  owned = true,
+): { item: OrganizeItem; target: LibraryTarget }[] {
+  return items.flatMap((item) => {
+    const target = targetOf(item, picked[item.id]);
+    return !item.error && !item.move && Boolean(item.owned.length) === owned && target ? [{ item, target }] : [];
+  });
+}
+
 export const fits = (item: OrganizeItem, target: LibraryTarget) =>
   target.freeBytes === null || target.freeBytes >= item.bytes;
 

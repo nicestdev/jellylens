@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
+  ArrowRightLeft,
   ChartPie,
   Compass,
   Film,
@@ -67,6 +68,7 @@ const sections: NavSection[] = [
     links: [
       { href: "/analytics", label: "Analytics", icon: ChartPie, admin: true },
       { href: "/logs", label: "Logs", icon: ScrollText, admin: true },
+      { href: "/migrations", label: "Migrations", icon: ArrowRightLeft, admin: true },
       { href: "/settings", label: "Settings", icon: Settings, admin: true },
     ],
   },

@@ -18,6 +18,7 @@ const status: StatusResponse = {
   tmdb: { ...stage, movies: 120, shows: 80 },
   releases: { ...stage, groups: 4, releases: 900 },
   wcx: { ...stage, releases: 300 },
+  dload: { ...stage, threads: 3000 },
 };
 const request = (tmdbId: number, over: Partial<RequestItem> = {}): RequestItem => ({
   mediaType: "movie",
@@ -63,6 +64,7 @@ describe("Sidebar", () => {
       "Wishlist",
       "Analytics",
       "Logs",
+      "Migrations",
       "Settings",
     ]);
     expect(sidebar().getByText("Library")).toBeInTheDocument();
@@ -175,6 +177,7 @@ describe("MobileBar", () => {
       "Wishlist",
       "Analytics",
       "Logs",
+      "Migrations",
       "Settings",
     ]);
   });

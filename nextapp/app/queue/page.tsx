@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CircleArrowDown, ListX, Rocket } from "lucide-react";
+import { AlertCircle, CircleArrowDown, FolderInput, ListX, Replace, Rocket, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
@@ -14,9 +14,9 @@ import { queueItems, type QueueChange } from "./queue-controls";
 import { PackageRow } from "./package-row";
 import { TableFrame } from "@/components/section-frame";
 import { StatStrip } from "@/components/stat-strip";
-import { isActive, queueLine, sections, sizeOf } from "./logic";
+import { isActive, queueLine, sections, sizeOf, startable } from "./logic";
 import { MovedRow, OrganizeRow, downloadColumns } from "./organize-row";
-import { isMoving } from "./organize-logic";
+import { isMoving, replaceable } from "./organize-logic";
 import { ErrorAlert } from "@/components/error-alert";
 
 // A package from when it comes in to when it's in the library, on one
@@ -134,6 +134,56 @@ export default function QueuePage() {
   const [picked, setPicked] = useState<Record<number, string>>({});
 
   const parts = data ? sections(data.packages, organize ?? null) : [];
+  // Replace all: one after another, as a click each would; the first error
+  // is shown.
+  const toReplace = replaceable(organize?.items ?? [], picked);
+  // Download all: each as its own ⋯ would start it; the first error is shown.
+  const toStart = data ? startable(data.packages) : [];
+  async function startAll() {
+    setError("");
+    try {
+      for (const { pkg, choice } of toStart)
+        await apiFetch(
+          `/api/downloads/${pkg.id}`,
+          jsonRequest("POST", { action: "start", ...(choice ? { choice } : {}) }),
+        );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    await page.reload();
+  }
+  async function replaceAll() {
+    setError("");
+    let first = "";
+    for (const { item, target } of toReplace) first ||= await post(item.id, target.path, true);
+    setError(first);
+  }
+  // Move all: the same for what's new to the library, to its disk.
+  const toMove = replaceable(organize?.items ?? [], picked, false);
+  async function moveAll() {
+    setError("");
+    let first = "";
+    for (const { item, target } of toMove) first ||= await post(item.id, target.path);
+    setError(first);
+  }
+  // Clear Needs attention: everything in it off the list, with what's
+  // downloaded (a failed or new package, a finished one that can't be moved
+  // or whose move failed).
+  const attention = parts.find((p) => p.title === "Needs attention");
+  async function clearAttention() {
+    if (!attention) return;
+    setError("");
+    try {
+      for (const pkg of [...attention.packages, ...attention.pending])
+        await apiFetch(`/api/downloads/${pkg.id}`, { method: "DELETE" });
+      for (const item of attention.items)
+        await apiFetch(`/api/downloads/${item.id}?files=delete`, { method: "DELETE" });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    page.reload();
+    organizePage.reload();
+  }
   const stats = data ? queueLine(data) : [];
   // Each section folds away under its heading on a click; open from the
   // start but Done, which is only when it's all there is.
@@ -143,30 +193,29 @@ export default function QueuePage() {
   return (
     <main className="w-full max-w-[90rem] px-4 py-4 sm:px-6 sm:py-5">
       {/* The page's ⋯ at the right of the heading: adding packages (pasted
-          links open below it), Download all, Pause all and Resume all
-          (how many come in at once is on Settings) and Clear done. */}
+          links open below it), Download all, Replace all, Pause all and
+          Resume all (how many come in at once is on Settings), Clear needs
+          attention and Clear done. */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-3xl font-semibold max-md:sr-only">Queue</h1>
         <AddControls
           more={
             data
               ? [
-                  // Not what the library has some of: that waits for Replace or Skip.
-                  data.packages.some((p) => p.status === "pending" && !p.library)
-                    ? [
-                        {
-                          icon: CircleArrowDown,
-                          label: "Download all",
-                          onClick: () =>
-                            act(
-                              data.packages.filter((p) => p.status === "pending" && !p.library),
-                              jsonRequest("POST", { action: "start" }),
-                            ),
-                        },
-                      ]
-                    : [],
+                  toStart.length ? [{ icon: CircleArrowDown, label: "Download all", onClick: startAll }] : [],
+                  [
+                    ...(toMove.length ? [{ icon: FolderInput, label: "Move all", onClick: moveAll }] : []),
+                    ...(toReplace.length
+                      ? [{ icon: Replace, label: "Replace all", onClick: replaceAll, confirm: true }]
+                      : []),
+                  ],
                   queueItems(data, changeQueue),
-                  organize?.moved.length ? [{ icon: ListX, label: "Clear done", onClick: clear }] : [],
+                  [
+                    ...(attention
+                      ? [{ icon: Trash2, label: "Clear needs attention", onClick: clearAttention, confirm: true }]
+                      : []),
+                    ...(organize?.moved.length ? [{ icon: ListX, label: "Clear done", onClick: clear }] : []),
+                  ],
                 ]
               : []
           }

@@ -183,24 +183,17 @@ export function FileTree({
   );
 }
 
-// A move as a row's state (components/row-status.tsx): a bar of the
-// phase it's in (copying, then verifying), peach while it waits, green
-// while it's copied, sky while it's verified; under it the state, speed and
-// time left.
+// A move as a row's state (components/row-status.tsx): a bar, peach while
+// it waits, green while it's copied; under it the state, speed and time
+// left.
 function moveState(move: MoveProgress): RowState {
   const fraction = move.total ? Math.min(1, move.done / move.total) : 0;
   const left = move.running ? timeLeft(move.total - move.done, move.speed) : null;
   const speed = move.running && move.speed ? formatSpeed(move.speed) : null;
   return {
-    line: [moveLabel(move), speed, speed ? left : null],
-    bar: { fraction, color: !move.running ? "bg-warning" : move.phase === "copying" ? "bg-success" : "bg-info" },
+    line: [move.running ? "Moving" : "Waiting", speed, speed ? left : null],
+    bar: { fraction, color: move.running ? "bg-success" : "bg-warning" },
   };
-}
-
-// What a move is doing: Waiting, Moving or Verifying.
-function moveLabel(move: MoveProgress): string {
-  if (!move.running) return "Waiting";
-  return move.phase === "copying" ? "Moving" : "Verifying";
 }
 
 // One plain item of the ⋯ menu.

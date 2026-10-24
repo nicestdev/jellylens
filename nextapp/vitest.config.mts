@@ -25,6 +25,9 @@ export default defineConfig({
       TMDB_LANGUAGE: "de-DE",
       WCX_URL: "https://wcx.test",
       WCX_API_URL: "https://api.wcx.test",
+      DLOAD_URL: "https://dload.test",
+      DLOAD_USER: "anna",
+      DLOAD_PASSWORD: "dload-secret",
       // Local times the same on every machine (CI is UTC, the dev container Vienna).
       TZ: "UTC",
     },

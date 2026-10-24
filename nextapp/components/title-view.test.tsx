@@ -58,7 +58,7 @@ const title = (
 const bluray = title("heat~1995", "Heat (1995)", ["Heat.1995.German.DL.2160p.UHD.BluRay.x265-VECTOR"]);
 const rip = title("heat", "Heat", ["Heat.German.AC3.HDRip.XViD-VECTOR"], { status: "searched" });
 
-type Tile = Omit<ReleaseDetail, "resolutions">;
+type Tile = Omit<ReleaseDetail, "resolutions" | "dload"> & { dload?: ReleaseDetail["dload"] };
 
 // What the route answers: only the qualities asked for (`?resolution=`) of
 // each title's releases, and every quality the tile has.
@@ -68,6 +68,7 @@ const detailOf = (tile: Tile, url: URL): ReleaseDetail => {
     ...tile,
     titles: tile.titles.map((t) => ({ ...t, items: t.items.filter((r) => keep(xrelRow(r))) })),
     resolutions: namesByResolution(tile.titles.flatMap((t) => t.items.map(xrelRow))),
+    dload: tile.dload ?? [],
   };
 };
 
@@ -103,6 +104,47 @@ const pickQuality = (q: string) => pick("Quality", q);
 const moreOptions = async (name: string) => (await screen.findAllByRole("button", { name }))[0];
 
 describe("TitleView", () => {
+  it("links FunXD as the mirror of FuN's releases WCX doesn't list", async () => {
+    api({
+      key: "movie:949",
+      head,
+      titles: [title("heat~1995", "Heat (1995)", ["Heat.1995.German.DL.1080p.BluRay.x265-FuN"])],
+    });
+    render(<TitleView tileKey="movie:949" />);
+    // The Mirror column's, and the phone's beside the name; none among the title's links.
+    const links = await screen.findAllByRole("link", { name: "FunXD" });
+    expect(links[0]).toHaveAttribute("href", expect.stringMatching(/^\/api\/funxd-link\?tmdbId=movie%3A949/));
+  });
+
+  it("lists the DLoad uploaders' threads as releases, linked to the thread, one xREL has once", async () => {
+    const thread = (id: number, name: string) => ({
+      id,
+      name,
+      group: "w00t",
+      url: `https://dload.example/${id}/`,
+      postedAt: 1,
+    });
+    api({
+      key: "movie:949",
+      head,
+      titles: [bluray],
+      dload: [
+        thread(7, "Heat.1995.GERMAN.AAC.1080p.BluRay.x265-w00t"),
+        thread(8, "heat.1995.german.dl.2160p.uhd.bluray.x265-vector"),
+      ],
+    });
+    render(<TitleView tileKey="movie:949" />);
+    expect(await screen.findByRole("link", { name: release(/1080p\.BluRay\.x265-w00t/) })).toHaveAttribute(
+      "href",
+      "https://dload.example/7/",
+    );
+    expect(screen.getAllByRole("link", { name: release(/2160p\.UHD/i) })).toHaveLength(1);
+    // Its Mirror is the thread too (and the phone's beside the name); the one
+    // xREL lists keeps its xREL link but gets its thread as the Mirror.
+    const mirrors = (await screen.findAllByRole("link", { name: "DLoad" })).map((a) => a.getAttribute("href"));
+    expect(mirrors).toEqual(expect.arrayContaining(["https://dload.example/7/", "https://dload.example/8/"]));
+  });
+
   it("lists a single title's releases with its menu beside the name", async () => {
     const fetch = api({ key: "movie:949", head, titles: [bluray] }, () => ({
       key: "movie:949",
@@ -223,6 +265,30 @@ describe("TitleView", () => {
       "href",
       "/api/xrel-link?tmdbId=movie%3A949&title=Heat",
     );
+  });
+
+  it("lists a show's library files a table per season when no release is listed", async () => {
+    const copy = (season: number, episode: number) => ({
+      fileName: `Darkwing.Duck.S0${season}E0${episode}.German.WEB.h264-TSCC.mkv`,
+      path: "nvme01/shows/x.mkv",
+      size: 1e9,
+      season,
+      episode,
+      episodeEnd: null,
+      resolution: "SD",
+      codec: "x264",
+      group: "TSCC",
+    });
+    api({
+      key: "tv:3319",
+      head: { ...head, title: "Darkwing Duck", mediaType: "tv", tmdbId: 3319, copies: [copy(1, 1), copy(2, 1)] },
+      titles: [],
+    });
+    render(<TitleView tileKey="tv:3319" />);
+    expect(await screen.findByRole("button", { name: /^Season 2$/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /^Season 1$/ })).toBeInTheDocument();
+    expect(screen.queryByText(/None of your favorite groups/)).not.toBeInTheDocument();
+    expect(shownCount()).toBe(1);
   });
 
   const got = title("got", "Game of Thrones", [

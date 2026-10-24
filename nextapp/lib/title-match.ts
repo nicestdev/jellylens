@@ -24,8 +24,15 @@ export function parseReleaseName(name: string): ParsedName {
     const n = Number(tokens[i]);
     if (/^\d{4}$/.test(tokens[i]) && n >= 1900 && n <= latest) yearAt = i;
   }
+  // An edition before the year ("Resident.Evil.UNCUT.2002"): the year right after the tags it starts.
+  if (yearAt < 0) {
+    let i = end;
+    while (i < tokens.length && TAG.test(tokens[i])) i++;
+    const n = Number(tokens[i]);
+    if (/^\d{4}$/.test(tokens[i] ?? "") && n >= 1900 && n <= latest) yearAt = i;
+  }
   return {
-    title: tokens.slice(0, yearAt > 0 ? yearAt : end).join(" "),
+    title: tokens.slice(0, yearAt > 0 ? Math.min(yearAt, end) : end).join(" "),
     year: yearAt > 0 ? Number(tokens[yearAt]) : null,
   };
 }

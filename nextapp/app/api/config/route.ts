@@ -10,6 +10,10 @@ import {
   XREL_SYNC_INTERVAL_HOURS,
   WCX_API_URL,
   WCX_SYNC_INTERVAL_HOURS,
+  DLOAD_URL,
+  DLOAD_USER,
+  DLOAD_PASSWORD,
+  DLOAD_SYNC_INTERVAL_HOURS,
   DDOWNLOAD_LOGIN,
   DDOWNLOAD_PASSWORD,
   REALDEBRID_TOKEN,
@@ -38,6 +42,9 @@ export async function GET() {
     // Never any of its characters, nor its length.
     ddownloadPassword: DDOWNLOAD_PASSWORD ? "********" : "",
     realDebridToken: maskKey(REALDEBRID_TOKEN),
+    dloadUser: DLOAD_USER,
+    // Never any of its characters, nor its length.
+    dloadPassword: DLOAD_PASSWORD ? "********" : "",
     archivePasswords: ARCHIVE_PASSWORDS.length,
     p2pGroups: P2P_GROUPS.length,
     sceneGroups: SCENE_GROUPS.length,
@@ -47,6 +54,7 @@ export async function GET() {
       tmdb: TMDB_SYNC_INTERVAL_HOURS,
       releases: XREL_SYNC_INTERVAL_HOURS,
       wcx: WCX_API_URL ? WCX_SYNC_INTERVAL_HOURS : 0,
+      dload: DLOAD_URL && DLOAD_USER ? DLOAD_SYNC_INTERVAL_HOURS : 0,
     },
     downloadSlots: getDownloadSettings().slots,
     passwords: getDownloadSettings().passwords,

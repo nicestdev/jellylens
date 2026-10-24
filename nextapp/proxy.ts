@@ -14,6 +14,9 @@ const ADMIN_ONLY = [
   "/settings",
   "/logs",
   "/api/logs",
+  "/migrations",
+  "/api/migrations",
+  "/api/dload-users",
   "/api/config",
   "/api/sync",
   "/api/ignored",
@@ -26,6 +29,7 @@ const ADMIN_ONLY = [
   "/api/wcx-search",
   "/api/wcx-releases",
   "/api/xrel-link",
+  "/api/funxd-link",
 ];
 const PUBLIC = ["/login", "/api/auth"];
 const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];

@@ -17,6 +17,8 @@ export const TMDB_SYNC_INTERVAL_HOURS = hours("TMDB_SYNC_INTERVAL_HOURS", 24);
 export const XREL_SYNC_INTERVAL_HOURS = hours("XREL_SYNC_INTERVAL_HOURS", 6);
 // About that often (±1 h of 6), never at night (see nextRunAt in lib/scheduler.ts).
 export const WCX_SYNC_INTERVAL_HOURS = hours("WCX_SYNC_INTERVAL_HOURS", 6);
+// The same for the DLoad uploaders' new threads (lib/sync-dload.ts).
+export const DLOAD_SYNC_INTERVAL_HOURS = hours("DLOAD_SYNC_INTERVAL_HOURS", 12);
 
 // Sign-in with Jellyfin accounts; on unless set to "false" (or 0/no/off).
 // Off, Jellylens is open to anyone who can reach it, as a single admin.
@@ -36,6 +38,12 @@ export const SCENE_GROUPS = list("SCENE_GROUPS");
 
 export const WCX_URL = (process.env.WCX_URL || "").replace(/\/+$/, "");
 export const WCX_API_URL = (process.env.WCX_API_URL || "").replace(/\/+$/, "");
+
+// DLoad, a XenForo forum (lib/dload.ts), and the member the DLoad sync
+// signs in as; without the URL or the user it's off.
+export const DLOAD_URL = (process.env.DLOAD_URL || "").replace(/\/+$/, "");
+export const DLOAD_USER = process.env.DLOAD_USER?.trim() || "";
+export const DLOAD_PASSWORD = process.env.DLOAD_PASSWORD || "";
 
 export const DATA_DIR = process.env.DATA_DIR || "/app/data";
 

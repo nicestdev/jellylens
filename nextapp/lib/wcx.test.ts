@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { releaseGroupOf } from "./analytics";
-import { dottedName, groupOf, toReleases } from "./wcx";
+import { dottedName } from "./release-name";
+import { groupOf, toReleases } from "./wcx";
 import { sceneQuality } from "./xrel";
 
 describe("dottedName", () => {

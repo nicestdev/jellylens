@@ -91,7 +91,7 @@ export function seasonsLabel(seasons: number[]): string {
 // title and where it's at, the details being the Queue's. Error
 // (red) for any failure; Needs attention (peach) for a new one that waits for a
 // hand before its download (the library has some of it, or no TMDB match);
-// what runs and how far (a download's state, Moving, Verifying), colored
+// what runs and how far (a download's state, Moving), colored
 // like the Queue's Status column; Ready to organize.
 export type QueueTone = "error" | "warning" | "success" | "info";
 export type QueueRow = {
@@ -127,9 +127,7 @@ function itemNote(item: OrganizeItem): { line: string[]; tone?: QueueTone } {
   if (!move) return { line: ["Ready to organize"] };
   const done = percent(move.total ? move.done / move.total : 0);
   if (!move.running) return { line: ["Waiting", done] };
-  return move.phase === "copying"
-    ? { line: ["Moving", done], tone: "success" }
-    : { line: ["Verifying", done], tone: "info" };
+  return { line: ["Moving", done], tone: "success" };
 }
 
 // A new one starts by itself when the library has nothing of it

@@ -9,6 +9,7 @@ const GLOBALS = [
   "__releaseSync",
   "__titleMatching",
   "__jellylensTriggers",
+  "__jellylensDload",
   "__jellylensDownloader",
   "__jellylensMoves",
   "__jellylensEvents",

@@ -35,3 +35,12 @@ export function episodesOf(name: string): { season: number; episodes: number[] |
   const pack = /\.S(\d{1,2})\./i.exec(name);
   return pack ? { season: Number(pack[1]), episodes: null } : null;
 }
+
+// A name typed with spaces as a release name (" Heat 1995 1080p x264 -
+// GRP (DDL)" → "Heat.1995.1080p.x264-GRP"): WCX's, w00t's thread titles.
+export const dottedName = (name: string) =>
+  name
+    .trim()
+    .replace(/(\s*\([^)]*\))+$/, "")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/\s+/g, ".");

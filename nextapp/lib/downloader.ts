@@ -310,10 +310,25 @@ async function extractSet(pkgId: number, set: ArchiveSet) {
     s.extracting.set(pkgId, { percent: 0, child: null });
     const started = Date.now();
     log.info("downloads", `Extracting ${set.first}`, `· ${set.members.length} parts`);
+    const before = new Set(packageOutputs(pkg).map((o) => o.path));
     const error = await extract7z(path.join(dir, set.first), dir, pkgId);
     // Removed, reset or failed meanwhile: leave it.
     if (!getPackage(pkgId) || getPackage(pkgId)?.status === "failed" || !setReady(pkgId, set)) return;
     if (error) return finish(pkgId, "failed", `${set.first}: ${error}`);
+    // An archive set that came out of it (FuN packs the release's RARs into
+    // RARs of a hoster's name): extracted too, one level deep, its parts
+    // deleted. A failure fails the package with the outer parts kept, so
+    // Retry starts over.
+    // Not the package's own files: one that finished downloading meanwhile is no inner archive.
+    const own = new Set(listFiles(pkgId).map((f) => f.name));
+    const added = packageOutputs(pkg).filter((o) => !before.has(o.path) && !own.has(o.path));
+    for (const inner of archiveSets(added.map((o) => o.path))) {
+      if (!inner.first) continue;
+      log.info("downloads", `Extracting ${inner.first}`, `· ${inner.members.length} parts, from ${set.first}`);
+      const innerError = await extract7z(path.join(dir, inner.first), path.dirname(path.join(dir, inner.first)), pkgId);
+      if (innerError) return finish(pkgId, "failed", `${inner.first}: ${innerError}`);
+      for (const m of inner.members) fs.rmSync(path.join(dir, m), { force: true });
+    }
     for (const f of listFiles(pkgId).filter((f) => set.members.includes(f.name))) {
       fs.rmSync(path.join(dir, f.name), { force: true });
       updateFile(f.id, { status: "extracted" });

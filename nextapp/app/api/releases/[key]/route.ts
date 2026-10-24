@@ -8,9 +8,13 @@ import {
   tileOf,
   tileTitleKeys,
   titleReleases,
+  dloadThreadsOf,
+  dloadUsers,
 } from "@/lib/store";
 import { groupEpisodes } from "@/lib/release-labels";
-import { inResolutions, namesByResolution, xrelRow } from "@/lib/title-rows";
+import { dloadRow, inResolutions, namesByResolution, xrelRow } from "@/lib/title-rows";
+import { dottedName } from "@/lib/release-name";
+import { threadUrl } from "@/lib/dload";
 import { resolveTitles } from "@/lib/sync-releases";
 import { TMDB_LANGUAGE } from "@/lib/env";
 import { TMDB_API_KEY } from "@/lib/env";
@@ -99,7 +103,20 @@ async function detail(key: string, resolutions: string[] = []): Promise<ReleaseD
     return [{ titleKey: keys[0], label, match: matchInfo(keys[0]), items }];
   });
   const head = await headOf(key, titles);
-  const available = namesByResolution(titles.flatMap((t) => t.items.map(xrelRow)));
+  // The DLoad uploaders' threads of a TMDB entry, as releases (lib/dload.ts),
+  // of their uploader's group.
+  const groups = new Map(dloadUsers().map((u) => [u.id, u.group]));
+  const dload =
+    head?.tmdbId && head.mediaType
+      ? dloadThreadsOf(head.mediaType, head.tmdbId).map((t) => ({
+          id: t.id,
+          name: dottedName(t.title),
+          group: groups.get(t.userId) ?? "",
+          url: threadUrl(t.id),
+          postedAt: Math.floor(Date.parse(t.postedAt) / 1000),
+        }))
+      : [];
+  const available = namesByResolution([...titles.flatMap((t) => t.items.map(xrelRow)), ...dload.map(dloadRow)]);
   // Only the qualities asked for come down, a title with none of them staying listed.
   const keep = inResolutions(resolutions);
   return {
@@ -107,6 +124,8 @@ async function detail(key: string, resolutions: string[] = []): Promise<ReleaseD
     head,
     titles: titles.map((t) => ({ ...t, items: t.items.filter((r) => keep(xrelRow(r))) })),
     resolutions: available,
+    // All of them: few, and the title page links the newest whatever the quality.
+    dload,
   };
 }
 

@@ -131,7 +131,8 @@ export function withoutTitle(name: string, { keepEpisode = false } = {}): string
 // "S01E02" is the release's before "S01" (a pack's "S01-S03" too), and it
 // ends the way the release does after that, an episode's title in
 // between ("Show.S04E01.Die.neue.Welt.GERMAN.1080p-GRP" is from
-// "Show.S04.GERMAN.1080p-GRP").
+// "Show.S04.GERMAN.1080p-GRP"; a pack's "COMPLETE" after its seasons
+// isn't in its episodes' names).
 const plainName = (s: string) =>
   s
     .toLowerCase()
@@ -142,7 +143,7 @@ export function fromRelease(fileName: string, release: string): boolean {
   const file = plainName(fileName);
   const rel = plainName(release);
   if (file === rel) return true;
-  const r = /^(.+?)\.s\d{1,2}(?:e\d{1,3}(?:-?e\d{1,3})*)?(?:[+-]s?\d{1,2})*\.(.+)$/.exec(rel);
+  const r = /^(.+?)\.s\d{1,2}(?:e\d{1,3}(?:-?e\d{1,3})*)?(?:[+-]s?\d{1,2})*(?:\.complete)?\.(.+)$/.exec(rel);
   const f = /^(.+?)\.s\d{1,2}e\d{1,3}(?:-?e\d{1,3})*\.(.+)$/.exec(file);
   return !!r && !!f && r[1] === f[1] && (f[2] === r[2] || f[2].endsWith("." + r[2]));
 }

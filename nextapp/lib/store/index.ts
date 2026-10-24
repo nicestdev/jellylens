@@ -13,3 +13,5 @@ export * from "./releases";
 export * from "./downloads";
 export * from "./scan";
 export * from "./logs";
+export * from "./dload";
+export * from "./migrations";

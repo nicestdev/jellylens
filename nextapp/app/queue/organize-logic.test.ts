@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OrganizeItem, OrganizeResponse } from "@/lib/api-types";
 import type { LibraryTarget, MoveProgress } from "@/lib/library-move";
-import { defaultTarget, destination, fits, isMoving, targetOf } from "./organize-logic";
+import { defaultTarget, destination, fits, isMoving, replaceable, targetOf } from "./organize-logic";
 
 const GB = 1e9;
 const target = (disk: string, freeBytes: number | null, existing: string | null = null): LibraryTarget => ({
@@ -27,7 +27,6 @@ const progress = (over: Partial<MoveProgress> = {}): MoveProgress => ({
   target: "/library/nvme02/movies",
   done: 0,
   total: GB,
-  phase: "copying",
   speed: 0,
   running: true,
   error: null,
@@ -77,5 +76,39 @@ describe("isMoving", () => {
     expect(isMoving(response([item(1)]))).toBe(false);
     expect(isMoving(response([item(1, { move: progress({ running: false }) })]))).toBe(true);
     expect(isMoving(response([item(1, { move: progress({ error: "x" }) })]))).toBe(false);
+  });
+});
+
+describe("replaceable", () => {
+  it("is what the library has, ready to go, with its disk: not new, failed, moving or without a disk", () => {
+    const owned = [{ path: "nvme02/movies/Heat (1995) [tmdbid-949]/Heat.mkv", size: GB, extras: [] }];
+    const has = [target("nvme02", 100 * GB, "Heat (1995) [tmdbid-949]")];
+    const rows = replaceable(
+      [
+        item(1, { owned, targets: has }),
+        item(2, { owned }),
+        item(3, { owned, targets: has, error: "No video in it." }),
+        item(4, { owned, targets: has, move: progress() }),
+        item(5, { targets: has }),
+      ],
+      { 2: "/library/nvme03/movies" },
+    );
+    expect(rows.map((r) => [r.item.id, r.target.disk])).toEqual([
+      [1, "nvme02"],
+      [2, "nvme03"],
+    ]);
+  });
+  it("with owned false is what Move all moves: new to the library, with a disk", () => {
+    const has = [target("nvme02", 100 * GB, "Heat (1995) [tmdbid-949]")];
+    const owned = [{ path: "nvme02/movies/Heat (1995) [tmdbid-949]/Heat.mkv", size: GB, extras: [] }];
+    const rows = replaceable(
+      [item(1, { targets: has }), item(2), item(3, { owned, targets: has })],
+      { 2: "/library/nvme03/movies" },
+      false,
+    );
+    expect(rows.map((r) => [r.item.id, r.target.disk])).toEqual([
+      [1, "nvme02"],
+      [2, "nvme03"],
+    ]);
   });
 });

@@ -8,8 +8,8 @@ import type { TmdbResult } from "./tmdb";
 import type { Availability } from "./availability";
 import type { AudioMix, FilePart, LibraryTotals, QualityCell } from "./store";
 import type { DownloadFile, DownloadMedia, DownloadPackage, LibraryChoice, LibraryCopy } from "./store";
-import type { LogEntry, LogLevel } from "./store";
-export type { LogEntry, LogLevel };
+import type { DloadUser, LogEntry, LogLevel, MigrationRow } from "./store";
+export type { LogEntry, LogLevel, MigrationRow };
 export type { LibraryChoice };
 import type { SeasonAiring } from "./tmdb";
 import type { LibraryTarget, MoveProgress, OwnedFile } from "./library-move";
@@ -52,6 +52,7 @@ export type StatusResponse = {
   tmdb: StageStatus & { movies: number; shows: number };
   releases: StageStatus & { groups: number; releases: number };
   wcx: StageStatus & { releases: number };
+  dload: StageStatus & { threads: number };
 };
 export type SyncStageName = keyof StatusResponse;
 
@@ -65,6 +66,8 @@ export type ConfigResponse = {
   ddownloadLogin: string;
   ddownloadPassword: string;
   realDebridToken: string;
+  dloadUser: string;
+  dloadPassword: string;
   archivePasswords: number;
   // How many groups P2P_GROUPS and SCENE_GROUPS name (added at every start
   // if missing; the group tables list them).
@@ -128,17 +131,26 @@ export type ReleaseHead = {
 };
 export type { LibraryCopy, SeasonAiring };
 // resolutions: every quality the tile's releases have, with their names (all of them, however `?resolution=` narrows `titles`).
+// dload: the DLoad uploaders' threads of the title (a TMDB entry's), its
+// name as a release's, its uploader's group, its page, when it was opened
+// (unix seconds).
+export type DloadThread = { id: number; name: string; group: string; url: string; postedAt: number };
 export type ReleaseDetail = {
   key: string;
   head: ReleaseHead | null;
   titles: ReleaseDetailTitle[];
   resolutions: Record<string, string[]>;
+  dload: DloadThread[];
 };
 
 // GET, POST, DELETE /api/release-groups. syncing: its releases are being
 // fetched right now; matching: the sync is checking titles on TMDB.
 export type ReleaseGroupItem = ReleaseGroup & { syncing: boolean };
 export type ReleaseGroupsResponse = { items: ReleaseGroupItem[]; matching: boolean };
+
+// GET, POST, DELETE /api/dload-users: the DLoad uploaders whose threads
+// are read, each with the group most of them are of and how many we know.
+export type DloadUsersResponse = { items: DloadUser[] };
 
 // A missing season as the Dashboard shows it.
 export type { MissingSeason } from "./store";
@@ -311,3 +323,14 @@ export type EventsResponse = { boot: string; last: number; events: AppEvent[] };
 // GET /api/logs — the log (lib/log.ts), newest first, a page at a time;
 // more: there are older ones.
 export type LogsResponse = { entries: LogEntry[]; more: boolean };
+
+// GET /api/migrations — every target's (the DLoad uploaders' groups, then
+// the favorite P2P groups, `targets` by name) rows: the library's movies
+// and seasons it offers, from anyone else (replace) or its own WEB it has a
+// BluRay of (upgrade). dload: the threads' sync, how many it knows and how
+// many of them have a TMDB title, and the uploaders' groups.
+export type MigrationsResponse = {
+  rows: MigrationRow[];
+  targets: string[];
+  dload: { threads: number; matched: number; groups: string[] } & StageStatus;
+};

@@ -24,7 +24,7 @@ import { log } from "./log";
 //
 // The movie or show a download package is, for its poster and title on
 // the Queue: its name parsed like a release's ("Lanterns.S01.
-// GERMAN.…-w00t - thewooter": the uploader after " - " dropped), a show if
+// GERMAN.…-GRP - uploader": the uploader after " - " dropped), a show if
 // it has a season, then a TMDB search by title and year. The best result
 // whose title fits, else none; looked up once per package. Nothing found
 // for a German name spelled without umlauts ("Auserwaehlten"): searched
@@ -56,14 +56,19 @@ export async function matchName(name: string): Promise<DownloadMedia | null> {
   const type = isShowName(release) ? "tv" : "movie";
   const language = TMDB_LANGUAGE;
   // A show's year in a release name is rare and often the season's, not
-  // the first air date: search without it if nothing fits with it.
-  const years = parsed.year && type === "tv" ? [parsed.year, null] : [parsed.year];
+  // the first air date: search without it if nothing fits with it. A
+  // movie's may be a year off TMDB's (a release of 2012 TMDB dates
+  // 2013-01-04): without it too, then only a hit that fits within a year.
+  const years = parsed.year ? [parsed.year, null] : [null];
+  const near = (r: { year: number | null }) =>
+    type === "tv" || !parsed.year || (r.year !== null && Math.abs(r.year - parsed.year) <= 1);
   const umlauts = withUmlauts(parsed.title);
   for (const query of umlauts === parsed.title ? [parsed.title] : [parsed.title, umlauts]) {
     for (const year of years) {
       const results = await searchTmdbTitle(TMDB_API_KEY, type, query, year, language);
-      const fits = results.find((r) => sameTitle(r.title, query) || sameTitle(r.originalTitle, query));
-      const hit = fits ?? (query === parsed.title ? results[0] : undefined);
+      const fits = results.find((r) => (sameTitle(r.title, query) || sameTitle(r.originalTitle, query)) && near(r));
+      const loose = query === parsed.title && (year !== null || type === "tv" || !parsed.year);
+      const hit = fits ?? (loose ? results[0] : undefined);
       if (hit) return { type, tmdbId: hit.tmdbId, title: hit.title, year: hit.year, posterPath: hit.posterPath };
     }
   }

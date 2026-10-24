@@ -198,6 +198,7 @@ describe("fromRelease", () => {
   it("takes an episode for its pack, several seasons' or its own release, an episode title in between", () => {
     expect(fromRelease(ep, "Outlander.S04.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
     expect(fromRelease(ep, "Outlander.S01-S06.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
+    expect(fromRelease(ep, "Outlander.S01-S06.COMPLETE.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
     expect(fromRelease(ep, "Outlander.S04E01.GERMAN.AAC.1080p.BluRay.x265-w00t")).toBe(true);
     expect(fromRelease("Show.S01E01E02.GERMAN.1080p-GRP.mkv", "Show.S01.GERMAN.1080p-GRP")).toBe(true);
   });

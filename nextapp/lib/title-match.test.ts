@@ -27,6 +27,7 @@ describe("parseReleaseName", () => {
     ["Blade.Runner.2049.2017.German.EAC3.DL.1080p.BluRay.x265-VECTOR", "Blade Runner 2049", 2017],
     ["Wonder.Woman.1984.2020.IMAX.German.EAC3.DL.1080p.BluRay.x265-VECTOR", "Wonder Woman 1984", 2020],
     ["Fear.Street.Teil.2.1978.2021.German.DL.EAC3.1080p.NF.WEB.H265-ZeroTwo", "Fear Street Teil 2 1978", 2021],
+    ["Resident.Evil.UNCUT.2002.German.DL.AC3D.1080p.UK-BluRay.x265-FuN", "Resident Evil", 2002],
     ["1917.2019.German.DL.1080p.BluRay.x265-VECTOR", "1917", 2019],
     // Shows: the season ends the title.
     ["Silo.2023.S03E10.German.DL.Atmos.2160p.DV.HDR.ATVP.WEB.H265-ZeroTwo", "Silo", 2023],

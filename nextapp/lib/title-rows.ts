@@ -1,4 +1,4 @@
-import type { LibraryCopy, TitleRelease, WcxRelease } from "./api-types";
+import type { DloadThread, LibraryCopy, TitleRelease, WcxRelease } from "./api-types";
 import { MB, seasonCode, seasonLabel } from "./format";
 import { rankIn, toggled, type SortDir } from "./facets";
 import { matchesWords } from "./text";
@@ -65,6 +65,21 @@ export const wcxRow = (r: WcxRelease): ReleaseRow => ({
   seasons: r.seasons ?? seasonsOf(r.name),
 });
 
+// A DLoad uploader's thread as a row, of their group: no size (DLoad's list has none),
+// the day it was opened.
+export const dloadRow = (d: DloadThread): ReleaseRow => ({
+  id: `dload:${d.id}`,
+  name: d.name,
+  episodes: null,
+  group: d.group,
+  resolution: resolutionOf(d.name),
+  codec: codecOf(d.name),
+  audio: audioOf(d.name),
+  size: null,
+  date: d.postedAt,
+  seasons: seasonsOf(d.name),
+});
+
 // What the library already has of a release, for its row on the title page
 // (the library icon, the disks): a movie's copies; for a show, those of the
 // seasons (or the one episode) the release holds. exact: some of them are
@@ -118,10 +133,12 @@ export function libraryNote(r: ReleaseRow, copies: LibraryCopy[], movie: boolean
 // how many episodes, their size, the disks. One a listed release is
 // already marked as owned by (fromRelease) isn't repeated.
 const TAG = /(?:^|\.)((?:german|deutsch|dl|ml|ac3d?|eac3|dts|\d{3,4}p|web(?:dl|rip)?|bluray|bdrip|hdtv)\..*)$/i;
-function releaseOf(fileName: string): string {
+// A part said twice in a row counts once, its second spelling
+// ("…Krone.German.GERMAN.AC3…" is the season's "GERMAN.AC3…").
+export function releaseOf(fileName: string): string {
   const base = fileName.replace(/\.[a-z0-9]{2,4}$/i, "");
   const rest = base.replace(/^.*?\.S\d{1,2}E\d{1,3}(?:-?E\d{1,3})*\./i, "");
-  return TAG.exec(rest)?.[1] ?? rest;
+  return (TAG.exec(rest)?.[1] ?? rest).replace(/(^|\.)([^.]+)\.(\2)(?=\.|$)/gi, "$1$3");
 }
 // Dubbed or not is one release here: "AC3D" (the German track from
 // another source) and "AC3LD" (line dubbed) count as "AC3".
@@ -267,14 +284,13 @@ export function sortRows<R extends ReleaseRow>(rows: R[], key: ReleaseSortKey, d
 
 // A show's rows by season, newest season first, then specials, then
 // Other: what isn't one season's pack (single episodes, a pack of several
-// seasons, rows naming none). Each keeps the rows' order.
+// seasons, rows naming none). Each keeps the rows' order. owned: the
+// seasons the library has, a table each even without a release of it.
 type SeasonGroup<R> = { key: string; label: string; rows: R[] };
 
-export function seasonGroups<R extends ReleaseRow>(rows: R[]): SeasonGroup<R>[] {
+export function seasonGroups<R extends ReleaseRow>(rows: R[], owned: number[] = []): SeasonGroup<R>[] {
   const groups = new Map<string, SeasonGroup<R> & { order: [number, number] }>();
-  for (const r of rows) {
-    const special = !r.seasons || r.seasons[0] !== r.seasons[1] || Boolean(episodesOf(r.name)?.episodes);
-    const s = special ? null : r.seasons;
+  const groupOf = (s: [number, number] | null) => {
     const key = s ? `${s[0]}-${s[1]}` : NONE;
     let g = groups.get(key);
     if (!g) {
@@ -287,7 +303,12 @@ export function seasonGroups<R extends ReleaseRow>(rows: R[]): SeasonGroup<R>[] 
       };
       groups.set(key, g);
     }
-    g.rows.push(r);
+    return g;
+  };
+  for (const n of owned) groupOf([n, n]);
+  for (const r of rows) {
+    const special = !r.seasons || r.seasons[0] !== r.seasons[1] || Boolean(episodesOf(r.name)?.episodes);
+    groupOf(special ? null : r.seasons).rows.push(r);
   }
   return [...groups.values()]
     .sort((a, b) => b.order[0] - a.order[0] || a.order[1] - b.order[1])

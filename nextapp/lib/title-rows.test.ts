@@ -11,6 +11,7 @@ import {
   libraryNote,
   namesByResolution,
   noRowFilters,
+  releaseOf,
   toggleFilter,
   wcxRow,
   xrelRow,
@@ -192,6 +193,15 @@ describe("libraryNote", () => {
   });
 });
 
+it("names an episode's release, a part said twice once", () => {
+  expect(releaseOf("Game.of.Thrones.S01E06.Eine.goldene.Krone.German.GERMAN.AC3.1080p.BluRay.x265-w00t.mkv")).toBe(
+    "GERMAN.AC3.1080p.BluRay.x265-w00t",
+  );
+  expect(releaseOf("Game.of.Thrones.S01E01.Der.Winter.naht.GERMAN.AC3.1080p.BluRay.x265-w00t.mkv")).toBe(
+    "GERMAN.AC3.1080p.BluRay.x265-w00t",
+  );
+});
+
 describe("ghostRows", () => {
   it("makes one row of a season's dubbed and undubbed files, named after most of them", () => {
     const ep = (n: number, audio: string) =>
@@ -267,6 +277,15 @@ describe("seasonGroups", () => {
       ["Season 1", ["A", "F"]],
       ["Specials", ["D"]],
       ["Other", ["B", "E"]],
+    ]);
+  });
+
+  it("gives each season the library has a table, without a release of it too", () => {
+    const rows = ["DuckTales.COLLECTION.1.DVD1-A", "DuckTales.S02.German.1080p-B"].map((name) => xrelRow(xrel(name)));
+    expect(seasonGroups(rows, [1, 2]).map((g) => [g.label, g.rows.map((r) => r.name.slice(-1))])).toEqual([
+      ["Season 2", ["B"]],
+      ["Season 1", []],
+      ["Other", ["A"]],
     ]);
   });
 });

@@ -8,7 +8,7 @@ import { openDatabase } from "./db";
 describe("openDatabase", () => {
   it("creates the whole schema on an empty database, up to the latest version", () => {
     const conn = openDatabase(":memory:");
-    expect(conn.pragma("user_version", { simple: true })).toBe(5);
+    expect(conn.pragma("user_version", { simple: true })).toBe(6);
     const tables = conn
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
       .all()
@@ -23,6 +23,8 @@ describe("openDatabase", () => {
         "download_packages",
         "download_files",
         "download_settings",
+        "dload_users",
+        "dload_threads",
       ]),
     );
     expect(conn.prepare("SELECT size_mb FROM releases").all()).toEqual([]);
@@ -71,9 +73,9 @@ describe("openDatabase", () => {
     const file = path.join(dir, "jellylens.db");
     try {
       const old = new Database(file);
-      old.pragma("user_version = 6");
+      old.pragma("user_version = 7");
       old.close();
-      expect(() => openDatabase(file)).toThrow(/schema version 6.*run the newer Jellylens/);
+      expect(() => openDatabase(file)).toThrow(/schema version 7.*run the newer Jellylens/);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

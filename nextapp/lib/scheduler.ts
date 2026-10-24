@@ -30,12 +30,14 @@ const SYNC_LABEL: Record<string, string> = {
   "tmdb-sync": "TMDB sync",
   "releases-sync": "Releases sync",
   "wcx-sync": "WCX sync",
+  "dload-sync": "DLoad sync",
 };
 const SYNC_AREA: Record<string, LogArea> = {
   "library-scan": "library",
   "tmdb-sync": "tmdb",
   "releases-sync": "xrel",
   "wcx-sync": "wcx",
+  "dload-sync": "dload",
 };
 
 export function makeTrigger<T>(name: string, fn: () => Promise<T>): Trigger<T> {

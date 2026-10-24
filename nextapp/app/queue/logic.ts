@@ -1,4 +1,10 @@
-import type { DownloadPackageItem, OrganizeItem, OrganizeMoved, OrganizeResponse } from "@/lib/api-types";
+import type {
+  DownloadPackageItem,
+  LibraryChoice,
+  OrganizeItem,
+  OrganizeMoved,
+  OrganizeResponse,
+} from "@/lib/api-types";
 import { formatBytes, plural } from "@/lib/format";
 import { parseReleaseName } from "@/lib/title-match";
 
@@ -93,6 +99,19 @@ export function queueLine(data: { packages: DownloadPackageItem[]; freeBytes: nu
 // What Pause all and Resume all would act on.
 export const canPauseAll = (packages: DownloadPackageItem[]) =>
   packages.some((p) => p.status === "queued" || p.status === "downloading");
+// Download all: every new one that can start, one the library has some of
+// as its ⋯ offers it first (Download another version, or Download missing).
+export const startable = (packages: DownloadPackageItem[]): { pkg: DownloadPackageItem; choice?: LibraryChoice }[] =>
+  packages.flatMap((pkg) =>
+    pkg.status !== "pending"
+      ? []
+      : !pkg.library
+        ? [{ pkg }]
+        : pkg.library.choices.length
+          ? [{ pkg, choice: pkg.library.choices[0] }]
+          : [],
+  );
+
 export const canResumeAll = (packages: DownloadPackageItem[]) => packages.some((p) => p.status === "paused");
 
 // Fast polling while anything moves.

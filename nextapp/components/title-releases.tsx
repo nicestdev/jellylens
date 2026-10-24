@@ -2,6 +2,7 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import {
+  ArrowUpRight,
   Check,
   Link2,
   Loader2,
@@ -275,6 +276,22 @@ export function ReleaseTable<R extends ReleaseRow>({
 const CHIP =
   "inline-grid size-8 cursor-pointer place-items-center rounded-lg text-sub-foreground transition-colors hover:bg-muted hover:text-bright disabled:cursor-default disabled:hover:bg-transparent [&_svg]:size-4";
 const DONE = "cursor-default hover:bg-transparent";
+
+// A release WCX doesn't have but another site does (FuN's on FunXD): its
+// Mirror is a link there, named and with the arrow, like every link.
+export function LinkMirror({ label, href }: { label: string; href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-0.5 text-sub-foreground transition-colors hover:text-bright"
+    >
+      {label}
+      <ArrowUpRight className="size-3.5" />
+    </a>
+  );
+}
 // A hoster's short name: "DD", "RG", else its first two letters
 // ("katfile.com" → "KA").
 const HOSTERS: Record<string, string> = { "ddownload.com": "DD", "rapidgator.net": "RG" };

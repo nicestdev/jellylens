@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { Writable } from "stream";
@@ -16,9 +15,10 @@ import { log, took } from "./log";
 // videos and subtitles are copied into the title's folder on the disk
 // picked ("Name (Year) [tmdbid-N]", lib/library-names.ts; a show's
 // into Season NN; a movie's named with spaces under the release's name,
-// releaseFileNames). All are written as "<name>.part", hashed on the way
-// and flushed to the disk (fsync); then all read back and hashed again; and
-// only if every hash and size matches renamed. Once all are in, the package
+// releaseFileNames). All are written as "<name>.part" and flushed to the
+// disk (fsync), and only if every size matches renamed (no read-back: it
+// would come mostly from the page cache, not the disk, and take as long
+// as the copy). Once all are in, the package
 // is marked moved, and only then its folder deleted. One move at a time,
 // the rest wait. A title the disk
 // has already (its "[tmdbid-N]" folder, whatever it's called) gets the
@@ -42,8 +42,7 @@ type MovePlan = {
   error: string | null;
 };
 // A move in the queue or running:
-// what it's doing, bytes copied and read back (verified) of total each, its
-// speed (bytes a second, over the last second or so); error if it failed
+// bytes copied of total, its speed (bytes a second, over the last second or so); error if it failed
 // (it stays listed until the next try).
 // replace: what the library has of it goes once the new files are in;
 // undefined: the library had none of it when it was queued (checked again
@@ -52,9 +51,7 @@ type Move = {
   target: string;
   replace: boolean | undefined;
   copied: number;
-  verified: number;
   total: number;
-  phase: "copying" | "verifying";
   speed: number;
   running: boolean;
   error: string | null;
@@ -199,13 +196,11 @@ export async function ownedFiles(pkg: DownloadPackage, plan: MovePlan): Promise<
 }
 
 // A package's move while it waits, runs or after it failed: the folder
-// it goes to (one of libraryTargets' paths); done of total bytes in the
-// phase it's in (copying, then verifying), so its bar fills once each.
+// it goes to (one of libraryTargets' paths); done of total bytes copied.
 export type MoveProgress = {
   target: string;
   done: number;
   total: number;
-  phase: "copying" | "verifying";
   speed: number;
   running: boolean;
   error: string | null;
@@ -215,9 +210,8 @@ export function moveOf(pkgId: number): MoveProgress | null {
   if (!m) return null;
   return {
     target: m.target,
-    done: m.phase === "copying" ? m.copied : m.verified,
+    done: m.copied,
     total: m.total,
-    phase: m.phase,
     speed: m.speed,
     running: m.running,
     error: m.error,
@@ -252,9 +246,7 @@ export async function startMove(pkg: DownloadPackage, target: string, replace?: 
     target,
     replace,
     copied: 0,
-    verified: 0,
     total: plan.bytes,
-    phase: "copying",
     speed: 0,
     running: false,
     error: null,
@@ -268,15 +260,13 @@ export async function startMove(pkg: DownloadPackage, target: string, replace?: 
   return null;
 }
 
-// Reads a stream through, counting its bytes into move (and its speed);
-// the SHA-256 of what came by.
-async function hashing(read: fs.ReadStream, move: Move, count: "copied" | "verified", into?: Writable) {
-  const hash = crypto.createHash("sha256");
+// Reads a stream into a writable, counting its bytes into move (and its
+// speed).
+async function counting(read: fs.ReadStream, move: Move, into: Writable) {
   let windowStart = Date.now();
   let windowBytes = 0;
   read.on("data", (chunk: Buffer | string) => {
-    hash.update(chunk);
-    move[count] += chunk.length;
+    move.copied += chunk.length;
     windowBytes += chunk.length;
     const now = Date.now();
     if (now - windowStart >= 1000) {
@@ -285,8 +275,7 @@ async function hashing(read: fs.ReadStream, move: Move, count: "copied" | "verif
       windowBytes = 0;
     }
   });
-  await pipeline(read, into ?? new Writable({ write: (_chunk, _encoding, done) => done() }));
-  return hash.digest("hex");
+  await pipeline(read, into);
 }
 
 // Flushes a file or folder to the disk; a folder only where the file
@@ -304,17 +293,16 @@ async function flush(file: string, folder = false) {
   }
 }
 
-// Copies files (src to dest) checked: all as "<dest>.part", hashed on the
-// way, flushed to the disk, their sizes checked; then all read back and
-// hashed again; renamed only if all match (the parts deleted if not).
+// Copies files (src to dest) checked: all as "<dest>.part", flushed to the
+// disk, their sizes checked; renamed only if all match (the parts deleted
+// if not).
 async function copyChecked(files: { src: string; dest: string; size: number }[], move: Move) {
-  const parts: { part: string; dest: string; hash: string }[] = [];
+  const parts: { part: string; dest: string }[] = [];
   try {
-    move.phase = "copying";
     for (const { src, dest, size } of files) {
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       const part = `${dest}.part`;
-      parts.push({ part, dest, hash: "" });
+      parts.push({ part, dest });
       const read = fs.createReadStream(src, { highWaterMark: 4 << 20 });
       // Flushed every 128 MB on the way: else the kernel holds gigabytes in
       // memory, the bar is full long before they're on the disk and the
@@ -333,7 +321,7 @@ async function copyChecked(files: { src: string; dest: string; size: number }[],
               }
             })().then(() => done(), done),
         });
-        parts.at(-1)!.hash = await hashing(read, move, "copied", into);
+        await counting(read, move, into);
         await fh.sync();
       } finally {
         await fh.close();
@@ -341,13 +329,6 @@ async function copyChecked(files: { src: string; dest: string; size: number }[],
       const copied = fs.statSync(part).size;
       if (copied !== size)
         throw new Error(`${path.basename(dest)}: only ${formatBytes(copied)} of ${formatBytes(size)} were copied`);
-    }
-    move.phase = "verifying";
-    move.speed = 0;
-    for (const { part, dest, hash } of parts) {
-      const read = fs.createReadStream(part, { highWaterMark: 4 << 20 });
-      if ((await hashing(read, move, "verified")) !== hash)
-        throw new Error(`${path.basename(dest)}: the copy doesn't match the original`);
     }
   } catch (e) {
     for (const { part } of parts) fs.rmSync(part, { force: true });

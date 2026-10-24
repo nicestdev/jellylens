@@ -6,6 +6,7 @@ import { StatTile } from "@/components/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ReleaseGroups } from "./release-groups";
+import { DloadUsers } from "./dload-users";
 import { SlotsMenu } from "./download-slots";
 import { ArchivePasswords } from "./archive-passwords";
 import { IgnoredShows } from "./ignored-shows";
@@ -17,6 +18,7 @@ import { apiFetch, runSync, jsonRequest } from "@/lib/api-client";
 import { plural, relativeTime } from "@/lib/format";
 import type {
   ConfigResponse,
+  DloadUsersResponse,
   DownloadsResponse,
   Preferences,
   ReleaseGroupsResponse,
@@ -75,16 +77,18 @@ const STAGES: { stage: SyncStageName; title: string }[] = [
   { stage: "tmdb", title: "TMDB" },
   { stage: "releases", title: "xREL" },
   { stage: "wcx", title: "WCX" },
+  { stage: "dload", title: "DLoad" },
 ];
 
 async function loadSettings() {
-  const [status, config, prefs, groups] = await Promise.all([
+  const [status, config, prefs, groups, dload] = await Promise.all([
     apiFetch<StatusResponse>("/api/status"),
     apiFetch<ConfigResponse>("/api/config"),
     apiFetch<Preferences>("/api/preferences"),
     apiFetch<ReleaseGroupsResponse>("/api/release-groups"),
+    apiFetch<DloadUsersResponse>("/api/dload-users"),
   ]);
-  return { status, config, prefs, groups };
+  return { status, config, prefs, groups, dload };
 }
 
 export default function SettingsPage() {
@@ -161,7 +165,7 @@ export default function SettingsPage() {
 
       {/* A card each: when it last synced, its schedule under it, and
           its Sync (spinning while it runs). One under another on a phone. */}
-      <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4 phone-landscape:grid-cols-4">
+      <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-2 sm:gap-6 lg:grid-cols-5 phone-landscape:grid-cols-5 sm:max-lg:[&>:last-child:nth-child(odd)]:col-span-2">
         {STAGES.map((st) => {
           const running = busy === st.stage || Boolean(status?.[st.stage].running);
           const syncedAt = status?.[st.stage].syncedAt ?? null;
@@ -204,6 +208,15 @@ export default function SettingsPage() {
             onError={setError}
           />
 
+          <DloadUsers
+            data={page.data?.dload ?? null}
+            onData={(next) => {
+              page.setData((d) => d && { ...d, dload: next });
+              reload(); // a new uploader starts the DLoad sync
+            }}
+            onError={setError}
+          />
+
           <IgnoredShows onError={setError} />
 
           {/* Read-only: all of this is set through environment variables. */}
@@ -228,6 +241,8 @@ export default function SettingsPage() {
               <EnvRow env="DDOWNLOAD_LOGIN" value={config?.ddownloadLogin} />
               <EnvRow env="DDOWNLOAD_PASSWORD" value={config?.ddownloadPassword} />
               <EnvRow env="REALDEBRID_TOKEN" value={config?.realDebridToken} />
+              <EnvRow env="DLOAD_USER" value={config?.dloadUser} />
+              <EnvRow env="DLOAD_PASSWORD" value={config?.dloadPassword} />
               <EnvRow
                 env="ARCHIVE_PASSWORDS"
                 value={

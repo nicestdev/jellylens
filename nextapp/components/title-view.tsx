@@ -9,7 +9,7 @@ import { Poster } from "@/components/poster";
 import { FacetMenu, FilterChips, type Facet } from "@/components/filter-menu";
 import { isPhone } from "@/components/page-tools";
 import { SearchInput } from "@/components/search-input";
-import { MatchMenu, ReleaseTable, useMirrorCheck } from "@/components/title-releases";
+import { LinkMirror, MatchMenu, ReleaseTable, useMirrorCheck } from "@/components/title-releases";
 import { PosterWish, type Result } from "@/components/request-tiles";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +36,7 @@ import {
   libraryNote,
   allRowsOf,
   combineRows,
+  dloadRow,
   noRowFilters,
   seasonGroups,
   sortRows,
@@ -284,21 +285,37 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
   };
   const keep = keepRow(query, { ...filters, resolution: new Set(quality) });
   const xrelLinks = new Map(titles.flatMap((t) => t.items.map((r) => [r.id, r.link] as const)));
+  // The DLoad uploaders' threads: a row each, but one xREL lists too (by name) stays xREL's.
+  const dload = current?.dload ?? [];
+  const dloadLinks = new Map<string, string>(dload.map((d) => [`dload:${d.id}`, d.url]));
+  const dloadByName = new Map(dload.map((d) => [d.name.toLowerCase(), d.url]));
+  const dloadOf = (r: { id: string; name: string }) => dloadLinks.get(r.id) ?? dloadByName.get(r.name.toLowerCase());
+  const onXrel = new Set(xrel.flatMap((t) => t.rows.map((r) => r.name.toLowerCase())));
   // xREL's and WCX's as one list, each row tagged with where it's listed
   // and with the mirror buttons of every WCX copy (two a line on a phone).
-  const combined = combineRows(
-    xrel.flatMap((t) => t.rows),
-    wcxReleases?.releases ?? [],
-  );
+  const combined = [
+    ...combineRows(
+      xrel.flatMap((t) => t.rows),
+      wcxReleases?.releases ?? [],
+    ),
+    ...dload
+      .map(dloadRow)
+      .filter((r) => !onXrel.has(r.name.toLowerCase()))
+      .map((r) => ({ ...r, xrel: false, wcx: [] })),
+  ];
   // How many releases each quality has among those the search leaves (what
   // picking it would show).
   const matchesQuery = matchesWords(query);
   const qualityCounts = new Map([...names].map(([q, ns]) => [q, [...ns].filter(matchesQuery).length]));
   qualityCounts.set(ALL, [...new Set([...names.values()].flatMap((ns) => [...ns]))].filter(matchesQuery).length);
   const shown = sortRows(combined.filter(keep), "date", "desc");
-  // A show's releases as a table per season; a movie's (or a show whose
-  // names say no season) as one.
-  const seasons = head?.mediaType !== "movie" && shown.some((r) => r.seasons) ? seasonGroups(shown) : null;
+  // A show's releases as a table per season, also each season the library has (the season
+  // menu's picks); a movie's (or a show with no season in names or library) as one.
+  const owned = [...new Set((head?.copies ?? []).flatMap((c) => (c.season === null ? [] : [c.season])))].filter(
+    (n) => !filters.season.size || filters.season.has(String(n)),
+  );
+  const seasons =
+    head?.mediaType !== "movie" && (owned.length || shown.some((r) => r.seasons)) ? seasonGroups(shown, owned) : null;
   // A season table's aired and known episodes (TMDB's), for its Episodes
   // column; none for Other.
   const airedIn = (key: string) => {
@@ -309,7 +326,8 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
   const countOf = (key: string, releases: number) => {
     const a = airedIn(key);
     const aired = a && (a.total > a.aired ? `${a.aired} of ${a.total} aired` : `${a.aired} aired`);
-    return [plural(releases, "release"), aired];
+    const parts = [releases ? plural(releases, "release") : null, aired].filter(Boolean);
+    return parts.length ? parts : undefined;
   };
   // The library's files for a table (its gray rows first): a season's ("2-2", a pack's "1-3")
   // episodes, a movie's all; none for the releases without a season.
@@ -319,6 +337,10 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
     const [from, to] = [Number(range[1]), Number(range[2])];
     return (head?.copies ?? []).filter((c) => c.season !== null && c.season >= from && c.season <= to);
   };
+  // The tables, also the library's alone when no release is left (none listed, or none matching).
+  const tables = (
+    seasons ?? [{ key: "all", label: head?.mediaType === "movie" ? "Movies" : "Releases", rows: shown }]
+  ).filter((s) => s.rows.length || copiesIn(s.key).length);
   const facets: Facet[] = FACET_KEYS.map((key) => ({
     key,
     label: FACET_LABELS[key],
@@ -388,13 +410,10 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
         }
       : null;
   const tmdb = head?.tmdbId && head.mediaType ? tmdbUrl(head.mediaType, head.tmdbId) : undefined;
-  const xrelLink =
-    head?.tmdbId && head.mediaType
-      ? "/api/xrel-link?" + new URLSearchParams({ tmdbId: `${head.mediaType}:${head.tmdbId}`, title: head.title })
-      : undefined;
+  const linkQuery = tmdbId && head ? "?" + new URLSearchParams({ tmdbId, title: head.title }) : null;
   const links = [
     tmdb ? { label: "TMDB", href: tmdb } : null,
-    xrelLink ? { label: "xREL", href: xrelLink } : null,
+    linkQuery ? { label: "xREL", href: "/api/xrel-link" + linkQuery } : null,
     wcxUrl ? { label: "WCX", href: wcxUrl } : null,
   ].filter((l): l is { label: string; href: string } => l !== null);
 
@@ -459,7 +478,7 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
                   {links.length ? (
                     <>
                       <Dot className="max-sm:hidden" />
-                      <span className="flex items-baseline gap-x-1.5 max-sm:basis-full">
+                      <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 max-sm:basis-full">
                         {links.flatMap((l, i) => [
                           i ? <Dot key={`s${i}`} /> : null,
                           <a
@@ -555,19 +574,17 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
                 ))}
               </div>
             ) : null}
-            {!combined.length ? (
+            {!combined.length && !head?.copies.length ? (
               <EmptyState
                 icon={Clapperboard}
                 title="No releases"
                 hint={`None of your favorite groups has released this${wcxUrl ? ", and WCX has nothing" : ""}.`}
               />
-            ) : !shown.length ? (
+            ) : !tables.length ? (
               noMatch
             ) : (
               <div className="flex flex-col gap-3">
-                {(
-                  seasons ?? [{ key: "all", label: head?.mediaType === "movie" ? "Movies" : "Releases", rows: shown }]
-                ).map((s, i) => (
+                {tables.map((s, i) => (
                   <ReleaseTable
                     key={s.key}
                     title={s.label}
@@ -580,8 +597,16 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
                       ...s.rows,
                     ]}
                     count={countOf(s.key, s.rows.length)}
-                    href={(r) => (r.xrel ? xrelLinks.get(r.id) : (wcxUrl ?? undefined))}
-                    mirrors={(r) => (r.wcx.length ? checkMirrors(r.wcx) : null)}
+                    href={(r) => (r.xrel ? xrelLinks.get(r.id) : (dloadLinks.get(r.id) ?? wcxUrl ?? undefined))}
+                    mirrors={(r) =>
+                      r.wcx.length ? (
+                        checkMirrors(r.wcx)
+                      ) : dloadOf(r) ? (
+                        <LinkMirror label="DLoad" href={dloadOf(r)!} />
+                      ) : r.xrel && r.group?.toLowerCase() === "fun" && linkQuery ? (
+                        <LinkMirror label="FunXD" href={"/api/funxd-link" + linkQuery} />
+                      ) : null
+                    }
                     library={(r) => (head ? libraryNote(r, head.copies, head.mediaType === "movie") : null)}
                     aired={airedIn(s.key)}
                     {...(seasons

@@ -4,6 +4,7 @@ import { syncNewTmdb, syncTmdb } from "./sync-tmdb";
 import { computeMissing } from "./compute-missing";
 import { syncReleases } from "./sync-releases";
 import { syncWcx } from "./sync-wcx";
+import { syncDload } from "./sync-dload";
 import { makeTrigger, nextRunAt, setJitteredSchedule, setSchedule } from "./scheduler";
 import { pruneTmdbImages } from "./tmdb-image-cache";
 import { pruneLogs } from "./store";
@@ -16,6 +17,9 @@ import {
   XREL_SYNC_INTERVAL_HOURS,
   WCX_API_URL,
   WCX_SYNC_INTERVAL_HOURS,
+  DLOAD_URL,
+  DLOAD_USER,
+  DLOAD_SYNC_INTERVAL_HOURS,
 } from "./env";
 
 export const triggerLibraryScan = makeTrigger("library-scan", async () => {
@@ -64,12 +68,20 @@ export const triggerWcxSync = makeTrigger("wcx-sync", async () => {
   return result;
 });
 
+// The DLoad uploaders' new threads, each with its TMDB title (Migrations, the title page).
+export const triggerDloadSync = makeTrigger("dload-sync", async () => {
+  if (!DLOAD_URL || !DLOAD_USER) throw new Error("DLOAD_URL and DLOAD_USER are not configured on the backend.");
+  if (!TMDB_API_KEY) throw new Error("TMDB_API_KEY is not configured on the backend.");
+  return syncDload({ tmdbApiKey: TMDB_API_KEY, language: TMDB_LANGUAGE });
+});
+
 // The stages by name, for /api/sync/<stage> and /api/status.
 export const stageTriggers = {
   library: triggerLibraryScan,
   tmdb: triggerTmdbSync,
   releases: triggerReleasesSync,
   wcx: triggerWcxSync,
+  dload: triggerDloadSync,
 };
 export type SyncStage = keyof typeof stageTriggers;
 
@@ -86,6 +98,13 @@ export function applySchedules() {
     const due = last ? nextRunAt(Date.parse(last), WCX_SYNC_INTERVAL_HOURS) : 0;
     const first = due > Date.now() ? due : nextRunAt(Date.now(), (2 + Math.random() * 13) / 60);
     setJitteredSchedule("wcx-sync", WCX_SYNC_INTERVAL_HOURS, first, triggerWcxSync);
+  }
+  // The same for DLoad's threads: now and then, never at night.
+  if (DLOAD_URL && DLOAD_USER) {
+    const last = syncedAt("dload");
+    const due = last ? nextRunAt(Date.parse(last), DLOAD_SYNC_INTERVAL_HOURS) : 0;
+    const first = due > Date.now() ? due : nextRunAt(Date.now(), (2 + Math.random() * 13) / 60);
+    setJitteredSchedule("dload-sync", DLOAD_SYNC_INTERVAL_HOURS, first, triggerDloadSync);
   }
 }
 

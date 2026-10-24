@@ -30,7 +30,7 @@ move into the library.
   connection when a `next dev` reload brings a new one; never edit one that has
   shipped, add a new one). Data access is in `lib/store/`, one module per area
   (library, files, tmdb, missing, ignored, requests, preferences, releases,
-  posters, sync-state, downloads, scan, logs), all re-exported by `lib/store/index.ts`; SQL helpers in
+  posters, sync-state, downloads, scan, logs, migrations, dload), all re-exported by `lib/store/index.ts`; SQL helpers in
   `lib/store/sql.ts`. Every read goes to the database, so a page always sees
   what the last sync wrote; each sync replaces its data in one transaction.
   Library items are stored with only the fields Jellylens reads
@@ -57,8 +57,8 @@ until it's done. A stage started that way (`startByHand`) leaves no note
 once it's done (it was asked for and is seen running); any failed run,
 scheduled or not, leaves one (see Notes).
 `instrumentation.ts` opens the database at boot, runs library scan → TMDB
-(→ missing) and the releases sync, then installs the intervals (WCX's is
-timed its own way, see 4.).
+(→ missing) and the releases sync, then installs the intervals (WCX's and
+DLoad's are timed their own way, see 4.).
 
 1. **Library scan** (`lib/library-scan.ts`, stage `library`,
    `LIBRARY_SCAN_INTERVAL_HOURS`, default 6): `LIBRARY_DIR`'s disks, each
@@ -103,6 +103,9 @@ timed its own way, see 4.).
    between about midnight, from 23:30 on, and 8 waits for 8 to 9 o'clock,
    in the container's `TZ`, Europe/Vienna in the compose files); at boot
    the first is due after the last one, or a few minutes from now.
+5. **DLoad** (`lib/sync-dload.ts`, stage `dload`,
+   `DLOAD_SYNC_INTERVAL_HOURS`, default 12, timed like WCX's, off without
+   `DLOAD_URL` and `DLOAD_USER`), see Migrations.
 
 The incomplete shows (`computeMissing` in `lib/compute-missing.ts`, the
 Dashboard's Incomplete shows) are no stage of their own: the last step of
@@ -180,7 +183,11 @@ single episodes are one line per season, group and version
 (`groupEpisodes` in `lib/release-labels.ts`). Its WCX link
 (`GET /api/wcx-search?tmdbId=`) searches WCX by the entry's IMDb id (from
 `imdb_lookups`, else TMDB's external ids); `wcx` keeps a hit for good and
-a miss for an hour, so reopening a title asks nobody.
+a miss for an hour, so reopening a title asks nobody. Its xREL link and a
+FuN release's FunXD mirror (see below) (`GET /api/xrel-link`,
+`/api/funxd-link`, `?tmdbId=&title=`) find the IMDb id the same way only on
+a click and redirect: to xREL's page of it, or FunXD's search page for it (a
+WordPress site), else either's search for the title.
 
 The title page lists xREL's releases and what the WCX page has together,
 right under the toolbar (`components/title-releases.tsx`; rows by
@@ -229,7 +236,8 @@ asked for one by one only when it's added (`hosterUrls`); and a filecrypt
 container (captcha, so not fetched). A mirror's `route` is how it would be
 fetched, by its hoster's plain links; a hide.cx container without any
 gets it from its own links once they're read, and is left out if nothing
-can fetch them. A row has one Check button (`useMirrorCheck`, in a Mirror
+can fetch them. A FuN release xREL lists and WCX doesn't has a link to FunXD there instead
+(`LinkMirror`, its name and the arrow, like every link). A row has one Check button (`useMirrorCheck`, in a Mirror
 column, on a phone on the right of the name): `POST { tmdbId, releases: [uid, …] }`
 (every WCX copy of the release) reads the page fresh and tries the
 mirrors in order (`lib/mirrors.ts`: RG, DD, then the rest A–Z; per
@@ -252,6 +260,11 @@ library icon, any other matched to TMDB the wishlist heart (`PosterWish`
 in `components/request-tiles.tsx`), the page's one button besides a single
 xREL title's ⋯ match menu beside the name; TMDB and WCX
 are plain links at the end of the line under the name.
+A TMDB entry's page lists the DLoad uploaders' threads too (`dload` in `GET
+/api/releases/<key>`, `dloadThreadsOf`; `dloadRow`): a row each, named as a
+release (`dottedName`), of its uploader's group, the day it was opened, no size, linked to the
+thread, its Mirror a link to it (`LinkMirror`, "DLoad"); one xREL lists by
+the same name (any case) is xREL's row only.
 What the library has of a release is worked out for a title page's row
 (`libraryNote` in `lib/title-rows.ts`) and a Queue package (`libraryOf`
 in `lib/download-library.ts`, see Queue); the library icon is a disk in
@@ -290,6 +303,65 @@ lists only xREL's stored releases and titles (WCX's come live from its
 page, see above); a title matched to nothing lists WCX's stored ones,
 there being no live page to read.
 
+## Migrations
+
+Administration › Migrations (`app/migrations/`, `GET /api/migrations`,
+admin only) lists the movies and seasons the library has that a target
+group offers too, a row per title and target (`migrationRows` in
+`lib/store/migrations.ts`, against `media_files` by TMDB id; a season counts
+if a release or thread names it, "S01-S03" each): `replace`, the library's
+files from anyone but the target; `upgrade`, the target's own WEB files
+(WEB after the language in the name, so not "Das.World.Wide.Web") while it
+has a BluRay of at least their resolution (a 1080p BluRay is no upgrade of
+a 4K WEB). Targets (`migrationTargets`): each DLoad uploader, named by
+their group, whose offers are their threads (with a link to the thread)
+and, when that group is a favorite group too, its xREL releases, one both
+have (by name, any case) one offer with both links and xREL's size; then
+the other favorite P2P groups,
+whose offers are their xREL releases with a title matched to TMDB (verified,
+searched or confirmed; links to xREL and, for FuN, FunXD). Which migration
+is shown is the menus' doing (`migrationView` in `app/migrations/logic.ts`):
+Source (the row's files' groups, any of them) and Target, each listing the
+groups and, after a line, each again as "not …" (none of them;
+`withNots`, `splitPick`), so "GRP's WEB to its BluRay" is Source GRP
+and Target GRP, "anything but GRP's to FuN" Target FuN and Source not
+GRP.
+
+DLoad (`DLOAD_URL`) is a XenForo forum without an API (`lib/dload.ts`).
+The uploaders whose threads are read are added on Settings by their
+profile's link (DLoad uploaders, `app/settings/dload-users.tsx`,
+`/api/dload-users`; `dload_users`, their forum id and name; removing one
+drops their threads). An uploader's group (`dloadUsers` in
+`lib/store/dload.ts`) is the one most of their thread titles end with
+("… x265 - GRP"), else their name. Pages are read as a signed-in member:
+`DLOAD_USER`/`DLOAD_PASSWORD` sign in as a browser would (the form's
+token and cookies, a pause, "stay signed in"; `signIn`), the session kept
+in memory, so a restart signs in again, and a page that comes back signed
+out signs in again once (a thread's IMDb link shows only signed in). The
+forum's search lists the threads a user opened, 20 a page, newest first.
+Each thread is a row of `dload_threads` with its uploader and TMDB title:
+from its title when that's sure (`sureTmdbId`: a year, and exactly one
+TMDB result of that year spelled the same, `fold`), else from the IMDb id
+in its first post (`fetchThreadImdb`, one more page; an IMDb entry of
+another year than the thread's, ±1, is taken for a wrong link). The sync
+(stage `dload`, Settings' DLoad card; Migrations' ⋯ Sync DLoad starts it
+too) reads, per uploader, the threads' pages until one with a thread it
+knows (5 at most, so a new uploader comes in with their newest 100), then
+their posts since the last sync (new episodes, upgrades), each with its
+thread's title as it is now: a known thread's title is updated
+(`renameDloadThread`), which is how Upgrade learns of a BluRay. Pages
+8–25 s apart like someone reading.
+
+One column, a row: the title (to its page), under it the release names of
+what the library has in peach (a season's as "Show.S04.GERMAN…-GRP")
+with their size, then the target's release names, each with
+its size when xREL gives one (green when smaller than the library's, red
+when bigger, `sizeTone`; only the movie or the very season, not an episode
+or a pack of several) and its links after a dot (an arrow after each, like the title page's); besides the group menus a search (titles and groups), a
+Type and a Quality menu (the target's releases' resolution by their names,
+`offerQuality`; a row keeps only the picked ones), Size (default, biggest
+first) or Title. Nothing is remembered between visits.
+
 ## Queue
 
 Admins only (`app/queue/`, `/api/downloads`, `/api/organize`): a package
@@ -310,7 +382,9 @@ through its premium account (`DDOWNLOAD_LOGIN`/`PASSWORD`), every other
 hoster through Real-Debrid (`REALDEBRID_TOKEN`; `routeOf` in
 `lib/hosters.ts`, the file's name from Real-Debrid's answer, which sends
 no Content-Disposition). A new package is looked over before it's started: its
-TMDB entry from its name (`matchName` in `lib/download-match.ts`, searched
+TMDB entry from its name (`matchName` in `lib/download-match.ts`, a movie
+also without its year when nothing fits with it, then only a hit within a
+year of it: TMDB dates "Death.Race.3.Inferno.2012" 2013; searched
 again with umlauts for a German name that spells them out, "Auserwaehlten";
 once per package, and once more for one found nothing for before
 `MATCHING_CHANGED`, moved on whenever the matching gets better), and every
@@ -323,7 +397,10 @@ the container: `./downloads` next to the compose file (a bind mount), or
 the host folder `DOWNLOADS_PATH` names. The download queue (`lib/downloader.ts`)
 runs 1–10 files at a time and extracts each archive set with 7-Zip as soon
 as its parts are in, trying the archive passwords set on Settings in turn,
-then `ARCHIVE_PASSWORDS`. A file whose connection drops mid-way
+then `ARCHIVE_PASSWORDS`. An archive set that comes out of one (FuN packs
+the release's RARs into RARs named after a hoster) is extracted too, one
+level deep, its parts deleted; if that fails, the package fails with the
+outer parts kept, so Retry starts over. A file whose connection drops mid-way
 ("terminated", or fewer bytes than its length) goes back in line and is
 resumed from what's on disk (HTTP Range), as long as each try gets further.
 A file that fails otherwise fails its package at once, with
@@ -346,15 +423,15 @@ with spaces (as VECTOR names them) gets the release's name instead
 (`releaseFileNames`; the release name is the folder the archive made, else
 the package's, made safe for a path, `safeName`). The disk defaults to the
 one that has the title (`defaultTarget` in `app/queue/organize-logic.ts`);
-a new title's is always picked by hand ("Select" in peach until then); every
-move is started by hand, one at a time (there's no Move all); a move is
+a new title's is always picked by hand ("Select" in peach until then); a
+move is started by hand, by its row or Move all (see below); a move is
 refused when what's queued for that disk leaves too little room
 (`startMove`; a Replace too, since the new files are in before the old go).
 
 A move (`lib/library-move.ts`, one at a time, the rest wait) copies every
-file as "<name>.part", hashed on the way and flushed to the disk (fsync),
-then reads each back and hashes it again, and renames them only if every
-hash and size matches; then it marks the package moved (`moved_to`,
+file as "<name>.part", flushed to the disk (fsync), and renames them only
+if every size matches (no read-back: it came mostly from the page cache
+and took as long as the copy); then it marks the package moved (`moved_to`,
 `moved_at`, `moved_files`: which file went where), and only then deletes
 its download folder. There's no Undo.
 
@@ -431,7 +508,8 @@ fetch only Remove. `POST /api/downloads/<id>` refuses a start without one
 of those (`choice`), and the package remembers it (`library_choice`): a
 Skip pack's move leaves out the episodes the library has (by the last
 scan, and still on the disk, since the download goes afterwards).
-Download all leaves such packages out.
+Download all starts such packages as their ⋯ offers first (`startable`
+in `app/queue/logic.ts`); one with only Remove stays.
 Parts aren't listed. Status (`components/row-status.tsx`) is
 muted text, nothing to click: a new one's parts (`partCheck`: "Checking ·
 3/8" while the hoster is asked, then "Online · 3/3", gaps in a
@@ -457,8 +535,8 @@ new files marked "+", like a diff), the disk (a menu with each disk's free space
 on a phone the tree's root, with the size in the line under it),
 Status ("—", or with files the library has
 already how many go and come like a diffstat, "−1 +1" in red and green;
-while it's moved a bar per phase,
-peach waiting, green copying, sky verifying, with "Moving·speed·time
+while it's moved a bar,
+peach waiting, green copying, with "Moving·speed·time
 left"; red why it failed or can't be moved, a crossed-out folder icon
 before its release name then), size, and the ⋯ (Move, or Replace;
 Retry; Delete, which takes its files too, `DELETE
@@ -471,10 +549,15 @@ at the end of the title's line (`MENU_CELL`, `PHONE_MENU` in
 `components/library-table.tsx`). The page's ⋯ at the top right
 (`PageMenu` in `components/page-menu.tsx`, from `AddControls` in
 `app/queue/add-form.tsx`; below md in the phone bar, `PageActions`) has Upload DLC and Add links (a box under the
-heading), then Download all (when a new one the library has nothing of
-waits; it starts only those), Pause all and Resume all
-(`queueItems`), then Clear done
-(forgets the moved ones, their files stay). DLC files can be dropped
+heading), then Download all (every new one that can start, see above),
+Move all (every finished one the library has nothing of whose disk is
+known, a new title's picked by hand), Replace all (every finished one the
+library has already, to its disk, `replaceable` in
+`app/queue/organize-logic.ts`, one after another), Pause all and Resume all
+(`queueItems`), then Clear needs attention (everything in that section
+off the list, with what's downloaded) and Clear done
+(forgets the moved ones, their files stay). Replace all and Clear needs
+attention ask "Sure? Click again" first (`confirm` on a `PageMenuItem`). DLC files can be dropped
 anywhere on the page too, each added after the last one's answer (a DLC
 takes a moment to read). A package whose move is running can't be
 deleted (a waiting move of one that's deleted is dropped). A library
@@ -557,9 +640,9 @@ user list (cached a minute) on every request. Failed sign-ins are limited per
 IP and per username (`lib/rate-limit.ts`, 5 per 15 min). `proxy.ts` also
 rejects state changes whose `Sec-Fetch-Site` is `cross-site` or
 `same-site`; `next.config.ts` sets the security headers. Jellyfin admins
-get the Dashboard, the Queue, Analytics, Settings, the title pages and
+get the Dashboard, the Queue, Analytics, Settings, Migrations, the title pages and
 their APIs (`ADMIN_ONLY` in `proxy.ts`: a release's page `/api/releases/<key>`,
-`/api/release-groups`, `/api/wcx-*`; the list `GET /api/releases` is for
+`/api/release-groups`, `/api/dload-users`, `/api/wcx-*`; the list `GET /api/releases` is for
 everyone, it's Discover's; the Queue's, `/api/downloads`,
 `/api/organize`, `/api/events`; sync, ignore, config, preferences and
 analytics); everyone gets Movies, Shows, Discover and their own Wishlist. Server code reads the user with `currentUser()`
@@ -606,15 +689,16 @@ loads through `useLoad` (`hooks/use-load.ts`: load on mount, `reload()`,
 so a poll asked before an action and answered after it is dropped);
 `usePoll` (`hooks/use-poll.ts`) reloads on an interval, one call at a time,
 skipping hidden tabs.
-Settings loads its status, config, preferences and groups together and
+Settings loads its status, config, preferences, groups and DLoad uploaders together and
 polls them every 2 s while a sync runs, every 15 s otherwise (`pollDelay`
-in `app/settings/logic.ts`). Its sync stages (Library, TMDB, xREL, WCX) are a card each (`StatTile`,
-four in a row from lg up and on a phone on its side, two from sm):
+in `app/settings/logic.ts`). Its sync stages (Library, TMDB, xREL, WCX, DLoad) are a card each (`StatTile`,
+five in a row from lg up and on a phone on its side, two from sm, the
+last one alone across the row):
 when it last synced, its schedule under it, and its Sync as an icon
 button at the top right, spinning while it runs. The two group tables
-share their last columns' widths (`SETTINGS_COLUMNS`), and a group's Last
+and DLoad uploaders share their last columns' widths (`SETTINGS_COLUMNS`), and a group's Last
 sync is the spinning icon with "Sync" while it syncs (its first list too),
-"Waiting" before its first sync. The group tables and Archive passwords
+"Waiting" before its first sync. The group tables, DLoad uploaders and Archive passwords
 add from a + in the heading's last column, above the rows' ⋯
 (`app/settings/add-row.tsx`): it opens a last row with a focused field,
 Enter adds and keeps it open for the next, Esc or leaving it empty closes
@@ -712,7 +796,7 @@ differ: search, sort, a menu's chevron), `dev-tools` (see
 Development). `nav` is
 the sidebar from md up (`Sidebar`: the Dashboard and the Queue on top
 without a heading, then Library (Movies, Shows, Discover, Wishlist) and
-Administration (Analytics, Logs, Settings), an icon before each, sections a
+Administration (Analytics, Logs, Migrations, Settings), an icon before each, sections a
 user has nothing in left out; the logo goes to the user's start page;
 counts, all muted and only when above 0, from `/api/status`, the wishlist's open requests and
 the Queue's packages not in the library yet (`DOWNLOADS_CHANGED` from
@@ -799,7 +883,7 @@ browser, a reload on each change): while it's on, the Queue, the wishlist, Setti
 nothing reaches the database), every state they can show. The routes are
 mocked whoever asks, so the Dashboard's Queue, imports, wishlist and disks are the
 mock's too, and so is `/api/status` (the sidebar's counts); Settings'
-Ignored incomplete shows stay real. Keep it current: a change to those pages or their responses
+Ignored incomplete shows and DLoad uploaders stay real. Keep it current: a change to those pages or their responses
 (`DownloadsResponse`, `OrganizeResponse`, `StatusResponse`,
 `ConfigResponse`, `ReleaseGroupsResponse`, `Preferences`) updates the mock
 data in the same change, a new state gets an example there

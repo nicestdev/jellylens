@@ -299,6 +299,26 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX logs_at ON logs (at);
   `,
+  // The uploaders on DLoad whose threads are read (Settings), by their
+  // forum user id and name; every thread one of them opened, with the TMDB
+  // title it is, for Migrations and the title page (lib/sync-dload.ts).
+  // type null: not a release (software…); tmdb_id null: none found.
+  // seasons: a show thread's, as a JSON array ("S01-S03" → [1,2,3]).
+  `
+  CREATE TABLE dload_users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+  CREATE TABLE dload_threads (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES dload_users (id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    posted_at TEXT NOT NULL,
+    type TEXT,
+    tmdb_id INTEGER,
+    imdb_id TEXT,
+    seasons TEXT NOT NULL DEFAULT '[]'
+  );
+  CREATE INDEX dload_threads_tmdb ON dload_threads (type, tmdb_id);
+  CREATE INDEX dload_threads_user ON dload_threads (user_id);
+  `,
 ];
 
 // Opens (creating if needed) a database and brings its schema up to date.

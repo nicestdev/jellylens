@@ -25,7 +25,7 @@ export type Facet = {
   onToggle: (value: string) => void;
   format?: (value: string) => string;
   single?: boolean;
-  divideAfter?: number; // a line after that many values (Discover's favorite groups)
+  divideAfter?: number | number[]; // a line after that many values (Discover's favorite groups)
 };
 
 function FacetOptions({ facet }: { facet: Facet }) {
@@ -34,7 +34,7 @@ function FacetOptions({ facet }: { facet: Facet }) {
     const checked = facet.selected.has(value);
     return (
       <Fragment key={value}>
-        {i > 0 && i === facet.divideAfter ? <DropdownMenuSeparator /> : null}
+        {i > 0 && [facet.divideAfter].flat().includes(i) ? <DropdownMenuSeparator /> : null}
         <DropdownMenuCheckboxItem
           checked={checked}
           onCheckedChange={() => facet.onToggle(value)}

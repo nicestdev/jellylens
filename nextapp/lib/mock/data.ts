@@ -150,7 +150,6 @@ const move = (target: string, more: Partial<MoveProgress>): MoveProgress => ({
   target,
   done: 0,
   total: 0,
-  phase: "copying",
   speed: 0,
   running: true,
   error: null,
@@ -230,7 +229,7 @@ function finished(): Finished[] {
         })),
       },
     },
-    // Moving: copying, verifying.
+    // Moving: one copied, one waiting for it.
     {
       id: 27,
       name: "Nosferatu.2024.German.DL.1080p.WEB.H264-ZeroTwo",
@@ -246,7 +245,7 @@ function finished(): Finished[] {
       files: ["The.Brutalist.2024.German.DL.1080p.WEB.H264-WvF.mkv"],
       bytes: 9.2 * GB,
       item: {
-        move: move("/library/nvme01/movies", { done: 4.1 * GB, total: 9.2 * GB, phase: "verifying", speed: 980e6 }),
+        move: move("/library/nvme01/movies", { total: 9.2 * GB, running: false }),
       },
     },
     // Needs attention: a move that failed, one that can't be moved.
@@ -260,9 +259,8 @@ function finished(): Finished[] {
         move: move("/library/nvme03/movies", {
           done: 5.1 * GB,
           total: 5.1 * GB,
-          phase: "verifying",
           running: false,
-          error: "Conclave.2024.German.DL.1080p.WEB.H264-SAUERKRAUT.mkv: the copy doesn't match the original",
+          error: "Conclave.2024.German.DL.1080p.WEB.H264-SAUERKRAUT.mkv: only 4.87 GB of 5.10 GB were copied",
         }),
       },
     },

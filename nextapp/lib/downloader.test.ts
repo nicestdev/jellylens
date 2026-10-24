@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { json, mockFetch } from "@/test/http";
 import {
@@ -363,6 +364,28 @@ describe("kickDownloads", () => {
     expect(listFiles(id)[0].error).toBe(
       "No account for example.org, and Real-Debrid doesn't cover it (or isn't set up)",
     );
+  });
+
+  // A ZIP stands in for FuN's RAR in a RAR (7-Zip writes no RAR).
+  it.skipIf(spawnSync("7zz").error)("extracts an archive that came out of the archive, too", async () => {
+    const tmp = fs.mkdtempSync(path.join(DOWNLOAD_DIR, "src-"));
+    fs.mkdirSync(path.join(tmp, "Heat"));
+    fs.writeFileSync(path.join(tmp, "Heat", "Heat.1995.mkv"), "video");
+    spawnSync("7zz", ["a", "inner.zip", "Heat"], { cwd: tmp });
+    fs.writeFileSync(path.join(tmp, ".md5-change-1"), "");
+    spawnSync("7zz", ["a", "outer.zip", "inner.zip", ".md5-change-1"], { cwd: tmp });
+    const zip = fs.readFileSync(path.join(tmp, "outer.zip"));
+    fs.rmSync(tmp, { recursive: true });
+    serve(() => new Response(zip));
+    const id = queued("outer.zip");
+    kickDownloads();
+    await settled(id);
+    expect(getPackage(id)?.status).toBe("done");
+    expect(
+      packageOutputs(getPackage(id)!)
+        .map((o) => o.path)
+        .sort(),
+    ).toEqual([".md5-change-1", "Heat/Heat.1995.mkv"]);
   });
 
   it("leaves a new package alone", async () => {

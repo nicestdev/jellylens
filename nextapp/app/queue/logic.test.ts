@@ -10,6 +10,7 @@ import {
   queueLine,
   sections,
   STATUS_LABEL,
+  startable,
   summarize,
   timeLeft,
 } from "./logic";
@@ -163,7 +164,6 @@ describe("sections", () => {
       target: "/library/nvme02/movies",
       done: 0,
       total: 1,
-      phase: "copying" as const,
       speed: 0,
       running: false,
       error: "Disk full",
@@ -337,4 +337,21 @@ describe("canPauseAll, canResumeAll and isActive", () => {
     expect(isActive(all("pending", "paused", "done", "failed"))).toBe(false);
     expect(isActive([])).toBe(false);
   });
+});
+
+it("starts every new one, the library's as their ⋯ offers first", () => {
+  const lib = (choices: ("replace" | "skip")[]) =>
+    ({ old: [], new: [], exact: false, skip: 0, choices, disks: [], presumed: [] }) as DownloadPackageItem["library"];
+  const list = [
+    pkg(1, "pending"),
+    pkg(2, "pending", { library: lib(["replace"]) }),
+    pkg(3, "pending", { library: lib(["skip"]) }),
+    pkg(4, "pending", { library: lib([]) }),
+    pkg(5, "downloading"),
+  ];
+  expect(startable(list).map(({ pkg, choice }) => [pkg.id, choice])).toEqual([
+    [1, undefined],
+    [2, "replace"],
+    [3, "skip"],
+  ]);
 });
