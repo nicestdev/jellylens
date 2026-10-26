@@ -81,6 +81,8 @@ export type ConfigResponse = {
   // Archive passwords set in Settings, tried in turn before
   // ARCHIVE_PASSWORDS (PATCH /api/downloads).
   passwords: string[];
+  // A finished package goes into the library on its own (PATCH /api/downloads).
+  autoMove: boolean;
 };
 
 // GET /api/discover — TMDB search or trending, with what's owned.

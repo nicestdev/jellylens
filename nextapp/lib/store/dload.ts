@@ -1,3 +1,6 @@
+import { tx } from "../db";
+import type { Release } from "../xrel";
+import { insertReleases } from "./releases";
 import { all, one, run } from "./sql";
 
 // The uploaders on DLoad whose threads are read (Settings), and their
@@ -39,10 +42,36 @@ export function addDloadUser(id: number, name: string) {
   run("INSERT INTO dload_users (id, name) VALUES (?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name", id, name);
 }
 
-// Their threads go with them.
+// Their threads go with them, and Discover's copies of them.
 export function removeDloadUser(id: number) {
-  run("DELETE FROM dload_users WHERE id = ?", id);
+  tx(() => {
+    run("DELETE FROM releases WHERE id IN (SELECT 'dload:' || id FROM dload_threads WHERE user_id = ?)", id);
+    run("DELETE FROM dload_users WHERE id = ?", id);
+  });
 }
+
+// The threads with a TMDB title, for Discover (toRelease in lib/dload.ts).
+export const dloadTmdbThreads = () =>
+  all<{ id: number; userId: number; title: string; postedAt: string; type: "movie" | "tv"; tmdbId: number }>(
+    `SELECT id, user_id AS userId, title, posted_at AS postedAt, type, tmdb_id AS tmdbId FROM dload_threads
+     WHERE type IS NOT NULL AND tmdb_id IS NOT NULL`,
+  );
+
+// Discover's copies of the threads (ids "dload:<id>"), written anew each
+// sync, so a renamed thread or an uploader's changed group shows.
+export function replaceDloadReleases(releases: Release[]) {
+  tx(() => {
+    run("DELETE FROM releases WHERE id LIKE 'dload:%'");
+    insertReleases(null, releases);
+  });
+}
+
+// Their titles (dload:movie:949) without a match yet.
+export const unmatchedDloadTitles = () =>
+  all<{ titleKey: string }>(
+    `SELECT DISTINCT r.title_key AS titleKey FROM releases r LEFT JOIN title_matches t ON t.title_key = r.title_key
+     WHERE r.id LIKE 'dload:%' AND t.title_key IS NULL`,
+  ).map((r) => r.titleKey);
 
 export function addDloadThreads(threads: DloadThreadRow[]) {
   for (const t of threads)

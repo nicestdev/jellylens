@@ -11,7 +11,8 @@ import { EPISODE, videosIn } from "./library-scan";
 import { getPackage, libraryCopies, setPackageMoved, type DownloadPackage } from "./store";
 import { log, took } from "./log";
 
-// Moving a finished download into the library, only ever by hand: its
+// Moving a finished download into the library, by hand or (Settings'
+// autoMove) once it is done: its
 // videos and subtitles are copied into the title's folder on the disk
 // picked ("Name (Year) [tmdbid-N]", lib/library-names.ts; a show's
 // into Season NN; a movie's named with spaces under the release's name,
@@ -218,6 +219,9 @@ export function moveOf(pkgId: number): MoveProgress | null {
   };
 }
 
+// The packages with a move queued, running or failed.
+export const moveIds = () => [...state().moves.keys()];
+
 // The disk a library folder is on ("/library/nvme01/movies" → "nvme01").
 const diskOf = (folder: string) => path.relative(LIBRARY_DIR, folder).split(path.sep)[0];
 
@@ -260,6 +264,21 @@ export async function startMove(pkg: DownloadPackage, target: string, replace?: 
   return null;
 }
 
+// Settings' autoMove, for a package just done: to the disk that has the
+// title's folder already (a show stays on one disk), else the one with the
+// most room (nvme03 too). One the library has already, or one that fits
+// nowhere, stays in Ready to organize.
+export async function autoMove(pkgId: number) {
+  const pkg = getPackage(pkgId);
+  if (!pkg) return;
+  const targets = libraryTargets(pkg);
+  const to =
+    targets.find((t) => t.existing) ??
+    targets.filter((t) => t.freeBytes !== null).sort((a, b) => b.freeBytes! - a.freeBytes!)[0];
+  const error = to ? await startMove(pkg, to.path) : (movePlan(pkg).error ?? "No library disk.");
+  if (error) log.info("organize", `Not moved on its own: ${pkg.name}`, `· ${error}`);
+}
+
 // Reads a stream into a writable, counting its bytes into move (and its
 // speed).
 async function counting(read: fs.ReadStream, move: Move, into: Writable) {
@@ -296,6 +315,8 @@ async function flush(file: string, folder = false) {
 // Copies files (src to dest) checked: all as "<dest>.part", flushed to the
 // disk, their sizes checked; renamed only if all match (the parts deleted
 // if not).
+const FUSE_MAGIC = 0x65735546; // statfs's type of a FUSE file system
+
 async function copyChecked(files: { src: string; dest: string; size: number }[], move: Move) {
   const parts: { part: string; dest: string }[] = [];
   try {
@@ -306,7 +327,10 @@ async function copyChecked(files: { src: string; dest: string; size: number }[],
       const read = fs.createReadStream(src, { highWaterMark: 4 << 20 });
       // Flushed every 128 MB on the way: else the kernel holds gigabytes in
       // memory, the bar is full long before they're on the disk and the
-      // last flush takes as long as the copy.
+      // last flush takes as long as the copy. Not over sshfs (FUSE): it
+      // writes through to the server, and a FUSE flush holds up every write
+      // to the file until it's done (a move at half speed).
+      const fuse = (await fs.promises.statfs(path.dirname(part))).type === FUSE_MAGIC;
       const fh = await fs.promises.open(part, "w");
       try {
         let unsynced = 0;
@@ -315,7 +339,7 @@ async function copyChecked(files: { src: string; dest: string; size: number }[],
             (async () => {
               for (let at = 0; at < chunk.length;) at += (await fh.write(chunk, at)).bytesWritten;
               unsynced += chunk.length;
-              if (unsynced >= 128 << 20) {
+              if (!fuse && unsynced >= 128 << 20) {
                 await fh.datasync();
                 unsynced = 0;
               }

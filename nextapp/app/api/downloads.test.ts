@@ -73,7 +73,7 @@ describe("PATCH /api/downloads", () => {
   it("keeps the archive passwords in order, blank and repeated ones dropped, out of its answer", async () => {
     const res = await patch({ passwords: [" serienfans.org ", "", "hd-source.to", "serienfans.org"] });
     expect(res.status).toBe(200);
-    expect(getDownloadSettings()).toEqual({ slots: 2, passwords: ["serienfans.org", "hd-source.to"] });
+    expect(getDownloadSettings()).toEqual({ slots: 2, passwords: ["serienfans.org", "hd-source.to"], autoMove: false });
     expect(await res.json()).not.toHaveProperty("passwords");
     await patch({ passwords: [] });
     expect(getDownloadSettings().passwords).toEqual([]);
@@ -83,5 +83,13 @@ describe("PATCH /api/downloads", () => {
     expect((await patch({ passwords: "serienfans.org" })).status).toBe(400);
     expect((await patch({ passwords: [1] })).status).toBe(400);
     expect(getDownloadSettings().passwords).toEqual([]);
+  });
+
+  it("turns moving new downloads on its own on and off, nothing but a boolean", async () => {
+    expect((await patch({ autoMove: true })).status).toBe(200);
+    expect(getDownloadSettings().autoMove).toBe(true);
+    expect((await patch({ autoMove: "yes" })).status).toBe(400);
+    await patch({ autoMove: false });
+    expect(getDownloadSettings().autoMove).toBe(false);
   });
 });

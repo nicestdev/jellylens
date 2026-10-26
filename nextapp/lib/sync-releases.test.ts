@@ -67,7 +67,7 @@ function apis(
 }
 
 const run = (tmdbApiKey = "key") => syncReleases({ tmdbApiKey, language: "de-DE" });
-const titles = () => queryTitles({ words: [], type: [], group: [] }, "date", false, 0, 60).items;
+const titles = () => queryTitles({ words: [], type: [], group: [], library: [] }, "date", false, 0, 60).items;
 
 describe("syncReleases", () => {
   it("walks a new group's whole list, then checks its titles on TMDB", async () => {

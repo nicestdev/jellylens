@@ -283,10 +283,11 @@ export function requeueInterrupted() {
 }
 
 // The queue's settings: slots (how many files come in at once), passwords
-// (tried in turn on an encrypted archive, before ARCHIVE_PASSWORDS).
-type DownloadSettings = { slots: number; passwords: string[] };
+// (tried in turn on an encrypted archive, before ARCHIVE_PASSWORDS),
+// autoMove (a finished package goes into the library on its own).
+type DownloadSettings = { slots: number; passwords: string[]; autoMove: boolean };
 export const MAX_DOWNLOAD_SLOTS = 10;
-const DEFAULT_SETTINGS: DownloadSettings = { slots: 2, passwords: [] };
+const DEFAULT_SETTINGS: DownloadSettings = { slots: 2, passwords: [], autoMove: false };
 
 export function getDownloadSettings(): DownloadSettings {
   const stored = all<{ key: string; value: string }>("SELECT key, value FROM download_settings");

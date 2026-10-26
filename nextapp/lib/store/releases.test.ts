@@ -27,6 +27,8 @@ import {
   type TmdbEntry,
 } from "./releases";
 import { setPreferences } from "./preferences";
+import { replaceLibrary } from "./library";
+import { movie } from "@/test/fixtures";
 import { db } from "../db";
 import type { Release } from "../xrel";
 
@@ -50,7 +52,7 @@ const heat: TmdbEntry = {
   year: 1995,
   posterPath: "/heat.jpg",
 };
-const noFilters: TitleFilters = { words: [], type: [], group: [] };
+const noFilters: TitleFilters = { words: [], type: [], group: [], library: [] };
 
 describe("groups", () => {
   it("lists groups in the order they were added, with their release counts", () => {
@@ -198,6 +200,14 @@ describe("queryTitles", () => {
     expect(query({ type: ["movie"], group: ["FuN"] }).matched).toBe(0);
   });
 
+  it("filters by whether the library has the title; both values are all", () => {
+    seed();
+    replaceLibrary({ movies: [movie({ id: "949", tmdbId: "949" })], shows: [], episodes: [] }, null);
+    expect(query({ library: ["owned"] }).items.map((t) => t.key)).toEqual(["movie:949"]);
+    expect(query({ library: ["missing"] }).items.map((t) => t.key)).toEqual(["himmel", "silo"]);
+    expect(query({ library: ["owned", "missing"] }).matched).toBe(3);
+  });
+
   it("sorts by title and pages", () => {
     seed();
     expect(query({}, "title", true).items.map((t) => t.key)).toEqual(["himmel", "movie:949", "silo"]);
@@ -218,10 +228,20 @@ describe("releaseFacets", () => {
       release("2", { titleKey: "a", type: "tv" }),
     ]);
     insertReleases("g2", [release("3", { titleKey: "b" })]);
-    expect(releaseFacets()).toEqual({ type: ["movie", "tv"], group: ["FuN", "VECTOR"], favorites: 2 });
+    expect(releaseFacets()).toEqual({
+      type: ["movie", "tv"],
+      group: ["FuN", "VECTOR"],
+      library: ["owned", "missing"],
+      favorites: 2,
+    });
     expect(tileCount()).toBe(2);
     removeGroup("g1");
-    expect(releaseFacets()).toEqual({ type: ["movie"], group: ["VECTOR"], favorites: 1 });
+    expect(releaseFacets()).toEqual({
+      type: ["movie"],
+      group: ["VECTOR"],
+      library: ["owned", "missing"],
+      favorites: 1,
+    });
     expect(tileCount()).toBe(1);
   });
 });

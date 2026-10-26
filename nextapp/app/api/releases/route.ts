@@ -22,7 +22,7 @@ function libraryItem(entry: LibraryEntry | undefined) {
   return ref ? { ...ref, posterPath: entry?.posterPath ?? null } : null;
 }
 
-// GET /api/releases?q=&type=movie|tv&group=&sort=date|title&dir=&offset=
+// GET /api/releases?q=&type=movie|tv&group=&library=owned|missing&sort=date|title&dir=&offset=
 // The favorite groups' releases as one tile per movie or show, for the
 // Discover's releases, for everyone (its <key> page is admin only, see proxy.ts). Words match a release name or
 // the checked title; facet params can repeat (any of them matches). The
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       .filter(Boolean),
     type: params.getAll("type"),
     group: params.getAll("group"),
+    library: params.getAll("library"),
   };
   const { matched, items } = queryTitles(filters, sort, asc, offset, PAGE_SIZE);
   const narrowed = Object.values(filters).some((values) => values.length > 0);

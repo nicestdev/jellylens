@@ -19,9 +19,10 @@ export type SortKey = (typeof SORTS)[number]["key"];
 export const FACETS: { key: FacetKey; label: string; format: (v: string) => string }[] = [
   { key: "type", label: "Type", format: (v) => (v === "tv" ? "Show" : "Movie") },
   { key: "group", label: "Group", format: (v) => v },
+  { key: "library", label: "Library", format: (v) => (v === "owned" ? "In library" : "Not in library") },
 ];
 
-export const noFilters = (): Filters => ({ type: new Set(), group: new Set() });
+export const noFilters = (): Filters => ({ type: new Set(), group: new Set(), library: new Set() });
 
 // The /api/releases request for one page of the grid.
 export function releasesUrl(

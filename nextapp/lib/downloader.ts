@@ -268,8 +268,10 @@ function run7z(args: string[], pkgId: number): Promise<{ code: number; output: s
 
 // Extracts an archive into dir, trying Settings' passwords and then
 // ARCHIVE_PASSWORDS in turn (7-Zip asks on the terminal if it gets none,
-// so without any, or for an unencrypted archive, it gets a dummy). The
-// error, or null.
+// so without any, or for an unencrypted archive, it gets a dummy). A RAR
+// with encrypted headers now and then says "Headers Error" for a wrong
+// password rather than "Wrong password", so that one tries the next too.
+// The error, or null.
 async function extract7z(archive: string, dir: string, pkgId: number): Promise<string | null> {
   const known = [...new Set([...getDownloadSettings().passwords, ...ARCHIVE_PASSWORDS])];
   const passwords = known.length ? known : ["-"];
@@ -277,17 +279,18 @@ async function extract7z(archive: string, dir: string, pkgId: number): Promise<s
   for (const pw of passwords) {
     const { code, output } = await run7z(["x", "-y", "-bsp1", "-bso0", `-p${pw}`, `-o${dir}`, archive], pkgId);
     if (code === 0) return null;
-    if (!/wrong password/i.test(output)) {
-      return (
-        output
-          .split("\n")
-          .map((l) => l.trim())
-          .filter((l) => /error|cannot|unexpected|missing/i.test(l))
-          .slice(-2)
-          .join(" · ") || `7-Zip exited with code ${code}`
-      );
+    if (/wrong password/i.test(output)) {
+      error ||= "Wrong archive password";
+      continue;
     }
-    error = "Wrong archive password";
+    error =
+      output
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => /error|cannot|unexpected|missing/i.test(l))
+        .slice(-2)
+        .join(" · ") || `7-Zip exited with code ${code}`;
+    if (!/headers error/i.test(output)) return error;
   }
   return error;
 }
@@ -373,7 +376,8 @@ export function settlePackage(pkgId: number) {
 }
 
 // A package done or failed, with a note for it (lib/events.ts): done, it
-// waits in Ready to organize for a hand; its title (TMDB's, else its
+// waits in Ready to organize for a hand (or with Settings' autoMove goes
+// into the library on its own); its title (TMDB's, else its
 // name), a failure's first line.
 function finish(pkgId: number, status: "done" | "failed", error: string | null = null) {
   setPackageStatus(pkgId, status, error);
@@ -388,6 +392,8 @@ function finish(pkgId: number, status: "done" | "failed", error: string | null =
       mono: true,
       tone: "error",
     });
+  // Imported here, not on top: library-move imports this file.
+  if (status === "done" && getDownloadSettings().autoMove) void import("./library-move").then((m) => m.autoMove(pkgId));
 }
 
 // Fills the free slots from the queue (oldest package first, a package's

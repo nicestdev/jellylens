@@ -20,7 +20,7 @@ a wishlist of what to add next.
 - 🎬 **Library**: your movies and shows as posters, read straight from your disks; search, sort, filter by genre or audio language.
 - 🧩 **Dashboard**: the Queue at a glance, incomplete shows (checked against TMDB), the wishlist, your disks and the last imports.
 - 📝 **Discover and Wishlist**: search TMDB, keep a wishlist per user.
-- 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to) and [WCX](#wcx-and-downloads)'s latest, with WCX mirrors.
+- 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to) and [WCX](#wcx-and-downloads)'s latest and your DLoad uploaders' threads, with WCX mirrors.
 - 🔁 **Migrations**: what your library has that a favorite group or a [DLoad](#configuration) uploader offers too, or better (their BluRay of your WEB).
 - 📊 **Analytics**: your files by audio (German and English), resolution and codec, and release group.
 - 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked.
@@ -125,7 +125,7 @@ Every title needs its own folder named `Name (Year) [tmdbid-N]`, and every episo
 
 ### Organize
 
-Finished downloads wait on the Queue page under *Ready to organize*. Each gets the disk that already has the title; for a new title you pick one.
+Finished downloads wait on the Queue page under *Ready to organize*. Each gets the disk that already has the title; for a new title you pick one. With *Move new downloads to the library* on Settings, they go in on their own: to the disk that has the title, else the one with the most room.
 
 A movie goes to `movies/Name (Year) [tmdbid-N]/`, a show's episodes to `shows/Name (Year) [tmdbid-N]/Season NN/`, named with TMDB's title as TMDB writes it. A disk with a folder for that TMDB id already, whatever it's called, gets the files in that folder. Only videos and subtitles go, not samples, `.nfo` or other extras; a movie's video named with spaces gets the release's name instead.
 

@@ -58,6 +58,7 @@ export async function GET() {
     },
     downloadSlots: getDownloadSettings().slots,
     passwords: getDownloadSettings().passwords,
+    autoMove: getDownloadSettings().autoMove,
     maxDownloadSlots: MAX_DOWNLOAD_SLOTS,
   } satisfies ConfigResponse);
 }

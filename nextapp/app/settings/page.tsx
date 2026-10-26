@@ -134,6 +134,18 @@ export default function SettingsPage() {
     }
   }
 
+  async function setAutoMove(autoMove: boolean) {
+    setError("");
+    const set = (on: boolean) => page.setData((data) => data && { ...data, config: { ...data.config, autoMove: on } });
+    set(autoMove);
+    try {
+      await apiFetch<DownloadsResponse>("/api/downloads", jsonRequest("PATCH", { autoMove }));
+    } catch (e) {
+      set(!autoMove);
+      setError(`Couldn't save setting: ${(e as Error).message}`);
+    }
+  }
+
   // The whole list, saved as it's changed; the page keeps what the server
   // stored (blank and repeated ones dropped).
   async function savePasswords(passwords: string[]) {
@@ -270,6 +282,7 @@ export default function SettingsPage() {
                   <Skeleton className="h-5 w-16" />
                 )}
               </div>
+              <PrefRow title="Move new downloads to the library" checked={config?.autoMove} onChange={setAutoMove} />
             </div>
           </SectionFrame>
 

@@ -1,14 +1,27 @@
 import {
   addDloadThreads,
   dloadUsers,
+  dloadTmdbThreads,
   hasDloadThread,
   renameDloadThread,
+  replaceDloadReleases,
+  saveTitleMatch,
   setSyncedAt,
   syncedAt,
+  unmatchedDloadTitles,
   type DloadThreadRow,
 } from "./store";
+import { fetchTmdbEntry } from "./tmdb";
 import { sleep } from "./async";
-import { fetchSearchPage, fetchThreadImdb, parseThreadTitle, sureTmdbId, tmdbOfImdb, type DloadHit } from "./dload";
+import {
+  fetchSearchPage,
+  fetchThreadImdb,
+  parseThreadTitle,
+  sureTmdbId,
+  tmdbOfImdb,
+  toRelease,
+  type DloadHit,
+} from "./dload";
 import { log } from "./log";
 
 // A sync reads no more than this many pages (20 threads each) per
@@ -73,8 +86,28 @@ export async function syncDload({ tmdbApiKey, language }: { tmdbApiKey: string; 
       if (!res.hits.length || Date.parse(res.hits.at(-1)!.postedAt) < since) break;
     }
   }
+  const groups = new Map(dloadUsers().map((u) => [u.id, u.group]));
+  replaceDloadReleases(dloadTmdbThreads().map((t) => toRelease(t, groups.get(t.userId))));
+  await matchDloadTitles(tmdbApiKey, language);
   setSyncedAt("dload", startedAt);
   return { pages, added, renamed };
+}
+
+// Discover's DLoad titles (dload:movie:949) are matched by their TMDB id
+// already: only TMDB's title, year and poster are asked for. One TMDB
+// doesn't answer for is tried again with the next sync, its tile the
+// thread's name until then.
+async function matchDloadTitles(tmdbApiKey: string, language: string) {
+  if (!tmdbApiKey) return;
+  for (const titleKey of unmatchedDloadTitles()) {
+    const [, type, id] = titleKey.split(":") as [string, "movie" | "tv", string];
+    try {
+      const entry = await fetchTmdbEntry(tmdbApiKey, type, Number(id), language);
+      if (entry) saveTitleMatch(titleKey, "verified", entry, { title: entry.title, year: entry.year });
+    } catch (e) {
+      log.error("match", `Matching ${titleKey} failed`, e);
+    }
+  }
 }
 
 async function resolve(

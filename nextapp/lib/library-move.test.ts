@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { eventsAfter } from "./events";
 import { DOWNLOAD_DIR, LIBRARY_DIR } from "./env";
-import { libraryTargets, moveOf, movePlan, ownedFiles, startMove } from "./library-move";
+import { autoMove, libraryTargets, moveOf, movePlan, ownedFiles, startMove } from "./library-move";
 import { db } from "./db";
 import { addPackage, getPackage, setPackageMedia, setPackageStatus } from "./store";
 
@@ -264,5 +264,43 @@ describe("moving into the library", () => {
       "Gen.V.S01E01.German.720p-OLD.mkv",
       "Gen.V.S01E02.German.1080p-w00t.mkv",
     ]);
+  });
+
+  describe("autoMove", () => {
+    // nvme02 with 2 GB more room than nvme01.
+    const freeOn = () =>
+      vi
+        .spyOn(fs, "statfsSync")
+        .mockImplementation((p) => ({ bavail: String(p).includes("nvme02") ? 3e9 : 1e9, bsize: 1 }) as fs.StatsFs);
+
+    it("moves a new title to the disk with the most room", async () => {
+      const id = vectorPackage();
+      fs.mkdirSync(path.join(LIBRARY_DIR, "nvme02", "movies"), { recursive: true });
+      freeOn();
+      await autoMove(id);
+      await settled();
+      vi.restoreAllMocks();
+      expect(getPackage(id)?.movedTo).toBe(path.join("nvme02", "movies", FOLDER));
+    });
+
+    it("moves to the disk that has the title's folder, however little room it has", async () => {
+      const id = vectorPackage();
+      fs.mkdirSync(path.join(LIBRARY_DIR, "nvme02", "movies"), { recursive: true });
+      fs.mkdirSync(path.join(MOVIES(), FOLDER));
+      freeOn();
+      await autoMove(id);
+      await settled();
+      vi.restoreAllMocks();
+      expect(getPackage(id)?.movedTo).toBe(path.join("nvme01", "movies", FOLDER));
+    });
+
+    it("leaves one the library has already in Ready to organize", async () => {
+      const id = vectorPackage();
+      fs.mkdirSync(path.join(MOVIES(), FOLDER));
+      fs.writeFileSync(path.join(MOVIES(), FOLDER, "Maze.Runner.2014.German.1080p-OLD.mkv"), "old");
+      await autoMove(id);
+      expect(moveOf(id)).toBeNull();
+      expect(getPackage(id)?.movedTo).toBeNull();
+    });
   });
 });

@@ -38,6 +38,7 @@ export function mockConfig(): ConfigResponse {
     downloadSlots: 3,
     maxDownloadSlots: 10,
     passwords: ["serienjunkies.org", "hd-area.org"],
+    autoMove: false,
   };
 }
 

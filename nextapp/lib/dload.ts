@@ -3,6 +3,8 @@ import { sleep } from "./async";
 import { log } from "./log";
 import { findTmdbByImdb, searchTmdbTitle } from "./tmdb";
 import { withUmlauts } from "./title-match";
+import { dottedName } from "./release-name";
+import { sceneQuality, type Release } from "./xrel";
 
 // DLoad (DLOAD_URL, a XenForo forum): the threads an uploader opened
 // (dload_users, by forum user id), read from the forum's search as a
@@ -76,6 +78,26 @@ async function getPage(url: string, referer: string): Promise<{ html: string; ur
 }
 
 export const threadUrl = (id: number) => `${BASE}/threads/${id}/`;
+
+// A thread as one of Discover's releases, of its uploader's group: all of a
+// TMDB title's threads are one title (dload:movie:949), its match known
+// already (matchDloadTitles in lib/sync-dload.ts).
+export function toRelease(
+  t: { id: number; title: string; postedAt: string; type: "movie" | "tv"; tmdbId: number },
+  group: string | undefined,
+): Release {
+  const name = dottedName(t.title);
+  return {
+    id: "dload:" + t.id,
+    name,
+    link: threadUrl(t.id),
+    type: t.type,
+    quality: sceneQuality(name),
+    publishedAt: Math.floor(Date.parse(t.postedAt) / 1000),
+    titleKey: `dload:${t.type}:${t.tmdbId}`,
+    group,
+  };
+}
 
 // A hit in the search's list: its thread's id and title as it is now (the
 // release name with spaces: "Tulsa King 2022 S04 GERMAN AAC 1080p WEB x265

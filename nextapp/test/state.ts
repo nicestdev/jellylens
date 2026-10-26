@@ -12,6 +12,7 @@ const GLOBALS = [
   "__jellylensDload",
   "__jellylensDownloader",
   "__jellylensMoves",
+  "__organizePage",
   "__jellylensEvents",
   "__ddownloadCookies",
   "__ddownloadSignIn",

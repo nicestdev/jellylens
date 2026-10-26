@@ -76,7 +76,7 @@ export function markGroupSynced(id: string, at: string) {
 export function releaseCounts() {
   return one<{ groups: number; releases: number; wcx: number }>(
     `SELECT (SELECT count(*) FROM release_groups) AS groups, (SELECT count(*) FROM releases WHERE group_id IS NOT NULL) AS releases,
-            (SELECT count(*) FROM releases WHERE group_id IS NULL) AS wcx`,
+            (SELECT count(*) FROM releases WHERE id LIKE 'wcx:%') AS wcx`,
   )!;
 }
 
@@ -224,7 +224,7 @@ export function pendingTitles(only?: string): PendingTitle[] {
   const rows = all<{ titleKey: string; type: string; imdbId: string | null; names: string }>(
     `SELECT r.title_key AS titleKey, max(r.type) AS type, max(r.imdb_id) AS imdbId, json_group_array(r.name) AS names
        FROM releases r LEFT JOIN title_matches t ON t.title_key = r.title_key
-      WHERE ${shownReleases()} AND (${only ? "r.title_key = ?" : "t.title_key IS NULL OR (t.status = 'unverified' AND t.checked_at < ?)"})
+      WHERE ${shownReleases()} AND (${only ? "r.title_key = ?" : "r.id NOT LIKE 'dload:%' AND (t.title_key IS NULL OR (t.status = 'unverified' AND t.checked_at < ?))"})
       GROUP BY r.title_key`,
     only ?? monthAgo(),
   );
@@ -321,7 +321,7 @@ export function matchInfo(titleKey: string): MatchInfo {
 
 // ---- Discover's releases
 
-export type TitleFilters = { words: string[]; type: string[]; group: string[] };
+export type TitleFilters = { words: string[]; type: string[]; group: string[]; library: string[] };
 
 // One tile per TMDB entry: xREL sometimes keeps two titles for one movie
 // (old SD rips and later releases, named a little differently), and those
@@ -357,8 +357,12 @@ const FROM = `FROM releases r
   LEFT JOIN release_groups g ON g.id = r.group_id
   LEFT JOIN title_matches t ON t.title_key = r.title_key`;
 
+// A tile the library has: its TMDB entry is a library movie or show.
+const OWNED = `EXISTS (SELECT 1 FROM movies m WHERE t.media_type = 'movie' AND m.tmdb_id = t.tmdb_id
+  UNION ALL SELECT 1 FROM shows s WHERE t.media_type = 'tv' AND s.tmdb_id = t.tmdb_id)`;
+
 // Every word must be in a release name or the checked titles; any of the
-// types (movie, tv) and any of the groups.
+// types (movie, tv), any of the groups, and owned or not (both: either).
 function where(f: TitleFilters): { sql: string; params: unknown[] } {
   const clauses: string[] = [shownReleases()];
   const params: unknown[] = [];
@@ -374,6 +378,7 @@ function where(f: TitleFilters): { sql: string; params: unknown[] } {
     clauses.push(`${GROUP} IN (${f.group.map(() => "?").join(", ")})`);
     params.push(...f.group);
   }
+  if (f.library.length === 1) clauses.push(f.library[0] === "owned" ? OWNED : `NOT ${OWNED}`);
   return { sql: "WHERE " + clauses.join(" AND "), params };
 }
 
@@ -426,12 +431,12 @@ function countTitles(w: { sql: string; params: unknown[] }): number {
 }
 
 // Every tile, for "42 of 11314 titles".
-export const tileCount = () => countTitles(where({ words: [], type: [], group: [] }));
+export const tileCount = () => countTitles(where({ words: [], type: [], group: [], library: [] }));
 
 // What the filter menu offers, over everything so it doesn't shrink as you
 // narrow it down: the favorite groups first, then every other group a
 // release is from (WCX's), each A→Z. favorites: how many come first.
-export type ReleaseFacets = Record<"type" | "group", string[]>;
+export type ReleaseFacets = Record<"type" | "group" | "library", string[]>;
 
 export function releaseFacets(): ReleaseFacets & { favorites: number } {
   const groups = all<{ name: string; favorite: number }>(
@@ -446,6 +451,7 @@ export function releaseFacets(): ReleaseFacets & { favorites: number } {
   return {
     type: types.map((t) => t.type),
     group: groups.map((g) => g.name),
+    library: ["owned", "missing"],
     favorites: groups.filter((g) => g.favorite).length,
   };
 }

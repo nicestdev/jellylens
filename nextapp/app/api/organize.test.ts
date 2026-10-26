@@ -92,6 +92,23 @@ describe("/api/organize", () => {
     expect(data.moved.map((m) => m.id)).toEqual([id]);
   });
 
+  it("reads the library at most every 10 s while moves are queued, their progress every time", async () => {
+    const id = heat();
+    const move = { target: MOVIES(), replace: undefined, copied: 0, total: 5, speed: 0, running: false, error: "x" };
+    Object.assign(globalThis, { __jellylensMoves: { moves: new Map([[id, move]]), chain: Promise.resolve() } });
+    expect((await page()).items[0].owned).toEqual([]);
+    // The library has it now, the move got further: only the progress shows.
+    fs.mkdirSync(path.join(MOVIES(), FOLDER));
+    fs.writeFileSync(path.join(MOVIES(), FOLDER, "Heat.1995.mkv"), "old");
+    move.copied = 3;
+    let data = await page();
+    expect(data.items[0]).toMatchObject({ owned: [], move: { done: 3 } });
+    // A package more: read again.
+    heat();
+    data = await page();
+    expect(data.items[0].owned).toHaveLength(1);
+  });
+
   it("lists a finished package with where it goes, and the disks", async () => {
     const id = heat();
     const data = await page();

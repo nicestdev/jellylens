@@ -100,7 +100,7 @@ export async function GET() {
 // order they're tried (blank and repeated ones dropped).
 export async function PATCH(req: Request) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const { paused, slots, passwords } = body ?? {};
+  const { paused, slots, passwords, autoMove } = body ?? {};
   const validSlots = Number.isInteger(slots) && (slots as number) >= 1 && (slots as number) <= MAX_DOWNLOAD_SLOTS;
   const validPasswords =
     Array.isArray(passwords) &&
@@ -111,11 +111,12 @@ export async function PATCH(req: Request) {
     (paused !== undefined && typeof paused !== "boolean") ||
     (slots !== undefined && !validSlots) ||
     (passwords !== undefined && !validPasswords) ||
-    (paused === undefined && slots === undefined && passwords === undefined)
+    (autoMove !== undefined && typeof autoMove !== "boolean") ||
+    (paused === undefined && slots === undefined && passwords === undefined && autoMove === undefined)
   ) {
     return Response.json(
       {
-        error: `Expected { paused?: boolean, slots?: 1–${MAX_DOWNLOAD_SLOTS}, passwords?: string[] }.`,
+        error: `Expected { paused?: boolean, slots?: 1–${MAX_DOWNLOAD_SLOTS}, passwords?: string[], autoMove?: boolean }.`,
       },
       { status: 400 },
     );
@@ -128,6 +129,10 @@ export async function PATCH(req: Request) {
   if (slots !== undefined) {
     setDownloadSettings({ slots: slots as number });
     kickDownloads();
+  }
+  if (typeof autoMove === "boolean") {
+    log.info("settings", `Moving new downloads on their own ${autoMove ? "on" : "off"}`);
+    setDownloadSettings({ autoMove });
   }
   if (typeof paused === "boolean") pauseAllDownloads(paused);
   return Response.json((await downloads()) satisfies DownloadsResponse);

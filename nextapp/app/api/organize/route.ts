@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { OrganizeDisk, OrganizeItem, OrganizeResponse } from "@/lib/api-types";
 import { LIBRARY_DIR } from "@/lib/env";
-import { libraryTargets, moveOf, movePlan, ownedFiles, startMove } from "@/lib/library-move";
+import { libraryTargets, moveIds, moveOf, movePlan, ownedFiles, startMove } from "@/lib/library-move";
 import { deletePackage, getPackage, listPackages, type DownloadPackage } from "@/lib/store";
 import { log } from "@/lib/log";
 
@@ -96,9 +96,29 @@ async function organizePage(): Promise<OrganizeResponse> {
   };
 }
 
+// While moves are queued the Queue asks every second, and reading the
+// library over sshfs shares the line with the copy (a move at half speed):
+// the folders are read at most every 10 s then, the moves' progress every
+// time, and at once when a move or package comes, goes or ends.
+const globalForOrganize = globalThis as unknown as {
+  __organizePage?: { key: string; at: number; page: OrganizeResponse };
+};
+
+async function pollPage(): Promise<OrganizeResponse> {
+  const moving = moveIds();
+  if (!moving.length) return organizePage();
+  const key = moving.join() + "|" + listPackages().map((p) => `${p.id}:${p.status}:${p.movedTo ?? ""}`);
+  const kept = globalForOrganize.__organizePage;
+  const page =
+    kept && kept.key === key && Date.now() - kept.at < 10_000
+      ? kept.page
+      : (globalForOrganize.__organizePage = { key, at: Date.now(), page: await organizePage() }).page;
+  return { ...page, items: page.items.map((i) => ({ ...i, move: moveOf(i.id) })) };
+}
+
 // GET /api/organize — the Queue's Ready to organize and Done; admin only (proxy.ts).
 export async function GET() {
-  return Response.json((await organizePage()) satisfies OrganizeResponse);
+  return Response.json((await pollPage()) satisfies OrganizeResponse);
 }
 
 // POST { id, target } — moves a finished package into the library folder

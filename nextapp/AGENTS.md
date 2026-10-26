@@ -40,7 +40,8 @@ move into the library.
 - Config is env vars only (`lib/env.ts`, read-only on the Settings page),
   except display options (`preferences` table, `PATCH /api/preferences`),
   the favorite release groups (also `P2P_GROUPS`/`SCENE_GROUPS`, see
-  Releases), and the download queue's slots and archive passwords (`download_settings`, `PATCH /api/downloads`).
+  Releases), and the download queue's slots, archive passwords and whether a finished
+  package moves on its own (`download_settings`, `PATCH /api/downloads`).
 
 ## Sync stages
 
@@ -170,9 +171,16 @@ xREL's own title.
 Discover shows everyone the releases as one tile per TMDB entry (key `movie:949`;
 `app/discover/page.tsx`, its request and filter menus in
 `app/discover/releases.ts`), since one movie can end up as several titles; a title matched to nothing is a tile of its
-own (key: its `title_key`). `GET /api/releases` searches, filters (by
-type, movie or show, and by group: a favorite's name for xREL's, the
-name's own for WCX's, `GROUP` in `lib/store/releases.ts`), sorts and pages
+own (key: its `title_key`). The DLoad uploaders' threads with a TMDB
+title are releases there too, of their uploader's group (`toRelease` in
+`lib/dload.ts`, id `dload:<id>`, a title per TMDB entry, `dload:movie:949`),
+written anew each DLoad sync (`replaceDloadReleases`) and matched by that
+TMDB id, only TMDB's title, year and poster asked for (`matchDloadTitles`
+in `lib/sync-dload.ts`); a title page lists them as threads (see below),
+not as releases. `GET /api/releases` searches, filters (by
+type, movie or show, by group: a favorite's name for xREL's, the
+name's own for WCX's, `GROUP` in `lib/store/releases.ts`, and by whether
+the library has the tile's TMDB entry, Library), sorts and pages
 tiles in SQL, nothing cached; a tile counts a release xREL and WCX both
 have once (by name). The filter
 menu lists its values without counts, which would mean another scan of
@@ -376,7 +384,7 @@ changes; the heading counts them all.
 Admins only (`app/queue/`, `/api/downloads`, `/api/organize`): a package
 from when it comes in to when it's in the library, on one page. It's
 fetched from the hosters and extracted into `DOWNLOAD_DIR`, then moved by
-hand into its title's folder on a disk of the library.
+hand, or on its own (see below), into its title's folder on a disk of the library.
 
 Packages come from DLC
 containers (decrypted through JDownloader's key service, `lib/dlc.ts`),
@@ -409,7 +417,8 @@ the container: `./downloads` next to the compose file (a bind mount), or
 the host folder `DOWNLOADS_PATH` names. The download queue (`lib/downloader.ts`)
 runs 1–10 files at a time and extracts each archive set with 7-Zip as soon
 as its parts are in, trying the archive passwords set on Settings in turn,
-then `ARCHIVE_PASSWORDS`. An archive set that comes out of one (FuN packs
+then `ARCHIVE_PASSWORDS` (a RAR with encrypted headers now and then says
+"Headers Error" for a wrong one, which tries the next too). An archive set that comes out of one (FuN packs
 the release's RARs into RARs named after a hoster) is extracted too, one
 level deep, its parts deleted; if that fails, the package fails with the
 outer parts kept, so Retry starts over. A file whose connection drops mid-way
@@ -422,7 +431,7 @@ back among the new ones. How many files come in at once (Options' Parallel
 downloads) and the archive passwords (`app/settings/archive-passwords.tsx`)
 are set on Settings.
 
-A finished package goes to its title's folder, by hand. `LIBRARY_DIR` holds one folder per disk, each with
+A finished package goes to its title's folder. `LIBRARY_DIR` holds one folder per disk, each with
 `movies/` and `shows/` (`/library/nvme01/movies`); a single disk is just
 one such folder. The folder is "Name (Year)
 [tmdbid-N]" with TMDB's German title as TMDB writes it (`libraryFolderName`
@@ -439,9 +448,15 @@ a new title's is always picked by hand ("Select" in peach until then); a
 move is started by hand, by its row or Move all (see below); a move is
 refused when what's queued for that disk leaves too little room
 (`startMove`; a Replace too, since the new files are in before the old go).
+With Settings' Options "Move new downloads to the library" on, a package
+just done is moved on its own (`autoMove`, from `finish` in
+`lib/downloader.ts`): to the disk with the title's folder (a show stays on
+one disk), else to the one with the most room; one the library has
+already, or that fits nowhere, stays in Ready to organize, why logged.
 
 A move (`lib/library-move.ts`, one at a time, the rest wait) copies every
-file as "<name>.part", flushed to the disk (fsync), and renames them only
+file as "<name>.part", flushed to the disk (fsync; every 128 MB on the way
+too, except over sshfs, where a flush holds up the writes), and renames them only
 if every size matches (no read-back: it came mostly from the page cache
 and took as long as the copy); then it marks the package moved (`moved_to`,
 `moved_at`, `moved_files`: which file went where), and only then deletes
@@ -470,7 +485,9 @@ what came in counts as owned right away.
 The page (`app/queue/page.tsx`) loads the packages (`/api/downloads`) and
 what's to move (`/api/organize`, slow over sshfs: it reads the library's
 folders) on their own: the packages every second while one downloads or
-extracts, what's to move while a move runs, each every 10 s otherwise, the second again when how many are finished changes. Up to four stats
+extracts, what's to move while a move runs (`GET /api/organize` then reads
+the library's folders at most every 10 s, sshfs sharing the line with the
+copy, and the moves' progress every time), each every 10 s otherwise, the second again when how many are finished changes. Up to four stats
 on top (`StatStrip`: on a phone one card across the width, from sm up a card
 each, the columns following the width with the rows evenly filled;
 `queueLine` in `app/queue/logic.ts`): Speed, Left (what's still to

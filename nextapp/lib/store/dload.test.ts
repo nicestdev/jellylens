@@ -1,13 +1,18 @@
 import { expect, it } from "vitest";
+import { toRelease } from "../dload";
 import {
   addDloadThreads,
   addDloadUser,
   dloadThreadsOf,
+  dloadTmdbThreads,
   dloadUsers,
   hasDloadThread,
   removeDloadUser,
   renameDloadThread,
+  replaceDloadReleases,
+  unmatchedDloadTitles,
 } from "./dload";
+import { queryTitles, saveTitleMatch } from "./releases";
 
 const thread = (id: number, userId: number, title: string) => ({
   id,
@@ -47,4 +52,26 @@ it("renames a thread only when its title changed, and drops an uploader's thread
   ]);
   removeDloadUser(1);
   expect(hasDloadThread(1)).toBe(false);
+});
+
+it("puts the threads on Discover as their group's releases, one tile with the TMDB title's", () => {
+  addDloadUser(1, "anna");
+  addDloadThreads([thread(1, 1, "Heat 1995 GERMAN 1080p - w00t"), { ...thread(2, 1, "Junk"), type: null }]);
+  const sync = () => replaceDloadReleases(dloadTmdbThreads().map((t) => toRelease(t, "w00t")));
+  sync();
+  expect(unmatchedDloadTitles()).toEqual(["dload:movie:949"]);
+  saveTitleMatch(
+    "dload:movie:949",
+    "verified",
+    { mediaType: "movie", tmdbId: 949, title: "Heat", originalTitle: "Heat", year: 1995, posterPath: null },
+    { title: "Heat", year: 1995 },
+  );
+  const w00t = () => queryTitles({ words: [], type: [], group: ["w00t"], library: [] }, "date", false, 0, 10).items;
+  expect(w00t()).toMatchObject([{ key: "movie:949", title: "Heat", groups: ["w00t"], releases: 1 }]);
+  // Written anew: a renamed thread replaces its old name.
+  renameDloadThread(1, "Heat 1995 GERMAN 2160p - w00t", []);
+  sync();
+  expect(w00t()).toMatchObject([{ releases: 1, qualities: ["HD-2160p"] }]);
+  removeDloadUser(1);
+  expect(w00t()).toEqual([]);
 });

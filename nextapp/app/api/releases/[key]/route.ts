@@ -89,12 +89,13 @@ async function detail(key: string, resolutions: string[] = []): Promise<ReleaseD
   // On a TMDB entry's page WCX's releases come live from its page
   // (app/api/wcx-releases), so the stored ones are left out there, and a
   // title with only those with them; elsewhere they're all there is.
+  // DLoad's copies are Discover's only: the threads come as dload below.
   const live = TMDB_TILE.test(key);
   const byTitle = Map.groupBy(tileTitleKeys(key), xrelTitle);
   const titles = [...byTitle.values()].flatMap((keys) => {
     const releases = keys
       .flatMap(titleReleases)
-      .filter((r) => !live || !r.id.startsWith("wcx:"))
+      .filter((r) => !r.id.startsWith("dload:") && (!live || !r.id.startsWith("wcx:")))
       .sort((a, b) => b.publishedAt - a.publishedAt);
     if (!releases.length) return [];
     const items = groupEpisodes(releases);
