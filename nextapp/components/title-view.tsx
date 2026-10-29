@@ -10,19 +10,23 @@ import { FacetMenu, FilterChips, type Facet } from "@/components/filter-menu";
 import { isPhone } from "@/components/page-tools";
 import { SearchInput } from "@/components/search-input";
 import { LinkMirror, MatchMenu, ReleaseTable, useMirrorCheck } from "@/components/title-releases";
-import { PosterWish, type Result } from "@/components/request-tiles";
+import { PosterWish, RequestAction, itemKey, metaLine, useRequests, type Result } from "@/components/request-tiles";
+import { PosterCard } from "@/components/poster-card";
+import { SectionFrame } from "@/components/section-frame";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IGNORES_CHANGED, RELEASES_CHANGED, apiFetch, tmdbImage, tmdbUrl, jsonRequest } from "@/lib/api-client";
 import type {
   IgnoredResponse,
   MatchInfo,
+  CollectionResponse,
   ReleaseDetail,
   WcxRelease,
   WcxReleasesResponse,
   WcxSearchResponse,
 } from "@/lib/api-types";
 import { plural } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { matchesWords } from "@/lib/text";
 import { NO_GROUP, matchNote } from "@/lib/release-labels";
 import { titlePath } from "@/lib/title-path";
@@ -410,11 +414,15 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
         }
       : null;
   const tmdb = head?.tmdbId && head.mediaType ? tmdbUrl(head.mediaType, head.tmdbId) : undefined;
+  // Of any quality, however few come down.
+  const hasFun = Object.values(current?.resolutions ?? {}).some((ns) => ns.some((n) => /-fun$/i.test(n)));
   const linkQuery = tmdbId && head ? "?" + new URLSearchParams({ tmdbId, title: head.title }) : null;
   const links = [
     tmdb ? { label: "TMDB", href: tmdb } : null,
     linkQuery ? { label: "xREL", href: "/api/xrel-link" + linkQuery } : null,
     wcxUrl ? { label: "WCX", href: wcxUrl } : null,
+    // A FuN release's row links FunXD; without one, its search is up here.
+    linkQuery && !hasFun ? { label: "FunXD", href: "/api/funxd-link" + linkQuery } : null,
   ].filter((l): l is { label: string; href: string } => l !== null);
 
   const matchMenu = head ? (
@@ -625,6 +633,7 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
           </section>
         </>
       )}
+      {head?.mediaType === "movie" && head.tmdbId ? <Collection key={tileKey} tmdbId={head.tmdbId} /> : null}
     </main>
   );
 
@@ -642,5 +651,52 @@ export function TitleView({ tileKey, overlay = false }: { tileKey: string; overl
       {page}
       <Footer />
     </div>
+  );
+}
+
+// A movie's TMDB collection under its releases, framed like them (as the
+// Dashboard's Last imports), asked for on its own and only shown when there
+// is one; folded to start with, its posters load once it's opened. Every
+// part as on Discover, this one dimmed and not a link, the others opening
+// their own title page (admin only).
+function Collection({ tmdbId }: { tmdbId: number }) {
+  const r = useRequests();
+  const [collection, setCollection] = useState<CollectionResponse["collection"]>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<CollectionResponse>(`/api/releases/movie:${tmdbId}/collection`)
+      .then((res) => !cancelled && setCollection(res.collection))
+      .catch(() => {}); // nothing to show then, as without one
+    return () => {
+      cancelled = true;
+    };
+  }, [tmdbId]);
+  if (!collection) return null;
+  const { name, items } = collection;
+  return (
+    <SectionFrame
+      title={name}
+      count={plural(items.length, "movie")}
+      open={open}
+      onToggle={() => setOpen(!open)}
+      className="mt-4 md:mt-6"
+    >
+      <div className="-mx-3 grid grid-cols-3 gap-3 border-t border-row p-3 sm:grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))]">
+        {items.map((item) => (
+          <div key={itemKey(item)} className={cn("min-w-0", item.tmdbId === tmdbId && "opacity-50")}>
+            <PosterCard
+              href={item.tmdbId === tmdbId ? undefined : titlePath(itemKey(item))}
+              imageSrc={tmdbImage(item.posterPath, "w185")}
+              title={item.title}
+              meta={metaLine(item, false)}
+              action={
+                <RequestAction item={item} requested={r.requestedKeys.has(itemKey(item))} ctx={{ ...r, admin: true }} />
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </SectionFrame>
   );
 }

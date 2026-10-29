@@ -468,6 +468,7 @@ export function mockDownloads(): DownloadsResponse {
           ),
         },
       ),
+      // TMDB had nothing for its name: No TMDB match, Set TMDB first in its ⋯.
       pkg(6, UNMATCHED, "pending", null, parts(UNMATCHED, 2, 2 * GB, "queued")),
       // Needs attention, failed: a part gone and another that failed for
       // another reason (+1).

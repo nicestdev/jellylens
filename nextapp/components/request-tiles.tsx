@@ -36,10 +36,11 @@ function shortDate(iso: string): string {
 }
 
 // Year, then the next release date if one is coming (e.g. "Digital 28 Sep"),
-// or else Movie/Show.
-function metaLine(item: Result): (string | number | null | undefined)[] {
+// or else Movie/Show (unless kind is false: a title page's collection,
+// movies all).
+export function metaLine(item: Result, kind = true): (string | number | null | undefined)[] {
   const next = item.availability?.next;
-  return [item.year, next ? `${next.kind} ${shortDate(next.date)}` : TYPE_LABEL[item.mediaType]];
+  return [item.year, next ? `${next.kind} ${shortDate(next.date)}` : kind ? TYPE_LABEL[item.mediaType] : null];
 }
 
 // A poster's In library mark, where the heart would be (what's owned can't be

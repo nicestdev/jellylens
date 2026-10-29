@@ -70,6 +70,8 @@ describe("files and seasons", () => {
     expect(seasonOf("Show.S02E03.mkv", "Show.S01.German")).toBe(2);
     expect(seasonOf("Folge 3.mkv", "Show.S01.German")).toBe(1);
     expect(seasonOf("Folge 3.mkv", "Show.German")).toBeNull();
+    expect(seasonOf("Show.2019.German.mkv", "Show.S01-S06.COMPLETE.German")).toBeNull();
+    expect(seasonOf("Show.S03E01.mkv", "Show.S01-S06.COMPLETE.German")).toBe(3);
     expect(seasonFolder(3)).toBe("Season 03");
   });
 });

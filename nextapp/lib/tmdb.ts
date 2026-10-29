@@ -312,3 +312,20 @@ export async function fetchTmdbTitles(apiKey: string, mediaType: "movie" | "tv",
   const translated = (body.translations?.translations ?? []).map((t) => t.data?.title || t.data?.name || "");
   return [...new Set([...alternative.map((t) => t.title), ...translated].filter(Boolean))];
 }
+
+// The collection a movie belongs to ("Spider-Man (Animated) Collection"),
+// its parts as a search would list them; null when it has none (or TMDB
+// doesn't know the movie). For the title page.
+export async function fetchMovieCollection(
+  apiKey: string,
+  tmdbId: number,
+  language: string,
+): Promise<{ name: string; parts: TmdbResult[] } | null> {
+  const movie = await getOrNull<{ belongs_to_collection?: { id: number } | null }>(apiKey, "/movie/" + tmdbId);
+  const id = movie?.belongs_to_collection?.id;
+  if (!id) return null;
+  const body = await getOrNull<{ name: string; parts?: RawResult[] }>(apiKey, "/collection/" + id, { language });
+  if (!body) return null;
+  const parts = (body.parts ?? []).map((p) => toResult({ ...p, media_type: "movie" }));
+  return { name: body.name, parts: parts.filter((r): r is TmdbResult => r !== null) };
+}

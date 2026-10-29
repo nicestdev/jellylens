@@ -8,35 +8,59 @@ import { Dot, shown } from "@/components/dot";
 // inside, an action on the right of it, its table or list edge to edge
 // (DataTable flat, or -mx-3 for a list or an AddRow), without a line on top
 // of the first. count: how many it holds, after the title and lighter
-// ("Running · 2").
+// ("Running · 2"). open: the heading folds it away and back, as
+// TableFrame's (a title page's collection).
 export function SectionFrame({
   title,
   count,
   action,
+  open,
+  onToggle,
   children,
   className,
 }: {
   title: string;
   count?: ReactNode | ReactNode[];
   action?: ReactNode;
+  open?: boolean;
+  onToggle?: () => void;
   children: ReactNode;
   className?: string;
 }) {
+  const label = (
+    <>
+      {title}
+      {count !== undefined ? (
+        <span className="text-[0.8125rem] font-normal text-muted-foreground">
+          {" "}
+          <Dot /> {shown(count)}
+        </span>
+      ) : null}
+    </>
+  );
   return (
     <section aria-label={title} className={cn("min-w-0 overflow-hidden rounded-lg border bg-card", className)}>
-      <div className="flex min-h-9 items-center gap-4 border-b px-3">
+      <div className={cn("flex min-h-9 items-center gap-4 px-3", open !== false && "border-b")}>
         <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-          {title}
-          {count !== undefined ? (
-            <span className="text-[0.8125rem] font-normal text-muted-foreground">
-              {" "}
-              <Dot /> {shown(count)}
-            </span>
-          ) : null}
+          {onToggle ? (
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={onToggle}
+              className="flex w-fit cursor-pointer items-center gap-1 outline-none"
+            >
+              <ChevronRight
+                className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-90")}
+              />
+              <span>{label}</span>
+            </button>
+          ) : (
+            label
+          )}
         </h2>
         {action}
       </div>
-      <div className="px-3 [&>*:first-child]:border-t-0">{children}</div>
+      {open === false ? null : <div className="px-3 [&>*:first-child]:border-t-0">{children}</div>}
     </section>
   );
 }

@@ -132,6 +132,9 @@ export type ReleaseHead = {
   aired: Record<number, SeasonAiring> | null; // a show's aired (and known) episodes per season, TMDB's
 };
 export type { LibraryCopy, SeasonAiring };
+// GET /api/releases/movie:<id>/collection: a movie's TMDB collection, every
+// part, their titles without what most of them share; null without one.
+export type CollectionResponse = { collection: { name: string; items: DiscoverItem[] } | null };
 // resolutions: every quality the tile's releases have, with their names (all of them, however `?resolution=` narrows `titles`).
 // dload: the DLoad uploaders' threads of the title (a TMDB entry's), its
 // name as a release's, its uploader's group, its page, when it was opened

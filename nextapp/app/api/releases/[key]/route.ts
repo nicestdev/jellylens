@@ -75,7 +75,12 @@ async function headOf(key: string, titles: ReleaseDetail["titles"]): Promise<Rel
   const copies =
     base.tmdbId && base.mediaType ? libraryCopies(base.mediaType === "movie" ? "movie" : "episode", base.tmdbId) : [];
   const aired = base.mediaType === "tv" && base.tmdbId ? await airedOf(base.tmdbId) : null;
-  return { ...base, library: ref ? { ...ref, posterPath: entry?.posterPath ?? null } : null, copies, aired };
+  return {
+    ...base,
+    library: ref ? { ...ref, posterPath: entry?.posterPath ?? null } : null,
+    copies,
+    aired,
+  };
 }
 
 // A movie's xREL title split by the year in its releases' names ("e1~2025",

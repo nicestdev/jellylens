@@ -29,6 +29,7 @@ const GLOBALS = [
   "__hideCx",
   "__tmdbPosterTries",
   "__showAiring",
+  "__movieCollection",
   "__jellylensPageTools",
 ];
 

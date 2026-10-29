@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { json, mockFetch } from "@/test/http";
 import { addPackage, listFiles, listPackages, setPackageMedia, updateFile } from "./store";
-import { RECHECK_MS, checkPendingFiles, matchName, matchPendingPackages, onlineOf } from "./download-match";
+import {
+  RECHECK_MS,
+  checkPendingFiles,
+  matchName,
+  matchPendingPackages,
+  mediaOfTmdb,
+  onlineOf,
+} from "./download-match";
 
 // What runs in the background, waited for.
 const g = globalThis as unknown as {
@@ -91,6 +98,40 @@ describe("matchName", () => {
     // Nothing fits anywhere: the name's own search's first hit within a year, not one two years off.
     tmdb({ "Cars 1": [twoCars, knockOff] });
     expect(await matchName("Cars.1.2006.German.DL.AC3.1080p.BluRay.x265-FuN")).toMatchObject({ tmdbId: 7 });
+  });
+
+  it("finds a sequel TMDB knows by another name as its first part's collection's part", async () => {
+    const first = { id: 466282, title: "To All the Boys I've Loved Before", release_date: "2018-08-17" };
+    const parts = [
+      { id: 614409, title: "To All the Boys: Always and Forever", release_date: "2021-02-12", poster_path: "/3.jpg" },
+      { ...first, poster_path: "/1.jpg" },
+      {
+        id: 565426,
+        title: "To All the Boys: P.S. I Still Love You",
+        release_date: "2020-02-12",
+        poster_path: "/2.jpg",
+      },
+    ];
+    const fetch = mockFetch((url) => {
+      if (url.pathname === "/3/search/movie")
+        return json({ results: url.searchParams.get("query") === "To All the Boys Ive Loved Before" ? [first] : [] });
+      if (url.pathname === "/3/movie/466282") return json({ belongs_to_collection: { id: 1 } });
+      if (url.pathname === "/3/collection/1") return json({ name: "To All the Boys", parts });
+    });
+    const name = "To.All.the.Boys.Ive.Loved.Before.2.2020.German.AC3.DL.1080p.WebRip.x265-FuN - funxd.site";
+    expect(await matchName(name)).toEqual({
+      type: "movie",
+      tmdbId: 565426,
+      title: "To All the Boys: P.S. I Still Love You",
+      year: 2020,
+      posterPath: "/2.jpg",
+    });
+    // A part that isn't within a year of the name's: not that one.
+    expect(await matchName("To.All.the.Boys.Ive.Loved.Before.3.2015.German.1080p.WEB.x264-GRP")).toBeNull();
+    // A show's number is no sequel's.
+    fetch.mockClear();
+    mockFetch((url) => (url.pathname === "/3/search/tv" ? json({ results: [] }) : undefined));
+    expect(await matchName("Show.2.S01.German.1080p.WEB.x264-GRP")).toBeNull();
   });
 
   it("takes only a hit that fits from the search with umlauts", async () => {
@@ -199,5 +240,29 @@ describe("checkPendingFiles", () => {
     checkPendingFiles();
     await settled();
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("mediaOfTmdb", () => {
+  it("takes a TMDB page's link, kind:id, or a bare id as the package's kind", async () => {
+    const fetch = mockFetch((url) => {
+      const m = url.pathname.match(/^\/3\/(movie|tv)\/(\d+)$/);
+      if (m) return json({ id: Number(m[2]), title: "Heat", name: "Silo", release_date: "1995-12-15" });
+    });
+    expect(await mediaOfTmdb("https://www.themoviedb.org/movie/949-heat?language=de", "x")).toEqual({
+      type: "movie",
+      tmdbId: 949,
+      title: "Heat",
+      year: 1995,
+      posterPath: null,
+    });
+    expect(await mediaOfTmdb("tv:125988", "x")).toMatchObject({ type: "tv", tmdbId: 125988 });
+    expect(await mediaOfTmdb(" 125988 ", "Silo.S01.German.1080p.WEB.x264-GRP")).toMatchObject({ type: "tv" });
+    expect(await mediaOfTmdb("949", "Heat.1995.German.1080p.BluRay.x264-GRP")).toMatchObject({ type: "movie" });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(await mediaOfTmdb("Heat", "x")).toBeNull();
+    // One TMDB doesn't have.
+    mockFetch(() => json({}, { status: 404 }));
+    expect(await mediaOfTmdb("movie:1", "x")).toBeNull();
   });
 });

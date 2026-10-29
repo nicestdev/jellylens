@@ -6,6 +6,7 @@ import { json, mockFetch } from "@/test/http";
 import {
   archiveSets,
   kickDownloads,
+  NETWORK_RETRY_MS,
   packageDir,
   packageOutputs,
   packagePath,
@@ -342,6 +343,38 @@ describe("kickDownloads", () => {
     expect(listFiles(id)[0].received).toBe(3);
   });
 
+  describe("out of reach before the hoster answers", () => {
+    const pauses = [...NETWORK_RETRY_MS];
+    const unreachable = () => {
+      throw new TypeError("fetch failed", {
+        cause: Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }),
+      });
+    };
+    afterEach(() => NETWORK_RETRY_MS.splice(0, NETWORK_RETRY_MS.length, ...pauses));
+
+    it("tries again after a pause", async () => {
+      NETWORK_RETRY_MS.splice(0, NETWORK_RETRY_MS.length, 0, 0);
+      let tries = 0;
+      serve(() => (++tries === 1 ? unreachable() : new Response("hi")));
+      const id = queued("Heat.1995.mkv");
+      kickDownloads();
+      await settled(id);
+      expect(tries).toBe(2);
+      expect(listFiles(id)[0]).toMatchObject({ status: "done", received: 2 });
+    });
+
+    it("fails the file once every try did, saying why", async () => {
+      NETWORK_RETRY_MS.splice(0, NETWORK_RETRY_MS.length, 0, 0);
+      let tries = 0;
+      serve(() => (tries++, unreachable()));
+      const id = queued("Heat.1995.mkv");
+      kickDownloads();
+      await settled(id);
+      expect(tries).toBe(3);
+      expect(listFiles(id)[0]).toMatchObject({ status: "failed", error: "fetch failed (ECONNRESET)" });
+    });
+  });
+
   it("fails the file, and so the package, when the hoster answers with an error", async () => {
     serve(() => new Response("gone", { status: 404 }));
     const id = queued("Heat.1995.mkv");
@@ -386,6 +419,20 @@ describe("kickDownloads", () => {
         .map((o) => o.path)
         .sort(),
     ).toEqual([".md5-change-1", "Heat/Heat.1995.mkv"]);
+  });
+
+  it.skipIf(spawnSync("7zz").error)("fails, keeping the archive, when nothing came out of it", async () => {
+    const tmp = fs.mkdtempSync(path.join(DOWNLOAD_DIR, "src-"));
+    fs.mkdirSync(path.join(tmp, "Empty"));
+    spawnSync("7zz", ["a", "empty.zip", "Empty"], { cwd: tmp });
+    const zip = fs.readFileSync(path.join(tmp, "empty.zip"));
+    fs.rmSync(tmp, { recursive: true });
+    serve(() => new Response(zip));
+    const id = queued("empty.zip");
+    kickDownloads();
+    await settled(id);
+    expect(getPackage(id)).toMatchObject({ status: "failed", error: "empty.zip: Nothing came out of the archive" });
+    expect(packageOutputs(getPackage(id)!).map((o) => o.path)).toContain("empty.zip");
   });
 
   it("leaves a new package alone", async () => {

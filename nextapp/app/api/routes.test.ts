@@ -514,6 +514,61 @@ describe("/api/releases/<key>", () => {
   });
 });
 
+describe("GET /api/releases/<key>/collection", () => {
+  const call = async (key: string) => {
+    const { GET } = await import("./releases/[key]/collection/route");
+    return GET(new Request("http://jellylens.test"), { params: Promise.resolve({ key }) });
+  };
+  const part = (id: number, title: string, release_date: string) => ({
+    id,
+    title,
+    release_date,
+    poster_path: `/${id}.jpg`,
+  });
+
+  it("lists a movie's collection by release date, owned or not, titles without what most share, kept an hour", async () => {
+    replaceLibrary({ movies: [movie({ id: "m1", tmdbId: "691" })], shows: [], episodes: [] }, null);
+    const fetch = mockFetch((url) => {
+      if (url.pathname === "/3/movie/691") return json({ belongs_to_collection: { id: 645 } });
+      if (url.pathname === "/3/collection/645")
+        return json({
+          name: "James Bond Filmreihe",
+          parts: [
+            part(700, "James Bond 007 - Octopussy", "1983-06-06"),
+            part(691, "James Bond 007 - Der Spion, der mich liebte", "1977-07-07"),
+            { ...part(1, "James Bond 007 - Ohne Poster", "1990-01-01"), poster_path: null },
+          ],
+        });
+      if (url.pathname.endsWith("/release_dates")) return json({ results: [] });
+    });
+    const body = await (await call("movie:691")).json();
+    expect(body.collection.name).toBe("James Bond Filmreihe");
+    expect(
+      body.collection.items.map((i: { tmdbId: number; title: string; library: unknown }) => [
+        i.tmdbId,
+        i.title,
+        !!i.library,
+      ]),
+    ).toEqual([
+      [691, "Der Spion, der mich liebte", true],
+      [700, "Octopussy", false],
+    ]);
+    const calls = fetch.mock.calls.length;
+    await call("movie:691");
+    expect(fetch).toHaveBeenCalledTimes(calls);
+  });
+
+  it("answers null for a movie without one, a show, and 502 when TMDB fails", async () => {
+    mockFetch((url) => {
+      if (url.pathname === "/3/movie/949") return json({ belongs_to_collection: null });
+      if (url.pathname === "/3/movie/1") return json({}, { status: 500 });
+    });
+    expect(await (await call("movie:949")).json()).toEqual({ collection: null });
+    expect(await (await call("tv:1399")).json()).toEqual({ collection: null });
+    expect((await call("movie:1")).status).toBe(502);
+  });
+});
+
 describe("GET /api/tmdb-image", () => {
   it("refuses sizes and names it doesn't serve", async () => {
     const { GET } = await import("./tmdb-image/[size]/[file]/route");

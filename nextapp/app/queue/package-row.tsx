@@ -1,8 +1,21 @@
 "use client";
 
-import { CircleArrowDown, Pause, Play, RefreshCcw, RotateCcw, Trash2, X, type LucideIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  CircleArrowDown,
+  Clapperboard,
+  Pause,
+  Play,
+  RefreshCcw,
+  RotateCcw,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import type { DownloadPackageItem, LibraryChoice } from "@/lib/api-types";
 import { ConfirmItem } from "@/components/confirm-item";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { LibraryIcon } from "@/components/library-icon";
 import { CELL, MENU_CELL, NOT_ON_PHONE, NUMBER_CELL, ROW } from "@/components/library-table";
 import { PhoneStatus, StatusCell, type RowState } from "@/components/row-status";
@@ -40,6 +53,8 @@ const MAIN_ACTION: Partial<Record<DownloadPackageItem["status"], MainAction>> = 
 function stateOf(pkg: DownloadPackageItem): RowState {
   if (pkg.status === "pending") {
     const check = partCheck(pkg);
+    // Looked up and nothing found: Set TMDB in its ⋯ is the hand it waits for.
+    if (pkg.matched && !pkg.media && !check.tone) return { line: "No TMDB match", tone: "warning" };
     const lib = pkg.library;
     // What the library has, like a Ready to organize row's diffstat, unless the parts'
     // check says something's off (red, or peach: no answer for one).
@@ -84,20 +99,26 @@ function stateOf(pkg: DownloadPackageItem): RowState {
 // then Reset (back among the new ones in Needs attention; not for a new one), and Remove (a
 // new one: off the list, nothing's downloaded yet; grey, a cross) or Delete
 // (what's downloaded goes too; red, a bin). Reset, Remove and Delete take
-// a second click.
+// a second click. A new one's Set TMDB opens a field under its title for
+// the TMDB entry it is (not found, or found wrong).
 function RowMenu({
   pkg,
   onAction,
   onRemove,
+  onSetTmdb,
 }: {
   pkg: DownloadPackageItem;
-  onAction: (action: PackageAction, options?: { choice: LibraryChoice }) => void;
+  onAction: (action: PackageAction, options?: ActionOptions) => void;
   onRemove: () => void;
+  onSetTmdb: () => void;
 }) {
   const main = MAIN_ACTION[pkg.status];
+  const unmatched = pkg.status === "pending" && pkg.matched && !pkg.media;
   const lib = pkg.status === "pending" ? pkg.library : null;
   return (
     <ActionMenu name={pkg.name}>
+      {/* What it waits for first, when that's its TMDB entry. */}
+      {unmatched ? <ActionItem icon={Clapperboard} label="Set TMDB" onClick={onSetTmdb} /> : null}
       {lib ? (
         // What the library has decides: another version all of it (the
         // Replace comes in Ready to organize), this one only what's missing,
@@ -114,7 +135,10 @@ function RowMenu({
         <ActionItem icon={main.icon} label={main.label} onClick={() => onAction(main.action)} />
       ) : null}
       {pkg.status === "pending" ? (
-        <ConfirmItem icon={X} label="Remove" plain onConfirm={onRemove} />
+        <>
+          {unmatched ? null : <ActionItem icon={Clapperboard} label="Set TMDB" onClick={onSetTmdb} />}
+          <ConfirmItem icon={X} label="Remove" plain onConfirm={onRemove} />
+        </>
       ) : (
         <>
           <ConfirmItem icon={RefreshCcw} label="Reset" plain onConfirm={() => onAction("reset")} />
@@ -129,16 +153,20 @@ function RowMenu({
 // files): title, a peach icon when the library has some of it,
 // the release name under it (and then the library's tree); where it's at (stateOf); its size; and the ⋯
 // menu, which starts, pauses, resumes or retries it.
-type PackageAction = "start" | "pause" | "resume" | "reset" | "retry";
+type PackageAction = "start" | "pause" | "resume" | "reset" | "retry" | "media";
+type ActionOptions = { choice?: LibraryChoice; tmdb?: string };
 export function PackageRow({
   pkg,
   onAction,
   onRemove,
 }: {
   pkg: DownloadPackageItem;
-  onAction: (action: PackageAction, options?: { choice: LibraryChoice }) => void;
+  onAction: (action: PackageAction, options?: ActionOptions) => void | Promise<void>;
   onRemove: () => void;
 }) {
+  // Set TMDB's field: null while closed.
+  const [tmdb, setTmdb] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const s = summarize(pkg);
   const state = stateOf(pkg);
   // A new one the library has some of: where it is and what comes, as a
@@ -150,7 +178,7 @@ export function PackageRow({
   const inFolder = lib?.old.map((p) => p.split("/").slice(3).join("/")) ?? [];
   const presumedIn = lib?.presumed.map((p) => p.split("/").slice(3).join("/")) ?? [];
   const onDisk = lib?.disks.length ? lib.disks.join(", ") : null;
-  const menu = <RowMenu pkg={pkg} onAction={onAction} onRemove={onRemove} />;
+  const menu = <RowMenu pkg={pkg} onAction={onAction} onRemove={onRemove} onSetTmdb={() => setTmdb("")} />;
   const size = s.total ? formatBytes(s.total) : "—";
 
   return (
@@ -163,6 +191,37 @@ export function PackageRow({
         mono
         below={
           <>
+            {tmdb !== null ? (
+              // Like the Add links box: Enter or Set sets it, Esc or Cancel closes it.
+              <form
+                className="mt-2 mb-1 flex max-w-xl items-center gap-2 whitespace-normal"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!tmdb.trim()) return;
+                  setSaving(true);
+                  await onAction("media", { tmdb: tmdb.trim() });
+                  setSaving(false);
+                  setTmdb(null);
+                }}
+              >
+                <Input
+                  autoFocus
+                  value={tmdb}
+                  onChange={(e) => setTmdb(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setTmdb(null)}
+                  placeholder="TMDB link or id"
+                  aria-label="TMDB link or id"
+                  disabled={saving}
+                  className="font-mono text-xs placeholder:font-sans"
+                />
+                <Button type="button" variant="ghost" onClick={() => setTmdb(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="outline" disabled={saving || !tmdb.trim()}>
+                  Set
+                </Button>
+              </form>
+            ) : null}
             {lib && at ? (
               <div className="mt-1 text-muted-foreground">
                 <FileTree

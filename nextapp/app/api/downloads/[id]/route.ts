@@ -10,11 +10,13 @@ import {
   resetPackage,
   resumePackage,
   retryPackage,
+  setPackageMedia,
   startPackage,
   type DownloadPackage,
   type DownloadStatus,
 } from "@/lib/store";
 import { log } from "@/lib/log";
+import { logMatch, mediaOfTmdb, startIfNew } from "@/lib/download-match";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -88,7 +90,9 @@ const ACTIONS: Record<
   },
 };
 
-// POST { action: "start" | "pause" | "resume" | "reset" | "retry", choice?: "replace" | "skip" }
+// POST { action: "start" | "pause" | "resume" | "reset" | "retry", choice?: "replace" | "skip" },
+// or { action: "media", tmdb } for a new one: the TMDB entry it is (a link
+// or an id, mediaOfTmdb) by hand, started then if it can be (startIfNew).
 export async function POST(req: Request, { params }: Params) {
   const json = await req.json().catch(() => null);
   // Read after the body, right before it's acted on: its status as it is
@@ -96,6 +100,16 @@ export async function POST(req: Request, { params }: Params) {
   const pkg = await pkgOf(params);
   if (!pkg) return notFound();
   const body: Record<string, unknown> = json && typeof json === "object" ? json : {};
+  if (body.action === "media") {
+    if (pkg.status !== "pending")
+      return Response.json({ error: "Only a new package can be matched." }, { status: 409 });
+    const media = typeof body.tmdb === "string" ? await mediaOfTmdb(body.tmdb, pkg.name).catch(() => null) : null;
+    if (!media) return Response.json({ error: "No TMDB entry by that link or id." }, { status: 400 });
+    setPackageMedia(pkg.id, media);
+    logMatch(`${pkg.name} by hand`, media);
+    await startIfNew(pkg.id);
+    return Response.json({ ok: true });
+  }
   const action = ACTIONS[body.action as Action];
   if (typeof body.action !== "string" || !Object.hasOwn(ACTIONS, body.action)) {
     return Response.json(

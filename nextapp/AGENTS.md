@@ -272,8 +272,21 @@ the table gives each its match note and ⋯ menu. Above them, the poster
 carries a tile's mark, smaller: a title the library has the peach
 library icon, any other matched to TMDB the wishlist heart (`PosterWish`
 in `components/request-tiles.tsx`), the page's one button besides a single
-xREL title's ⋯ match menu beside the name; TMDB and WCX
-are plain links at the end of the line under the name.
+xREL title's ⋯ match menu beside the name; TMDB, xREL and WCX
+are plain links at the end of the line under the name, and FunXD's search
+when no FuN release of any quality (xREL's or a DLoad thread's) links it
+in its row.
+A movie's TMDB collection is under its releases (`GET
+/api/releases/movie:<id>/collection`, asked for on its own so the releases
+never wait for TMDB, kept an hour; `fetchMovieCollection` in
+`lib/tmdb.ts`): a `SectionFrame` headed with the collection's name and how
+many movies, folded to start with (its posters load once it's opened, not
+remembered), nothing when there's none. Every part as on Discover by
+release date (`RequestAction`'s library mark or heart, the year, or a
+coming release's date), this one dimmed and not a link, the others
+opening their title page; their titles without what most of them share up
+to " - " or ": " (`withoutSharedPrefix` in `lib/title-rows.ts`: "James
+Bond 007 - Skyfall" is "Skyfall", Harry Potter's two "… - Teil N" stay).
 A TMDB entry's page lists the DLoad uploaders' threads too (`dload` in `GET
 /api/releases/<key>`, `dloadThreadsOf`; `dloadRow`): a row each, named as a
 release (`dottedName`), of its uploader's group, the day it was opened, no size, linked to the
@@ -405,9 +418,10 @@ year of it: TMDB dates "Death.Race.3.Inferno.2012" 2013; searched
 again with umlauts for a German name that spells them out, "Auserwaehlten",
 and without a first part's "1", "Cars.1.2006" being TMDB's "Cars"; only
 when no search has a title that fits, its own search's first hit, a
-movie's within a year: for "Cars 1" that's "Two Cars, One Night";
-once per package, and once more for one found nothing for before
-`MATCHING_CHANGED`, moved on whenever the matching gets better), and every
+movie's within a year: for "Cars 1" that's "Two Cars, One Night"; before
+that, a sequel named by its first part and a number that TMDB knows by
+another title, "To.All.the.Boys.Ive.Loved.Before.2.2020", is that part of
+the first one's collection, within a year; once per package), and every
 file is asked about at the hoster once, its size known or not, like
 JDownloader's LinkGrabber (`checkPendingFiles`: online, names and sizes
 filled in where missing, or failed as offline; one it didn't answer for
@@ -424,6 +438,11 @@ level deep, its parts deleted; if that fails, the package fails with the
 outer parts kept, so Retry starts over. A file whose connection drops mid-way
 ("terminated", or fewer bytes than its length) goes back in line and is
 resumed from what's on disk (HTTP Range), as long as each try gets further.
+One whose hoster or Real-Debrid was out of reach before answering ("fetch
+failed", `NETWORK_RETRY_MS`) is tried again after 30 s, 2 and 5 minutes,
+as JDownloader does, holding its slot. An extraction 7-Zip says went fine
+but that wrote no file fails the package ("Nothing came out of the
+archive"), its parts kept for a look.
 A file that fails otherwise fails its package at once, with
 each failed file's name and error (no more of its files start; Retry
 fetches just those). Reset deletes what's downloaded and puts the package
@@ -437,7 +456,9 @@ one such folder. The folder is "Name (Year)
 [tmdbid-N]" with TMDB's German title as TMDB writes it (`libraryFolderName`
 in `lib/library-names.ts`: ":" becomes " -", a censored "F***" the word,
 what a file name can't have left out, cut to 255 bytes), a show's episodes
-into `Season NN`; a disk that has the title already (its `[tmdbid-N]`
+into `Season NN` (a pack of several seasons' file without one, Downton's
+movies in its S01-S06, is left out, logged with the move, and goes with
+the download); a disk that has the title already (its `[tmdbid-N]`
 folder, whatever it's called) gets them in that folder. Its videos and
 subtitles go, not samples or the rest; a movie whose one video is named
 with spaces (as VECTOR names them) gets the release's name instead
@@ -545,15 +566,22 @@ muted text, nothing to click: a new one's parts (`partCheck`: "Checking ·
 `.partN.rar` set counting as parts; red when one is missing, peach when
 the hoster didn't answer for one; when some failed, why instead, red, and
 how many, "No account for its hoster · 2 parts", "+1" for another
-reason); while it moves a bar (peach
+reason; with its parts fine, "No TMDB match" in peach when its name found
+nothing); while it moves a bar (peach
 waiting, green coming in, sky extracting, muted paused) over the state
 and, while it comes in, speed and time left ("Loading · 45.00 MB/s · 2
 min"; waiting, paused or extracting the state alone); a failed one's error (red,
 `errorLine`: without the file's name, as a sentence starts); "—" when finished. What to do about it comes
 first in the row's ⋯ menu (`RowMenu`: Start, or Download or Download missing, see
-above; Pause, Resume or Retry), then Reset,
+above; Pause, Resume or Retry; Set TMDB before them when there's no TMDB
+match), then a new one's Set TMDB, then Reset,
 Remove or Delete (only red ones are what deletes files; Reset, Remove and
-Delete ask "Sure? Click again" first, `ConfirmItem`).
+Delete ask "Sure? Click again" first, `ConfirmItem`). Set TMDB (a new one
+not matched, or matched wrong) opens a field under its title like the Add
+links box, with Cancel and Set: a TMDB page's link, `movie:N`/`tv:N` or a
+bare id (a show's when the name has a season; `mediaOfTmdb`), sent as
+`POST /api/downloads/<id>` `{ action: "media", tmdb }`, which sets it and
+starts the package if it can (`startIfNew`, as a new one does).
 
 A finished one is an `OrganizeRow` (`app/queue/organize-row.tsx`): the title
 (the library icon after it when the library has it) over
@@ -628,7 +656,7 @@ failure, and one asked for by hand or after a move; xREL's limits; TMDB's
 seasons a show didn't get; a package added (DLC or links), matched, started
 or why it waits for a hand, peeked into, each file's start, end with its
 speed, drop and resume or failure, each extraction, the package done or
-failed, every hand on it (Start, Pause, Retry, Reset, Remove, Delete); a
+failed, every hand on it (Start, Pause, Retry, Reset, Remove, Delete, a TMDB match set by hand); a
 WCX Check's mirrors; a move queued, done (what it took out) or not; sign-ins
 and lockouts; the wishlist, groups, ignores, match verdicts and settings
 (archive passwords only by count; never a secret). A new feature logs the
@@ -795,7 +823,7 @@ UI: `poster-card` (grid tile with corner badges, link or button),
 `section-title` (a section's heading: name, hint, and an action on the
 right, no count; Discover), `section-frame` (`SectionFrame`, and
 `TableFrame`: a table in a frame headed with its section and count, which
-can fold its rows away; the Dashboard, the Queue, Settings, Analytics, a
+can fold its rows away, as a `SectionFrame` can too; the Dashboard, the Queue, Settings, Analytics, a
 title page), `page-menu`
 (the ⋯ at a page's top right, groups of items with a line between:
 the Queue),

@@ -28,7 +28,7 @@ const pkg: DownloadPackageItem = {
   createdAt: "2026-10-07T12:00:00.000Z",
   startedAt: null,
   finishedAt: null,
-  media: null,
+  media: { type: "movie", tmdbId: 949, title: "Heat", year: 1995, posterPath: null },
   matched: true,
   movedTo: null,
   movedAt: null,
@@ -137,7 +137,7 @@ describe("PackageRow", () => {
     expect(screen.getAllByText("−1")[0]).toHaveClass("text-destructive");
     expect(screen.getAllByText("+1")[0]).toHaveClass("text-success");
     await userEvent.click(more());
-    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Download", "Remove"]);
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Download", "Set TMDB", "Remove"]);
     await userEvent.click(screen.getByRole("menuitem", { name: "Download" }));
     expect(onAction).toHaveBeenCalledWith("start", { choice: "replace" });
   });
@@ -164,7 +164,37 @@ describe("PackageRow", () => {
     renderRow({ ...pkg, library: { ...library, new: [], choices: [] } });
     expect(screen.getAllByText("All in library")[0]).toBeInTheDocument();
     await userEvent.click(more());
-    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Remove"]);
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Set TMDB", "Remove"]);
+  });
+
+  it("says when TMDB had nothing for it, Set TMDB first in its menu, sent from the field it opens", async () => {
+    let done = () => {};
+    const onAction = vi.fn(() => new Promise<void>((resolve) => (done = resolve)));
+    renderRow({ ...pkg, media: null, files: [file(1)] }, vi.fn(), onAction);
+    for (const line of screen.getAllByText("No TMDB match")) expect(line).toHaveClass("text-warning");
+    await userEvent.click(more());
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Set TMDB", "Start", "Remove"]);
+    await userEvent.click(items[0]);
+    const field = screen.getByRole("textbox", { name: "TMDB link or id" });
+    expect(field).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Set" })).toBeDisabled();
+    await userEvent.type(field, " https://www.themoviedb.org/movie/949 {Enter}");
+    expect(onAction).toHaveBeenCalledWith("media", { tmdb: "https://www.themoviedb.org/movie/949" });
+    expect(field).toBeDisabled();
+    await act(async () => done());
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("closes the Set TMDB field on Esc or Cancel", async () => {
+    renderRow(pkg);
+    for (const close of [() => userEvent.keyboard("{Escape}"), () => userEvent.click(screen.getByText("Cancel"))]) {
+      await userEvent.click(more());
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Set TMDB" }));
+      expect(screen.getByRole("textbox", { name: "TMDB link or id" })).toBeInTheDocument();
+      await close();
+      expect(screen.queryByRole("textbox")).toBeNull();
+    }
   });
 
   it("shows a failed package's error", () => {

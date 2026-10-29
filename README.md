@@ -20,10 +20,10 @@ a wishlist of what to add next.
 - 🎬 **Library**: your movies and shows as posters, read straight from your disks; search, sort, filter by genre or audio language.
 - 🧩 **Dashboard**: the Queue at a glance, incomplete shows (checked against TMDB), the wishlist, your disks and the last imports.
 - 📝 **Discover and Wishlist**: search TMDB, keep a wishlist per user.
-- 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to) and [WCX](#wcx-and-downloads)'s latest and your DLoad uploaders' threads, with WCX mirrors.
+- 📦 **Releases**: on Discover, your favorite release groups' releases from [xREL](https://www.xrel.to) and [WCX](#wcx-and-downloads)'s latest and your DLoad uploaders' threads, with WCX mirrors; a movie's page shows its TMDB collection.
 - 🔁 **Migrations**: what your library has that a favorite group or a [DLoad](#configuration) uploader offers too, or better (their BluRay of your WEB).
 - 📊 **Analytics**: your files by audio (German and English), resolution and codec, and release group.
-- 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked.
+- 📥 **Queue**: DLC containers and hoster links, via ddownload and Real-Debrid, extracted with 7-Zip, then into your library, checked; a TMDB match set by hand where the name finds none.
 - 🔔 **Notes**: a heads-up when something needs a hand: a download to organize, or a failure.
 - 📜 **Logs**: what happened, kept two weeks, searchable by level and area, ready to copy.
 - 🔐 **Jellyfin sign-in**: admin pages for Jellyfin admins only.

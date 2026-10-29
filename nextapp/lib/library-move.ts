@@ -35,10 +35,12 @@ import { log, took } from "./log";
 // there if it has one.
 export type LibraryTarget = { path: string; disk: string; freeBytes: number | null; existing: string | null };
 // What goes where: each file's path in the package and in the title's
-// folder; error says why it can't be moved.
+// folder; left: what stays behind (a pack's movies), gone with the
+// download; error says why it can't be moved.
 type MovePlan = {
   folder: string;
   files: { from: string; to: string; size: number }[];
+  left: string[];
   bytes: number;
   error: string | null;
 };
@@ -104,9 +106,11 @@ export function libraryTargets(pkg: DownloadPackage): LibraryTarget[] {
 
 export function movePlan(pkg: DownloadPackage): MovePlan {
   const folder = pkg.media ? libraryFolderName(pkg.media) : "";
+  const left: string[] = [];
   const plan = (error: string | null, files: MovePlan["files"] = []): MovePlan => ({
     folder,
     files,
+    left,
     bytes: files.reduce((n, f) => n + f.size, 0),
     error,
   });
@@ -140,6 +144,11 @@ export function movePlan(pkg: DownloadPackage): MovePlan {
           has.add(`${c.season}:${e}`);
     for (const [i, o] of outputs.entries()) {
       const season = seasonOf(o.path, pkg.name);
+      // A pack's extra (Downton's movies in its S01-S06) is no episode: left out, not lost unnoticed.
+      if (season === null && /S\d{1,2}-S\d{1,2}/i.test(pkg.name)) {
+        left.push(names[i]);
+        continue;
+      }
       if (season === null) return plan(`No season in ${names[i]}.`);
       const eps = episodesOf(names[i]);
       if (eps.length && eps.every((e) => has.has(e))) {
@@ -415,7 +424,8 @@ async function runMove(pkgId: number) {
       "organize",
       `${move.replace ? "Replaced" : "Moved"} in ${took(started)}: ${pkg.name}`,
       `· to ${path.relative(LIBRARY_DIR, titleDir)} · ${plural(plan.files.length, "file")}` +
-        (replaced.length ? ` · took out ${replaced.map((o) => path.basename(o.path)).join(", ")}` : ""),
+        (replaced.length ? ` · took out ${replaced.map((o) => path.basename(o.path)).join(", ")}` : "") +
+        (plan.left.length ? ` · left out, no episode: ${plan.left.join(", ")}` : ""),
     );
     remove(root, () => fs.rmSync(root, { recursive: true, force: true }));
   } catch (e) {

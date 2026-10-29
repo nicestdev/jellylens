@@ -57,10 +57,12 @@ export function releaseFileNames(names: string[], release: string): string[] {
 }
 
 // The season a show's file belongs to: its own SxxEyy, else the package's
-// Sxx; null if neither says.
+// Sxx (not a pack of several, "S01-S06", whose movies are no episode);
+// null if neither says.
 export function seasonOf(rel: string, packageName: string): number | null {
   const own = /S(\d{1,2})E\d{1,3}/i.exec(rel.split("/").pop() ?? rel) ?? /S(\d{1,2})E\d{1,3}/i.exec(rel);
   if (own) return Number(own[1]);
+  if (/S\d{1,2}-S\d{1,2}/i.test(packageName)) return null;
   const pkg = /(?:^|[. _-])S(\d{1,2})(?=[. _-]|$)/i.exec(packageName);
   return pkg ? Number(pkg[1]) : null;
 }

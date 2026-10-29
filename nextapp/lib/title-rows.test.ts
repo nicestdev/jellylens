@@ -10,6 +10,7 @@ import {
   inResolutions,
   libraryNote,
   namesByResolution,
+  withoutSharedPrefix,
   noRowFilters,
   releaseOf,
   toggleFilter,
@@ -378,5 +379,32 @@ describe("sortRows", () => {
     expect(ids("date", "asc")).toEqual(["b", "a", "c"]);
     expect(ids("size", "desc")).toEqual(["b", "c", "a"]);
     expect(ids("name", "asc")).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("withoutSharedPrefix", () => {
+  const titles = (...ts: string[]) => withoutSharedPrefix(ts.map((title) => ({ title }))).map((p) => p.title);
+
+  it("drops what most of a collection's titles start with, up to a dash or colon", () => {
+    expect(titles("James Bond 007 jagt Dr. No", "James Bond 007 - Goldfinger", "James Bond 007 - Skyfall")).toEqual([
+      "James Bond 007 jagt Dr. No",
+      "Goldfinger",
+      "Skyfall",
+    ]);
+    expect(titles("Star Wars: Episode I", "Star Wars: Episode II")).toEqual(["Episode I", "Episode II"]);
+  });
+
+  it("keeps what only a few share, and a title that's nothing but it", () => {
+    const potter = [
+      "Harry Potter und der Halbblutprinz",
+      "HP - Teil 1",
+      "HP - Teil 2",
+      "Harry Potter und der Feuerkelch",
+    ];
+    expect(titles(...potter.slice(0, 3), potter[3], "Harry Potter und die Kammer")).toEqual([
+      ...potter,
+      "Harry Potter und die Kammer",
+    ]);
+    expect(titles("Heat - ", "Heat - 2")).toEqual(["Heat - ", "2"]);
   });
 });

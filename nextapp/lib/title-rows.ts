@@ -314,3 +314,15 @@ export function seasonGroups<R extends ReleaseRow>(rows: R[], owned: number[] = 
     .sort((a, b) => b.order[0] - a.order[0] || a.order[1] - b.order[1])
     .map(({ order: _order, ...g }) => g);
 }
+
+// A collection's parts without what their titles share up to a " - " or
+// ": " ("James Bond 007 - Octopussy" as "Octopussy"), when most of them
+// start that way (not Harry Potter's two "Heiligtümer des Todes - Teil N");
+// a title that's only that prefix stays.
+export function withoutSharedPrefix<T extends { title: string }>(parts: T[]): T[] {
+  return parts.map((p) => {
+    const prefix = p.title.match(/^.+?(?: - |: )/)?.[0];
+    const shared = prefix && parts.filter((o) => o.title.startsWith(prefix)).length > parts.length / 2;
+    return shared && p.title.length > prefix.length ? { ...p, title: p.title.slice(prefix.length) } : p;
+  });
+}

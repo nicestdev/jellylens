@@ -432,6 +432,23 @@ describe("POST /api/downloads/[id]", () => {
     ]);
   });
 
+  it("sets a new package's TMDB entry by hand and starts it when it's new to the library", async () => {
+    mockFetch((url) =>
+      url.pathname === "/3/movie/565426" ? json({ id: 565426, title: "P.S. I Still Love You" }) : undefined,
+    );
+    const id = episodesPackage("To.All.the.Boys.Ive.Loved.Before.2.2020.German.1080p.WEB.x264-FuN");
+    setPackageMedia(id, null);
+    expect((await act(id, { action: "media", tmdb: "nothing" })).status).toBe(400);
+    expect(await act(id, { action: "media", tmdb: "https://www.themoviedb.org/movie/565426" })).toEqual({
+      status: 200,
+      body: { ok: true },
+    });
+    expect(getPackage(id)).toMatchObject({ status: "queued", media: { type: "movie", tmdbId: 565426 } });
+    expect(queue.kickDownloads).toHaveBeenCalled();
+    // Only a new one.
+    expect((await act(id, { action: "media", tmdb: "movie:565426" })).status).toBe(409);
+  });
+
   it("pauses a waiting or downloading package and resumes a paused one", async () => {
     const id = onDisk("Running");
     await act(id, { action: "start" });

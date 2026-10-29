@@ -1,6 +1,6 @@
 import { TMDB_API_KEY } from "./env";
 import { TMDB_LANGUAGE } from "./env";
-import { searchTmdbTitle, type TmdbFindResult } from "./tmdb";
+import { fetchMovieCollection, fetchTmdbEntry, searchTmdbTitle, type TmdbFindResult } from "./tmdb";
 import { parseReleaseName, sameTitle, withUmlauts } from "./title-match";
 import { linkInfo } from "./hosters";
 import { peekName } from "./archive-peek";
@@ -74,16 +74,43 @@ export async function matchName(name: string): Promise<DownloadMedia | null> {
     year: hit.year,
     posterPath: hit.posterPath,
   });
+  const fitting = (results: TmdbFindResult[], query: string) =>
+    results.find((r) => sameTitle(r.title, query) || sameTitle(r.originalTitle, query));
   let loose: TmdbFindResult | undefined;
   for (const query of queries) {
     for (const year of years) {
       const results = await searchTmdbTitle(TMDB_API_KEY, type, query, year, language);
-      const fits = results.find((r) => (sameTitle(r.title, query) || sameTitle(r.originalTitle, query)) && near(r));
+      const fits = fitting(results.filter(near), query);
       if (fits) return media(fits);
       if (query === parsed.title && (year !== null || type === "tv" || !parsed.year)) loose ??= results.find(near);
     }
   }
+  // A sequel by its first part's name and a number, which TMDB doesn't
+  // know it by ("To.All.the.Boys.Ive.Loved.Before.2.2020" is "To All the
+  // Boys: P.S. I Still Love You"): that part of the first one's collection,
+  // within a year.
+  const sequel = type === "movie" ? parsed.title.match(/^(.+) ([2-9])$/) : null;
+  if (sequel) {
+    const first = fitting(await searchTmdbTitle(TMDB_API_KEY, type, sequel[1], null, language), sequel[1]);
+    const collection = first && (await fetchMovieCollection(TMDB_API_KEY, first.tmdbId, language));
+    const part = collection?.parts.sort((a, b) => (a.releaseDate ?? "9999").localeCompare(b.releaseDate ?? "9999"))[
+      Number(sequel[2]) - 1
+    ];
+    if (part && near(part)) return media({ ...part, originalTitle: part.title });
+  }
   return loose ? media(loose) : null;
+}
+
+// The TMDB entry an admin names for a package (the Queue's Set TMDB): a
+// TMDB page's link ("…/movie/565426-to-all-the-boys"), "tv:1399", or a bare
+// id, taken for a show when the package's name has a season. null when
+// it's none of those, or TMDB doesn't have it.
+export async function mediaOfTmdb(input: string, name: string): Promise<DownloadMedia | null> {
+  const ref = input.match(/\b(movie|tv)[/:](\d+)/) ?? input.trim().match(/^()(\d+)$/);
+  if (!ref || !TMDB_API_KEY) return null;
+  const type = (ref[1] || (isShowName(name) ? "tv" : "movie")) as "movie" | "tv";
+  const hit = await fetchTmdbEntry(TMDB_API_KEY, type, Number(ref[2]), TMDB_LANGUAGE);
+  return hit ? { type, tmdbId: hit.tmdbId, title: hit.title, year: hit.year, posterPath: hit.posterPath } : null;
 }
 
 // Packages not looked up yet, in the background (one at a time, deduped

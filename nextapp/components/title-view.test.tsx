@@ -6,7 +6,15 @@ import { wholeText } from "@/test/dom";
 import { json, mockFetch } from "@/test/http";
 import { RELEASES_CHANGED } from "@/lib/api-client";
 import { inResolutions, namesByResolution, wcxRow, xrelRow } from "@/lib/title-rows";
-import type { MatchInfo, ReleaseDetail, ReleaseDetailTitle, ReleaseHead, WcxRelease } from "@/lib/api-types";
+import type {
+  CollectionResponse,
+  DiscoverItem,
+  MatchInfo,
+  ReleaseDetail,
+  ReleaseDetailTitle,
+  ReleaseHead,
+  WcxRelease,
+} from "@/lib/api-types";
 import { dismissToast, getToasts } from "@/lib/toast";
 import { Toaster } from "./toaster";
 import { TitleView } from "./title-view";
@@ -73,10 +81,17 @@ const detailOf = (tile: Tile, url: URL): ReleaseDetail => {
 };
 
 // Answers GET /api/releases/<key> with detail, POSTs with after(body).
-// Also handles /api/wcx-search, always returning null.
-function api(detail: Tile, after?: (body: { titleKey: string; verdict: string | null }) => Tile) {
+// Also handles /api/wcx-search, always returning null, a movie's
+// collection (none unless given) and the wishlist (empty).
+function api(
+  detail: Tile,
+  after?: (body: { titleKey: string; verdict: string | null }) => Tile,
+  collection: CollectionResponse["collection"] = null,
+) {
   return mockFetch((url, init) => {
     if (url.pathname === "/api/wcx-search") return json({ url: null });
+    if (url.pathname.endsWith("/collection")) return json({ collection } satisfies CollectionResponse);
+    if (url.pathname === "/api/requests") return json({ items: [], all: false, admin: true });
     if (url.pathname !== "/api/releases/" + encodeURIComponent(detail.key)) return undefined;
     return json(detailOf(init?.method === "POST" ? after!(JSON.parse(String(init.body))) : detail, url));
   });
@@ -114,6 +129,7 @@ describe("TitleView", () => {
     // The Mirror column's, and the phone's beside the name; none among the title's links.
     const links = await screen.findAllByRole("link", { name: "FunXD" });
     expect(links[0]).toHaveAttribute("href", expect.stringMatching(/^\/api\/funxd-link\?tmdbId=movie%3A949/));
+    expect(meta()).not.toHaveTextContent("FunXD");
   });
 
   it("lists the DLoad uploaders' threads as releases, linked to the thread, one xREL has once", async () => {
@@ -260,11 +276,55 @@ describe("TitleView", () => {
     expect(await screen.findByText("None of your favorite groups has released this.")).toBeInTheDocument();
     expect(shownCount()).toBe(0);
     // xREL links to the title's page there even without releases.
-    expect(meta()).toHaveTextContent(/^1995·Movie·TMDB·xREL$/);
+    // FunXD's search too, with no FuN release to link it.
+    expect(meta()).toHaveTextContent(/^1995·Movie·TMDB·xREL·FunXD$/);
+    expect(screen.getByRole("link", { name: "FunXD" })).toHaveAttribute(
+      "href",
+      "/api/funxd-link?tmdbId=movie%3A949&title=Heat",
+    );
     expect(screen.getByRole("link", { name: "xREL" })).toHaveAttribute(
       "href",
       "/api/xrel-link?tmdbId=movie%3A949&title=Heat",
     );
+  });
+
+  it("shows a movie's collection under its releases, folded, its posters once it's opened", async () => {
+    const part = (tmdbId: number, title: string, year: number, owned = false): DiscoverItem => ({
+      mediaType: "movie",
+      tmdbId,
+      title,
+      year,
+      releaseDate: `${year}-01-01`,
+      posterPath: `/${tmdbId}.jpg`,
+      library: owned ? { id: String(tmdbId) } : null,
+      availability: null,
+    });
+    api({ key: "movie:949", head, titles: [bluray] }, undefined, {
+      name: "Heat Collection",
+      items: [part(949, "Heat", 1995, true), part(950, "Heat 2", 2027)],
+    });
+    render(<TitleView tileKey="movie:949" />);
+    const toggle = await screen.findByRole("button", { name: /^Heat Collection/ });
+    expect(toggle).toHaveTextContent(/^Heat Collection · 2 movies$/);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Heat 2")).toBeNull();
+    await userEvent.click(toggle);
+    // This one dimmed, not a link; the other to its own title page, its year alone.
+    const sequel = screen.getByRole("link", { name: /Heat 2/ });
+    expect(sequel).toHaveAttribute("href", "/title/movie/950");
+    expect(within(sequel).getByText("2027")).toBeInTheDocument();
+    expect(screen.queryByText("Movie", { selector: "a *" })).toBeNull();
+    const collection = screen.getByRole("region", { name: "Heat Collection" });
+    expect(within(collection).getAllByRole("link")).toHaveLength(1);
+    expect(within(collection).getByLabelText("In library")).toBeInTheDocument();
+  });
+
+  it("shows no collection for a movie without one", async () => {
+    const fetch = api({ key: "movie:949", head, titles: [bluray] });
+    render(<TitleView tileKey="movie:949" />);
+
+    await waitFor(() => expect(fetch.mock.calls.map((c) => c[0])).toContain("/api/releases/movie:949/collection"));
+    expect(screen.queryByRole("region", { name: /Collection/ })).toBeNull();
   });
 
   it("lists a show's library files a table per season when no release is listed", async () => {

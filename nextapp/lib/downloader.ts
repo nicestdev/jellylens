@@ -3,6 +3,7 @@ import path from "path";
 import { spawn } from "child_process";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
+import { setTimeout as sleep } from "timers/promises";
 import { ARCHIVE_PASSWORDS, DOWNLOAD_DIR } from "./env";
 import { formatBytes } from "./format";
 import { notify } from "./events";
@@ -49,7 +50,16 @@ function state(): DownloaderState {
   return s;
 }
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// fetch's network error says why only in its cause ("fetch failed (ECONNRESET)").
+const errorText = (e: unknown) => {
+  if (!(e instanceof Error)) return String(e);
+  const cause = e.cause as { code?: string; message?: string } | undefined;
+  return e.message === "fetch failed" && cause ? `fetch failed (${cause.code ?? cause.message})` : e.message;
+};
+
+// Real-Debrid or the hoster out of reach before it answered ("fetch failed")
+// is tried again after these pauses, as JDownloader does, before the file fails.
+export const NETWORK_RETRY_MS = [30_000, 120_000, 300_000];
 
 // A file or folder name that stays inside DOWNLOAD_DIR.
 export function safeName(name: string): string {
@@ -116,7 +126,7 @@ function fileNameOf(res: Response, fallback: string): string {
   }
 }
 
-async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
+async function downloadFile(file: DownloadFile, pkg: DownloadPackage, attempt = 0): Promise<void> {
   const s = state();
   const abort = new AbortController();
   const live: Live = { abort, packageId: pkg.id, speed: 0 };
@@ -193,6 +203,16 @@ async function downloadFile(file: DownloadFile, pkg: DownloadPackage) {
     if (abort.signal.aborted) {
       // Paused: back in line, resumed from the bytes on disk later. (Removed
       // or reset: the row is gone or reset already.)
+      if (abort.signal.reason === "pause") updateFile(file.id, { status: "queued", received });
+      return;
+    }
+    // Out of reach before the hoster answered: again after a pause, holding
+    // its slot (a Pause or Reset meanwhile ends the wait).
+    const wait = NETWORK_RETRY_MS[attempt];
+    if (from < 0 && e instanceof TypeError && e.message === "fetch failed" && wait !== undefined) {
+      log.warn("downloads", `${errorText(e)} on ${file.name}, trying again in ${took(Date.now() - wait)}`);
+      await sleep(wait, undefined, { signal: abort.signal }).catch(() => {});
+      if (!abort.signal.aborted) return downloadFile(file, pkg, attempt + 1);
       if (abort.signal.reason === "pause") updateFile(file.id, { status: "queued", received });
       return;
     }
@@ -318,12 +338,18 @@ async function extractSet(pkgId: number, set: ArchiveSet) {
     // Removed, reset or failed meanwhile: leave it.
     if (!getPackage(pkgId) || getPackage(pkgId)?.status === "failed" || !setReady(pkgId, set)) return;
     if (error) return finish(pkgId, "failed", `${set.first}: ${error}`);
+    // 7-Zip's 0 alone isn't enough: a file it wrote has a new ctime (its
+    // mtime is the archive's). Nothing written: the parts stay, for a look.
+    const own = new Set(listFiles(pkgId).map((f) => f.name));
+    const wrote = packageOutputs(pkg).some(
+      (o) => !own.has(o.path) && fs.statSync(path.join(dir, o.path)).ctimeMs >= started - 1000,
+    );
+    if (!wrote) return finish(pkgId, "failed", `${set.first}: Nothing came out of the archive`);
     // An archive set that came out of it (FuN packs the release's RARs into
     // RARs of a hoster's name): extracted too, one level deep, its parts
     // deleted. A failure fails the package with the outer parts kept, so
     // Retry starts over.
     // Not the package's own files: one that finished downloading meanwhile is no inner archive.
-    const own = new Set(listFiles(pkgId).map((f) => f.name));
     const added = packageOutputs(pkg).filter((o) => !before.has(o.path) && !own.has(o.path));
     for (const inner of archiveSets(added.map((o) => o.path))) {
       if (!inner.first) continue;
