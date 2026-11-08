@@ -289,8 +289,9 @@ function run7z(args: string[], pkgId: number): Promise<{ code: number; output: s
 // Extracts an archive into dir, trying Settings' passwords and then
 // ARCHIVE_PASSWORDS in turn (7-Zip asks on the terminal if it gets none,
 // so without any, or for an unencrypted archive, it gets a dummy). A RAR
-// with encrypted headers now and then says "Headers Error" for a wrong
-// password rather than "Wrong password", so that one tries the next too.
+// with encrypted headers now and then says "Headers Error" or "Unexpected
+// end of archive" for a wrong password rather than "Wrong password", so any
+// error tries the next; the last one other than a wrong password is told.
 // The error, or null.
 async function extract7z(archive: string, dir: string, pkgId: number): Promise<string | null> {
   const known = [...new Set([...getDownloadSettings().passwords, ...ARCHIVE_PASSWORDS])];
@@ -310,14 +311,17 @@ async function extract7z(archive: string, dir: string, pkgId: number): Promise<s
         .filter((l) => /error|cannot|unexpected|missing/i.test(l))
         .slice(-2)
         .join(" · ") || `7-Zip exited with code ${code}`;
-    if (!/headers error/i.test(output)) return error;
   }
   return error;
 }
 
+// A package's files that count: not skipped (at Start, or a second link
+// of the same name, see kickDownloads).
+const ownFiles = (pkgId: number) => listFiles(pkgId).filter((f) => f.status !== "skipped");
+
 // Whether a set's files are all downloaded and not extracted yet.
 const setReady = (pkgId: number, set: ArchiveSet) => {
-  const files = listFiles(pkgId).filter((f) => set.members.includes(f.name));
+  const files = ownFiles(pkgId).filter((f) => set.members.includes(f.name));
   return files.length === set.members.length && files.every((f) => f.status === "done");
 };
 
@@ -358,7 +362,7 @@ async function extractSet(pkgId: number, set: ArchiveSet) {
       if (innerError) return finish(pkgId, "failed", `${inner.first}: ${innerError}`);
       for (const m of inner.members) fs.rmSync(path.join(dir, m), { force: true });
     }
-    for (const f of listFiles(pkgId).filter((f) => set.members.includes(f.name))) {
+    for (const f of ownFiles(pkgId).filter((f) => set.members.includes(f.name))) {
       fs.rmSync(path.join(dir, f.name), { force: true });
       updateFile(f.id, { status: "extracted" });
     }
@@ -384,7 +388,7 @@ export function settlePackage(pkgId: number) {
   const pkg = getPackage(pkgId);
   if (!pkg || pkg.status === "pending" || pkg.status === "done" || pkg.status === "failed") return;
   const s = state();
-  const files = listFiles(pkgId);
+  const files = ownFiles(pkgId);
   for (const set of archiveSets(files.map((f) => f.name))) {
     const key = `${pkgId}:${set.key}`;
     if (!set.first || s.pendingSets.has(key) || !setReady(pkgId, set)) continue;
@@ -432,6 +436,17 @@ export function kickDownloads() {
     const file = nextQueuedFile();
     const pkg = file && getPackage(file.packageId);
     if (!file || !pkg) return;
+    // A second link of a name the package has coming or in (an uploader's
+    // re-upload) would write the same file: skipped.
+    if (
+      listFiles(pkg.id).some(
+        (f) => f.id !== file.id && f.name === file.name && ["downloading", "done", "extracted"].includes(f.status),
+      )
+    ) {
+      updateFile(file.id, { status: "skipped" });
+      log.warn("downloads", `Skipped ${file.name}: the package has it from another link`, `· ${pkg.name}`);
+      continue;
+    }
     // Marks the file as downloading before its first await, so the next
     // round of this loop picks another.
     downloadFile(file, pkg)

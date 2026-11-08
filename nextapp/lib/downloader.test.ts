@@ -268,6 +268,20 @@ describe("kickDownloads", () => {
     expect(fs.existsSync(path.join(packagePath(getPackage(id)!), name))).toBe(true);
   });
 
+  it("skips a second link of a name the package has coming, rather than write the same file twice", async () => {
+    serve(() => new Response("hi"));
+    const id = addPackage({
+      name: "Pkg",
+      dir: "Pkg",
+      files: ["a", "b"].map((u) => ({ url: `https://example.com/${u}`, name: "E01.mkv", size: null })),
+    });
+    startPackage(id);
+    kickDownloads();
+    await settled(id);
+    expect(getPackage(id)?.status).toBe("done");
+    expect(listFiles(id).map((f) => f.status)).toEqual(["done", "skipped"]);
+  });
+
   it("keeps the name it came with when the server names none", async () => {
     serve(() => new Response("hi"));
     const id = queued("Heat.1995.mkv");

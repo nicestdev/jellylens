@@ -73,6 +73,29 @@ describe("syncWcx", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(titleReleases("wcx:s")).toMatchObject([{ group: "TVS" }]);
   });
+
+  it("reads a page WCX fails on one entry at a time, leaving out the broken one", async () => {
+    setSyncedAt("wcx", hoursAgo(6));
+    // 21 entries on page 1, the 2nd broken (WCX answers 500 for any page holding it).
+    const all = Array.from({ length: 21 }, (_, i) =>
+      entry(String.fromCharCode(65 + i), hoursAgo(1), [`Movie${i}.2026.German.1080p.WEB.x264-FuN`]),
+    );
+    const fetch = mockFetch((url) => {
+      if (url.pathname !== "/start/search" || url.searchParams.get("types") === "series")
+        return json({ items: { data: [], last_page: 1 } });
+      const perPage = Number(url.searchParams.get("per_page"));
+      const page = Number(url.searchParams.get("page"));
+      const data = all.slice((page - 1) * perPage, page * perPage);
+      if (data.some((e) => e.uid === "B")) return new Response("{}", { status: 500 });
+      return json({ items: { data, last_page: Math.ceil(all.length / perPage) } });
+    });
+
+    expect(await run()).toMatchObject({ added: 20 });
+    expect(fetch).toHaveBeenCalledTimes(1 + 21 + 1);
+    expect(titleReleases("wcx:A~2026")).toHaveLength(1);
+    expect(titleReleases("wcx:B~2026")).toEqual([]);
+    expect(syncedAt("wcx")).not.toBeNull();
+  });
 });
 
 describe("releaseFacets", () => {

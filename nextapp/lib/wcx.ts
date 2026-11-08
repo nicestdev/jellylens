@@ -35,12 +35,13 @@ export type WcxType = "movie" | "series";
 export async function fetchLatest(
   type: WcxType,
   page: number,
+  perPage = 21,
 ): Promise<{ entries: WcxEntry[]; lastPage: number; remaining: number }> {
   const res = await fetch(
-    `${WCX_API_URL}/start/search?__LOAD&per_page=21&page=${page}&types=${type}&sortOrder=latest&sortBy=desc`,
+    `${WCX_API_URL}/start/search?__LOAD&per_page=${perPage}&page=${page}&types=${type}&sortOrder=latest&sortBy=desc`,
     { headers: headers() },
   );
-  if (!res.ok) throw new Error(`WCX answered HTTP ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`WCX answered HTTP ${res.status}`), { status: res.status });
   const data: WcxPage = await res.json();
   const remaining = Number(res.headers.get("x-ratelimit-remaining"));
   return {

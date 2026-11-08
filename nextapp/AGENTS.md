@@ -311,7 +311,10 @@ page by page with 4–20 s between pages (a minute when fewer than 5 of
 WCX's 60 calls a minute are left), until an entry that last changed
 before the last sync started (10 minutes' overlap; the first sync goes a
 week back). One that stops at its page limit (300 a list) doesn't move
-that time, so the next reads on from the same point. An entry's
+that time, so the next reads on from the same point. WCX answers 500
+for a whole page when one entry on it is broken (one without a cover):
+that page is read again one entry at a time (`per_page=1`), the broken
+ones left out and logged (`pageOneByOne`), so a sync never sticks on it. An entry's
 releases come along in the list: each is stored in `releases` with
 `group_id` NULL, id `wcx:<id>`, title `wcx:<uid>` (a movie's split by
 the year in its names, `wcx:<uid>~2012`, as xREL's are: WCX too files a
@@ -431,8 +434,11 @@ the container: `./downloads` next to the compose file (a bind mount), or
 the host folder `DOWNLOADS_PATH` names. The download queue (`lib/downloader.ts`)
 runs 1–10 files at a time and extracts each archive set with 7-Zip as soon
 as its parts are in, trying the archive passwords set on Settings in turn,
-then `ARCHIVE_PASSWORDS` (a RAR with encrypted headers now and then says
-"Headers Error" for a wrong one, which tries the next too). An archive set that comes out of one (FuN packs
+then `ARCHIVE_PASSWORDS` (any error tries the next: a RAR with encrypted
+headers now and then says "Headers Error" or "Unexpected end of archive"
+for a wrong one; the last error other than a wrong password is told). A
+second link of a name the package has coming or in (an uploader's
+re-upload) is skipped, logged, rather than write the same file twice. An archive set that comes out of one (FuN packs
 the release's RARs into RARs named after a hoster) is extracted too, one
 level deep, its parts deleted; if that fails, the package fails with the
 outer parts kept, so Retry starts over. A file whose connection drops mid-way
@@ -464,8 +470,9 @@ subtitles go, not samples or the rest; a movie whose one video is named
 with spaces (as VECTOR names them) gets the release's name instead
 (`releaseFileNames`; the release name is the folder the archive made, else
 the package's, made safe for a path, `safeName`). The disk defaults to the
-one that has the title (`defaultTarget` in `app/queue/organize-logic.ts`);
-a new title's is always picked by hand ("Select" in peach until then); a
+one that has the title (`defaultTarget` in `app/queue/organize-logic.ts`),
+else the only disk when there's one and it fits; otherwise a new title's
+is picked by hand ("Select" in peach until then); a
 move is started by hand, by its row or Move all (see below); a move is
 refused when what's queued for that disk leaves too little room
 (`startMove`; a Replace too, since the new files are in before the old go).

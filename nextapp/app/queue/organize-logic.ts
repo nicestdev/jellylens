@@ -2,10 +2,11 @@ import type { OrganizeItem, OrganizeResponse } from "@/lib/api-types";
 import type { LibraryTarget } from "@/lib/library-move";
 
 // The disk an item goes to unless another is picked: the one that has the
-// title already; else none, a disk for a new title is always picked by
-// hand.
+// title already; else the only disk, if it fits; else none, a disk for a new
+// title is picked by hand.
 export function defaultTarget(item: OrganizeItem): LibraryTarget | null {
-  return item.targets.find((t) => t.existing) ?? null;
+  const only = item.targets.length === 1 && fits(item, item.targets[0]) ? item.targets[0] : null;
+  return item.targets.find((t) => t.existing) ?? only;
 }
 
 // The disk an item goes to: the one it's being moved to, else the one

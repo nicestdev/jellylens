@@ -47,6 +47,11 @@ describe("defaultTarget", () => {
     expect(defaultTarget(has)?.disk).toBe("nvme02");
   });
 
+  it("is the only disk when it fits", () => {
+    expect(defaultTarget(item(1, { targets: [target("hdd02", 100 * GB)] }))?.disk).toBe("hdd02");
+    expect(defaultTarget(item(1, { targets: [target("hdd02", 0)] }))).toBeNull();
+  });
+
   it("counts a disk whose free space can't be read as fitting", () => {
     expect(fits(item(1), target("nvme09", null))).toBe(true);
   });
